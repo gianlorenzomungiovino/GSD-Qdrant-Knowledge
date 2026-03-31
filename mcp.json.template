@@ -1,0 +1,34 @@
+{
+  "servers": {
+    "qdrant": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "uv", "run", "mcp-server-qdrant"],
+      "env": {
+        "QDRANT_URL": "http://localhost:6333",
+        "QDRANT_API_KEY": "",
+        "COLLECTION_NAME": "<PROJECT_NAME>-gsd",
+        "VECTOR_NAME": "<VECTOR_NAME>",
+        "EMBEDDING_MODEL": "<EMBEDDING_MODEL>",
+        "EMBEDDING_DIMENSIONS": "<EMBEDDING_DIMENSIONS>",
+        "TOOL_STORE_DESCRIPTION": "Store GSD artifacts: decisions, requirements, summaries, code context, lessons learned",
+        "TOOL_FIND_DESCRIPTION": "Search GSD knowledge base for relevant information, decisions, past work, and reusable patterns"
+      }
+    },
+    "qdrant-templates": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "uv", "run", "mcp-server-qdrant"],
+      "env": {
+        "QDRANT_URL": "http://localhost:6333",
+        "QDRANT_API_KEY": "",
+        "COLLECTION_NAME": "gsd-setup-templates",
+        "VECTOR_NAME": "<VECTOR_NAME>",
+        "EMBEDDING_MODEL": "<EMBEDDING_MODEL>",
+        "EMBEDDING_DIMENSIONS": "<EMBEDDING_DIMENSIONS>",
+        "TOOL_STORE_DESCRIPTION": "Store and retrieve GSD setup templates (configs, scripts, docs)",
+        "TOOL_FIND_DESCRIPTION": "Search GSD setup templates for configuration files, scripts, and documentation"
+      }
+    }
+  }
+}

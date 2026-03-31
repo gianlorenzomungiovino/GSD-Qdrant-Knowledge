@@ -1,0 +1,39 @@
+{
+  "generatedAt": "2026-03-31T10:57:59.649Z",
+  "root": "D:/Gianlorenzo/Documents/Sviluppo",
+  "projects": [
+    {
+      "projectKey": "Gotcha",
+      "packageName": null,
+      "folderName": "Gotcha",
+      "projectPath": "D:/Gianlorenzo/Documents/Sviluppo/Gotcha",
+      "collectionName": "Gotcha-gsd",
+      "gsdPath": "D:/Gianlorenzo/Documents/Sviluppo/Gotcha/.gsd",
+      "hasAppsApi": false,
+      "hasRootApi": false,
+      "mcpPath": null
+    },
+    {
+      "projectKey": "vite-project",
+      "packageName": "vite-project",
+      "folderName": "prova_landing_page",
+      "projectPath": "D:/Gianlorenzo/Documents/Sviluppo/prova_landing_page",
+      "collectionName": "vite-project-gsd",
+      "gsdPath": "D:/Gianlorenzo/Documents/Sviluppo/prova_landing_page/.gsd",
+      "hasAppsApi": false,
+      "hasRootApi": false,
+      "mcpPath": null
+    },
+    {
+      "projectKey": "website-agency",
+      "packageName": "website-agency",
+      "folderName": "website-agency",
+      "projectPath": "D:/Gianlorenzo/Documents/Sviluppo/website-agency",
+      "collectionName": "website-agency-gsd",
+      "gsdPath": "D:/Gianlorenzo/Documents/Sviluppo/website-agency/.gsd",
+      "hasAppsApi": true,
+      "hasRootApi": false,
+      "mcpPath": "D:/Gianlorenzo/Documents/Sviluppo/website-agency/.gsd/mcp.json"
+    }
+  ]
+}
