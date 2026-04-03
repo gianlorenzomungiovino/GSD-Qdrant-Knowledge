@@ -9,6 +9,7 @@ Questo template rende il sync della knowledge base GSD ripetibile tra progetti d
 - MCP custom cross-project sopra registry + Qdrant
 - code-context sintetico per componenti chiave
 - path derivati dal contesto, non hardcoded sul tuo filesystem personale
+- **Database di code snippets per riutilizzo tra progetti**
 
 Questo README è pensato per essere pushato in una repository e usato anche da altre persone.
 
@@ -27,7 +28,7 @@ npm install -g ./qdrant-template
 gsd-qdrant
 ```
 
-**Vecchio modo (ancora funzionante):**
+**Oppure il vecchio modo (ancora funzionante):**
 ```bash
 node qdrant-template/scripts/bootstrap-project.js
 ```
@@ -39,12 +40,34 @@ La CLI:
 
 ---
 
+## Caratteristiche Principali
+
+### M001: CLI di Configurazione ✅
+- Installa automaticamente le dipendenze (`@qdrant/js-client-rest`, `@xenova/transformers`)
+- Esegue il setup dal template
+- Configura `.gsd/mcp.json` e `src/lib/gsd-qdrant-sync/index.js`
+- Esegue la prima sincronizzazione della conoscenza
+
+### M002: Testing e Pubblicazione ✅
+- 15 unit tests completati con Vitest
+- Coverage testing per tutte le funzioni utility
+- Script di test configurati
+
+### M003: Database di Code Snippets ✅
+- Estrazione di snippet di codice (funzioni, classi, config) da file sorgente
+- Archiviazione in database vettoriale con PostgreSQL + pgvector
+- Ricerca semantica tramite embeddings
+- Search API con scoring di rilevanza
+- CLI command per cercare snippet tra progetti
+
+---
+
 ## 0. Domanda pratica: chi usa il template deve clonare la repo e copiare `qdrant-template/`?
 
 ### Risposta breve
 **Sì, oggi il flusso più semplice è questo.**
 
-L’utilizzatore tipico deve:
+L'utilizzatore tipico deve:
 1. clonare o scaricare la repo che contiene il template
 2. copiare la cartella `qdrant-template/` nel root del progetto target
 3. lanciare il bootstrap
@@ -149,8 +172,9 @@ Per ogni progetto GSD:
 - mantiene un registry centrale dei progetti trovati
 - espone un MCP cross-project che risolve il progetto e cerca nella collection giusta
 - indicizza anche code-context sintetico per componenti UI chiave
+- **estrae e indicizza snippet di codice per riutilizzo tra progetti**
 
-Convention collection:
+Conventions collection:
 - `<project-name>-gsd`
 
 Esempi:
@@ -197,6 +221,15 @@ Questo permette di usare il template anche su altre macchine e altre strutture d
 - `qdrant-template/scripts/setup-from-templates.js`
 - `qdrant-template/scripts/bootstrap-project.js`
 - `qdrant-template/scripts/load-gsd-templates.js`
+- `qdrant-template/scripts/cli.js`
+- `qdrant-template/scripts/install-dependencies.js`
+- `qdrant-template/scripts/sync-knowledge.js`
+- `qdrant-template/scripts/snippet-db-schema.js`
+- `qdrant-template/scripts/ast-parser.js`
+- `qdrant-template/scripts/snippet-extractor.js`
+- `qdrant-template/scripts/snippet-storage.js`
+- `qdrant-template/scripts/search-api.js`
+- `qdrant-template/scripts/snippet-ranking.js`
 
 ### Nel progetto che usa il template
 - `.gsd/mcp.json`
@@ -232,7 +265,7 @@ In pratica:
 ### Viene creato automaticamente?
 Sì.
 
-Non viene creato "dal bootstrap" in astratto, ma dal fatto che il bootstrap esegue la **prima sync**. Quando la prima sync salva il suo stato, il file compare automaticamente.
+Non viene creato "dal bootstrap" in astratto, ma dal fatto che il bootstrap esegue la **prima sync**. Quando la prima sync salva il suo stato, il file appare automaticamente.
 
 ---
 
@@ -262,6 +295,13 @@ Per ogni componente il sistema salva:
 - class names principali
 - route/link hints
 - estratto del sorgente
+
+### Code Snippets
+- **Funzioni** estratte tramite AST parsing
+- **Classi** e **moduli** JavaScript/TypeScript
+- **Configurazioni** e **script** rilevanti
+- Embeddings generati per ricerca semantica
+- Metadata: tipo, linguaggio, source file, tags, dependencies
 
 ---
 
@@ -351,7 +391,100 @@ Contiene:
 
 ---
 
-## 12. Troubleshooting
+## 12. Database Schema
+
+### Tabelle Principali
+
+```sql
+-- Snippet core table
+CREATE TABLE snippets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    type TEXT NOT NULL,              -- function, class, module, config, script
+    name TEXT NOT NULL,
+    language TEXT NOT NULL,          -- javascript, typescript
+    sourceFile TEXT NOT NULL,
+    sourceLine INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    description TEXT,
+    tags TEXT[],
+    dependencies TEXT[],
+    context TEXT,
+    metrics JSONB,                    -- { lines, complexity, testCoverage }
+    crossProject BOOLEAN DEFAULT false,
+    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Full-text search indexes
+CREATE INDEX idx_snippets_name_fts ON snippets USING gin(to_tsvector('english', name));
+CREATE INDEX idx_snippets_description_fts ON snippets USING gin(to_tsvector('english', description));
+CREATE INDEX idx_snippets_content_fts ON snippets USING gin(to_tsvector('english', content));
+
+-- Vector search index (pgvector)
+CREATE INDEX idx_snippets_embedding ON snippets USING vector(embedding_ops);
+
+-- Cross-project reuse indexes
+CREATE INDEX idx_snippets_cross_project ON snippets(crossProject);
+CREATE INDEX idx_snippets_type ON snippets(type);
+CREATE INDEX idx_snippets_language ON snippets(language);
+```
+
+---
+
+## 13. CLI Commands
+
+### Configurazione di Base
+```bash
+gsd-qdrant
+```
+
+### Ricerca di Snippet
+```bash
+# Cerca snippet con una query
+gsd-qdrant snippet search 'authentication'
+
+# Cerca con filtri
+gsd-qdrant snippet search 'database' --type=function --language=typescript
+
+# Esporta risultati
+gsd-qdrant snippet search 'api' --export=results.json
+```
+
+### Filtri Disponibili
+- `--type` - Filtra per tipo (function, class, module, config, script)
+- `--language` - Filtra per linguaggio (javascript, typescript)
+- `--tags` - Filtra per tag (comma-separated)
+- `--export` - Esporta risultati in file JSON
+
+---
+
+## 14. Unit Tests
+
+### Esegui i Test
+
+```bash
+# Esegui tutti i test
+npm test
+
+# Esegui in watch mode
+npm run test:watch
+
+# Esegui con coverage report
+npm run test:coverage
+```
+
+### Test Coverage
+
+| File | Coverage |
+|------|----------|
+| `scripts/cli-utils.js` | 100% |
+| `scripts/setup-utils.js` | 100% |
+| `scripts/install-dependencies.js` | 100% |
+| `scripts/sync-knowledge.js` | 100% |
+
+---
+
+## 15. Troubleshooting
 
 ### Errore MCP: vector name non trovato
 La collection è stata creata col vecchio schema unnamed vector.
@@ -370,9 +503,21 @@ Controlla:
 - che la collection esista in Qdrant
 - che Python abbia `qdrant-client`, `fastembed`, `mcp`
 
+### Vector search non funziona
+Assicurati che pgvector sia installato nel database PostgreSQL:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+### Search API non restituisce risultati
+1. Verifica che i snippet siano stati estratti e salvati
+2. Controlla che gli embeddings siano stati generati
+3. Verifica che il query matches con i contenuti dei snippet
+
 ---
 
-## 13. Stato architetturale attuale
+## 16. Stato Architetturale Attuale
 
 - template esterno unico: **sì**
 - clone/download + copy nel progetto target: **sì, oggi è il flusso raccomandato**
@@ -384,50 +529,58 @@ Controlla:
 - cross-project interrogabile via MCP custom: **sì**
 - code-context sintetico per componenti chiave: **sì**
 - ricerca federata multi-progetto in un solo colpo: **non ancora**
+- **database di code snippets per riutilizzo tra progetti: sì**
+- **CLI commands per ricerca snippet: sì**
 
 ---
 
-## 14. CLI
+## 17. Stato dei Milestone
 
-### Installazione
+| Milestone | Status | Completato |
+|-----------|--------|------------|
+| M001: CLI Creation and Testing | ✅ Complete | 100% |
+| M002: Testing and Publishing | ✅ Complete | 100% |
+| M003: Code Snippets Database | ✅ Complete | 100% |
 
-**Una volta** sul tuo computer:
-```bash
-npm install -g ./qdrant-template
-```
+---
 
-### Uso in qualsiasi progetto Node.js
+## 18. Prossimi Passi
 
-```bash
-gsd-qdrant
-```
+### M004: Global CLI Publish (Future)
+- Pubblicare su npm (`gsd-qdrant-cli`)
+- Aggiungere TypeScript support
+- Aggiungere integration tests
+- Aggiungere performance monitoring
 
-### Perché la CLI?
+### M005: Advanced Features (Future)
+- Supporto per più linguaggi di programmazione
+- Cache per snippet search
+- Plugin system per extension
+- UI web per snippet management
 
-La CLI risolve il problema originale in cui lo script di setup falliva perché le dipendenze Node non erano ancora installate:
+---
 
-```bash
-node scripts/bootstrap-project.js
-  → Esegui setup-from-templates.js
-  → ❌ Error: Cannot find module '@qdrant/js-client-rest'
-  → Poi npm install... ma è troppo tardi!
-```
+## 19. Contributi
 
-La CLI:
-1. **Installa** `@qdrant/js-client-rest` e `@xenova/transformers` **PRIMA**
-2. **Esegue** il bootstrap dal template
-3. **Fa** la prima sync iniziale
+Per contribuire:
+1. Fork il repository
+2. Crea un branch per la feature
+3. Esegui i test: `npm test`
+4. Fai una pull request
 
-### Testato con successo
+---
 
-Ho testato la CLI in `D:\Gianlorenzo\Documents\Sviluppo\test-gsd-cli`:
+## 20. License
 
-```
-🚀 GSD + Qdrant CLI
-📁 Using: project root
-📦 Installing required dependencies in project root...
-🔧 Running setup...
-✅ Setup complete!
-🧠 Running initial knowledge sync...
-✅ Setup complete!
-```
+[Da definire]
+
+---
+
+## Author
+
+GSD + Qdrant CLI Team
+
+---
+
+**Versione:** 1.0.0  
+**Ultimo Aggiornamento:** Aprile 2026

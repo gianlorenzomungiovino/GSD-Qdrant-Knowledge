@@ -1,0 +1,102 @@
+[
+  {
+    "functions": [
+      {
+        "type": "function",
+        "name": "getProjectName",
+        "isAnonymous": false,
+        "line": 14,
+        "endLine": 23,
+        "params": 1,
+        "isAsync": false,
+        "isGenerator": false,
+        "sourceFile": "scripts/setup-from-templates.js"
+      },
+      {
+        "type": "function",
+        "name": "findProjectRoot",
+        "isAnonymous": false,
+        "line": 25,
+        "endLine": 37,
+        "params": 0,
+        "isAsync": false,
+        "isGenerator": false,
+        "sourceFile": "scripts/setup-from-templates.js"
+      },
+      {
+        "type": "function",
+        "name": "getApiDir",
+        "isAnonymous": false,
+        "line": 39,
+        "endLine": 43,
+        "params": 1,
+        "isAsync": false,
+        "isGenerator": false,
+        "sourceFile": "scripts/setup-from-templates.js"
+      },
+      {
+        "type": "function",
+        "name": "getPackageJsonPath",
+        "isAnonymous": false,
+        "line": 45,
+        "endLine": 49,
+        "params": 2,
+        "isAsync": false,
+        "isGenerator": false,
+        "sourceFile": "scripts/setup-from-templates.js"
+      },
+      {
+        "type": "function",
+        "name": "installPostCommitHook",
+        "isAnonymous": false,
+        "line": 51,
+        "endLine": 75,
+        "params": 2,
+        "isAsync": true,
+        "isGenerator": false,
+        "sourceFile": "scripts/setup-from-templates.js"
+      },
+      {
+        "type": "function",
+        "name": "patchServerForWatcher",
+        "isAnonymous": false,
+        "line": 77,
+        "endLine": 117,
+        "params": 1,
+        "isAsync": true,
+        "isGenerator": false,
+        "sourceFile": "scripts/setup-from-templates.js"
+      },
+      {
+        "type": "function",
+        "name": "setup",
+        "isAnonymous": false,
+        "line": 131,
+        "endLine": 201,
+        "params": 0,
+        "isAsync": true,
+        "isGenerator": false,
+        "sourceFile": "scripts/setup-from-templates.js"
+      },
+      {
+        "type": "function",
+        "name": "arrow",
+        "isAnonymous": true,
+        "line": 203,
+        "endLine": 206,
+        "params": 1,
+        "isAsync": false,
+        "isGenerator": false,
+        "sourceFile": "scripts/setup-from-templates.js"
+      }
+    ],
+    "classes": [],
+    "exports": [],
+    "metrics": {
+      "lines": 207,
+      "complexity": 7531,
+      "estimatedTime": 3766
+    },
+    "sourceFile": "scripts/setup-from-templates.js"
+  }
+]

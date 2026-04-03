@@ -1,0 +1,74 @@
+[
+  {
+    "id": null,
+    "type": "function",
+    "name": "getProjectName",
+    "language": "javascript",
+    "sourceFile": "scripts/setup-from-templates.js",
+    "sourceLine": 14,
+    "content": "function getProjectName(projectRoot) {\n  try {\n    const pkgPath = join(projectRoot, 'package.json');\n    if (existsSync(pkgPath)) {\n      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));\n      if (pkg.name) return pkg.name;\n    }\n  } catch (_e) {}\n  return basename(projectRoot.replace(/\\\\/g, '/'));\n}",
+    "description": "Extracted getProjectName function with no params",
+    "tags": [
+      "function",
+      "getProjectName"
+    ],
+    "dependencies": [],
+    "context": "Function defined at line 14",
+    "metrics": {
+      "lines": 10,
+      "complexity": 317,
+      "estimatedTime": 159
+    },
+    "crossProject": true,
+    "createdAt": "2026-04-03T14:40:25.939Z",
+    "updatedAt": "2026-04-03T14:40:25.939Z"
+  },
+  {
+    "id": null,
+    "type": "function",
+    "name": "installPostCommitHook",
+    "language": "javascript",
+    "sourceFile": "scripts/setup-from-templates.js",
+    "sourceLine": 51,
+    "content": "async function installPostCommitHook(projectRoot, apiDir) {\n  const hooksDir = join(projectRoot, '.git', 'hooks');\n  if (!existsSync(hooksDir)) {\n    console.warn('⚠️  .git/hooks not found, skipping post-commit hook install');\n    return;\n  }\n\n  const relApiDir = apiDir.replace(projectRoot, '').replace(/^[/\\\\]/, '');\n  const hookPath = join(hooksDir, 'post-commit');\n  const hookContent = `#!/bin/sh\n# Auto-sync GSD knowledge to Qdrant after each local commit.\n\nPROJECT_ROOT=\"$(git rev-parse --show-toplevel 2>/dev/null)\"\n[ -z \"$PROJECT_ROOT\" ] && exit 0\n\nTARGET_DIR=\"$PROJECT_ROOT/${relApiDir || '.'}\"\nif [ -f \"$TARGET_DIR/package.json\" ]; then\n  cd \"$TARGET_DIR\" || exit 0\n  npm run sync-knowledge >/dev/null 2>&1 || echo \"[qdrant-sync] sync-knowledge failed\" >&2\nfi\n`;\n\n  await writeFile(hookPath, hookContent, { mode: 0o755 });\n  console.log('📝 Installed .git/hooks/post-commit');\n}",
+    "description": "Extracted installPostCommitHook function with no params",
+    "tags": [
+      "function",
+      "installPostCommitHook"
+    ],
+    "dependencies": [],
+    "context": "Function defined at line 51",
+    "metrics": {
+      "lines": 25,
+      "complexity": 893,
+      "estimatedTime": 447
+    },
+    "crossProject": true,
+    "createdAt": "2026-04-03T14:40:25.939Z",
+    "updatedAt": "2026-04-03T14:40:25.939Z"
+  },
+  {
+    "id": null,
+    "type": "function",
+    "name": "patchServerForWatcher",
+    "language": "javascript",
+    "sourceFile": "scripts/setup-from-templates.js",
+    "sourceLine": 77,
+    "content": "async function patchServerForWatcher(apiDir) {\n  const serverPath = join(apiDir, 'src', 'server.js');\n  if (!existsSync(serverPath)) {\n    console.warn('⚠️  src/server.js not found, skipping watcher auto-start patch');\n    return;\n  }\n\n  let content = await readFile(serverPath, 'utf-8');\n\n  if (!content.includes(\"const { GSDKnowledgeSync } = require('./lib/gsd-qdrant-sync');\")) {\n    content = content.replace(\n      /const healthRouter = require\\((['\"])\\.\\/routes\\/health\\1\\);/,\n      `const healthRouter = require('./routes/health');\\nconst { GSDKnowledgeSync } = require('./lib/gsd-qdrant-sync');`\n    );\n  }\n\n  if (!content.includes('Qdrant knowledge watcher started in non-production mode.')) {\n    content = content.replace(\n      /app\\.listen\\(PORT, \\(\\) => \\{([\\s\\S]*?)\\n\\}\\);/,\n      `app.listen(PORT, () => {$1\n\n  const isNonProduction = process.env.NODE_ENV !== \"production\";\n  if (isNonProduction) {\n    const knowledgeSync = new GSDKnowledgeSync();\n    knowledgeSync\n      .init()\n      .then(() => {\n        knowledgeSync.startWatcher();\n        console.log(\"Qdrant knowledge watcher started in non-production mode.\");\n      })\n      .catch((err) => {\n        console.error(\"Failed to start Qdrant knowledge watcher:\", err.message);\n      });\n  }\n});`\n    );\n  }\n\n  await writeFile(serverPath, content);\n  console.log(`📝 Patched ${serverPath} for watcher auto-start`);\n}",
+    "description": "Extracted patchServerForWatcher function with no params",
+    "tags": [
+      "function",
+      "patchServerForWatcher"
+    ],
+    "dependencies": [],
+    "context": "Function defined at line 77",
+    "metrics": {
+      "lines": 41,
+      "complexity": 1396,
+      "estimatedTime": 698
+    },
+    "crossProject": true,
+    "createdAt": "2026-04-03T14:40:25.939Z",
+    "updatedAt": "2026-04-03T14:40:25.939Z"
+  }
+]

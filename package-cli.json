@@ -1,0 +1,22 @@
+{
+  "name": "gsd-qdrant-cli",
+  "version": "1.0.0",
+  "description": "CLI for setting up GSD + Qdrant integration in any Node.js project",
+  "main": "scripts/cli.js",
+  "bin": {
+    "gsd-qdrant": "./scripts/cli.js"
+  },
+  "scripts": {
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "keywords": ["gsd", "qdrant", "knowledge-base", "mcp"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@qdrant/js-client-rest": "^1.17.0",
+    "@xenova/transformers": "^2.17.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

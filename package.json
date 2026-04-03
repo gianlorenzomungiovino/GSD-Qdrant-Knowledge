@@ -1,0 +1,48 @@
+{
+  "name": "gsd-qdrant-cli",
+  "version": "1.0.0",
+  "description": "CLI per setup automatico GSD + Qdrant in qualsiasi progetto Node.js",
+  "main": "scripts/cli.js",
+  "bin": {
+    "gsd-qdrant": "./scripts/cli.js"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "sync-knowledge": "node src/lib/gsd-qdrant-sync/index.js sync",
+    "sync-knowledge:watch": "node src/lib/gsd-qdrant-sync/index.js watch"
+  },
+  "keywords": [
+    "gsd",
+    "qdrant",
+    "knowledge-base",
+    "mcp",
+    "cli"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/gsd-qdrant-cli"
+  },
+  "dependencies": {
+    "@qdrant/js-client-rest": "^1.17.0",
+    "@xenova/transformers": "^2.17.2"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "scripts/cli.js",
+    "scripts/bootstrap-project.js",
+    "scripts/setup-from-templates.js",
+    "scripts/load-gsd-templates.js",
+    "lib/",
+    "README.md"
+  ],
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.2",
+    "vitest": "^4.1.2"
+  }
+}
