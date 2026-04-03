@@ -7,3 +7,24 @@ Thumbs.db
 __pycache__/
 *.pyc
 .qdrant/
+
+# ── GSD baseline (auto-generated) ──
+.gsd
+.gsd-id
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.code-workspace
+!.env.example
+.next/
+dist/
+build/
+.venv/
+venv/
+target/
+vendor/
+coverage/
+.cache/
+tmp/
