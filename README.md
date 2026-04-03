@@ -1,4 +1,4 @@
-# GSD + Qdrant Template
+# GSD + Qdrant CLI
 
 Questo template rende il sync della knowledge base GSD ripetibile tra progetti diversi:
 - una collection Qdrant per progetto
@@ -11,6 +11,31 @@ Questo template rende il sync della knowledge base GSD ripetibile tra progetti d
 - path derivati dal contesto, non hardcoded sul tuo filesystem personale
 
 Questo README è pensato per essere pushato in una repository e usato anche da altre persone.
+
+---
+
+## CLI
+
+Da **v1.0.0** in poi, il template include una CLI installabile globalmente che risolve automaticamente il problema delle dipendenze Node mancanti durante il bootstrap.
+
+**Nuovo modo consigliato:**
+```bash
+# Installa la CLI una volta
+npm install -g ./qdrant-template
+
+# Poi in qualsiasi progetto Node.js
+gsd-qdrant
+```
+
+**Vecchio modo (ancora funzionante):**
+```bash
+node qdrant-template/scripts/bootstrap-project.js
+```
+
+La CLI:
+1. **Installa** `@qdrant/js-client-rest` e `@xenova/transformers` **PRIMA** di eseguire il setup
+2. **Esegue** il bootstrap dal template
+3. **Fa** la prima sync iniziale verso Qdrant
 
 ---
 
@@ -85,18 +110,23 @@ Copia questa cartella nel root del progetto target con il nome:
 
 - `qdrant-template/`
 
-### Step 3 — esegui il bootstrap
+### Step 3 — usa la CLI per il bootstrap
 Dal root del progetto target:
 
+```bash
+gsd-qdrant
+```
+
+**Oppure** il vecchio modo (ancora funzionante):
 ```bash
 node qdrant-template/scripts/bootstrap-project.js
 ```
 
-Il bootstrap fa tutto questo da solo:
-1. setup del progetto dal template
-2. `npm install`
-3. prima sync iniziale verso Qdrant
-4. generazione di `.gsd/.qdrant-sync-state.json`
+La CLI fa tutto questo da sola:
+1. **Installa** `@qdrant/js-client-rest` e `@xenova/transformers` **PRIMA**
+2. **Esegue** il bootstrap dal template
+3. **Fa** la prima sync iniziale verso Qdrant
+4. **Genera** `.gsd/.qdrant-sync-state.json`
 
 ### Step 4 — avvia il progetto normalmente
 ```bash
@@ -237,18 +267,25 @@ Per ogni componente il sistema salva:
 
 ## 8. Setup di un nuovo progetto
 
-### Metodo consigliato: un solo comando
+### Metodo consigliato: CLI
 Dal root del progetto:
+
+```bash
+gsd-qdrant
+```
+
+La CLI fa tutto da sola:
+1. **Installa** `@qdrant/js-client-rest` e `@xenova/transformers` **PRIMA**
+2. **Esegue** il bootstrap dal template
+3. **Fa** la prima sync iniziale verso Qdrant
+4. **Genera** `.gsd/.qdrant-sync-state.json`
+
+### Metodo alternativo: bootstrap diretto
+Ancora funzionante, ma meno consigliato:
 
 ```bash
 node qdrant-template/scripts/bootstrap-project.js
 ```
-
-Il bootstrap fa:
-1. setup da template Qdrant
-2. `npm install`
-3. prima sync iniziale
-4. genera `.gsd/.qdrant-sync-state.json`
 
 ### Metodo manuale, se vuoi spezzarlo
 ```bash
@@ -347,3 +384,50 @@ Controlla:
 - cross-project interrogabile via MCP custom: **sì**
 - code-context sintetico per componenti chiave: **sì**
 - ricerca federata multi-progetto in un solo colpo: **non ancora**
+
+---
+
+## 14. CLI
+
+### Installazione
+
+**Una volta** sul tuo computer:
+```bash
+npm install -g ./qdrant-template
+```
+
+### Uso in qualsiasi progetto Node.js
+
+```bash
+gsd-qdrant
+```
+
+### Perché la CLI?
+
+La CLI risolve il problema originale in cui lo script di setup falliva perché le dipendenze Node non erano ancora installate:
+
+```bash
+node scripts/bootstrap-project.js
+  → Esegui setup-from-templates.js
+  → ❌ Error: Cannot find module '@qdrant/js-client-rest'
+  → Poi npm install... ma è troppo tardi!
+```
+
+La CLI:
+1. **Installa** `@qdrant/js-client-rest` e `@xenova/transformers` **PRIMA**
+2. **Esegue** il bootstrap dal template
+3. **Fa** la prima sync iniziale
+
+### Testato con successo
+
+Ho testato la CLI in `D:\Gianlorenzo\Documents\Sviluppo\test-gsd-cli`:
+
+```
+🚀 GSD + Qdrant CLI
+📁 Using: project root
+📦 Installing required dependencies in project root...
+🔧 Running setup...
+✅ Setup complete!
+🧠 Running initial knowledge sync...
+✅ Setup complete!
+```
