@@ -58,7 +58,16 @@ function detectSearchType(query) {
     'prefix': /\b(for|prefix|prefisso|prefixe)\b/,
     'contains': /\b(contains|contiene|includes|include)\b/,
     'starts': /\b(starts|inizi|comincia|begin)\b/,
-    'fuzzy': /\b(fuzzy|approssimativo|similare|fuzzi)\b/
+    'fuzzy': /\b(fuzzy|approssimativo|similare|fuzzi)\b/,
+    // Code placement patterns
+    'script': /\b(cli|command|script|scripting|esecuzione|esecuzione)\b/,
+    'utility': /\b(utility|helper|aiuto|help|funzione|function|libreria|librerias)\b/,
+    'component': /\b(component|componente|ui|interface|interfaccia|widget)\b/,
+    'test': /\b(test|testing|prove|testare|suite|test suite)\b/,
+    'config': /\b(config|configuration|configurazione|configuratione|settings|impostazioni)\b/,
+    'documentation': /\b(documentation|documentazione|docs|wiki|manuale)\b/,
+    'snippet': /\b(snippet|pezzo|tratto|porzione)\b/,
+    'example': /\b(example|esempio|esempi|sample|campioni|demo)\b/
   };
   
   for (const [type, pattern] of Object.entries(searchTypePatterns)) {
