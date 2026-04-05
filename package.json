@@ -4,7 +4,7 @@
   "description": "CLI per setup automatico GSD + Qdrant in qualsiasi progetto Node.js",
   "main": "scripts/cli.js",
   "bin": {
-    "gsd-qdrant": "./scripts/cli.js"
+    "gsd-qdrant": "scripts/cli.js"
   },
   "scripts": {
     "test": "vitest run",
@@ -24,7 +24,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/gsd-qdrant-cli"
+    "url": "git+https://github.com/yourusername/gsd-qdrant-cli.git"
   },
   "dependencies": {
     "@qdrant/js-client-rest": "^1.17.0",
