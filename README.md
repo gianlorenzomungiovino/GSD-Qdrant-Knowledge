@@ -4,12 +4,42 @@ Template per rendere il sync della knowledge base GSD ripetibile tra progetti di
 
 ## Installazione Rapida
 
-```bash
-# Installa la CLI una volta
-npm install -g ./qdrant-template
+### Installazione Globale
 
+```bash
+# Installa la CLI globalmente su npm
+npm install -g gsd-qdrant-cli
+
+# Verifica l'installazione
+gsd-qdrant --version
+```
+
+### Uso in un Progetto
+
+```bash
 # In qualsiasi progetto Node.js
 gsd-qdrant
+```
+
+### Esempio: Applicare un Template
+
+```bash
+# Applicare il template GSD + Qdrant in un progetto esistente
+gsd-qdrant
+
+# Oppure specifica un template specifico
+gsd-qdrant apply gsd-setup-templates
+```
+
+### Esempio: Query della Knowledge Base
+
+```bash
+# Cerca snippet di codice specifici
+gsd-qdrant snippet search 'authentication'
+gsd-qdrant snippet search 'database' --type=function --language=typescript
+
+# Esporta i risultati
+gsd-qdrant snippet search 'api' --export=results.json
 ```
 
 ## Come Funziona
