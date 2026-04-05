@@ -312,4 +312,7 @@ module.exports = {
   loadDatabase
 };
 
-main();
+// Execute if run directly
+if (require.main === module) {
+  main();
+}

@@ -408,4 +408,6 @@ module.exports = {
 };
 
 // Execute if run directly
-main();
+if (require.main === module) {
+  main();
+}

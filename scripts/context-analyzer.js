@@ -313,12 +313,20 @@ function recommendCodePlacement(intentDescription, context) {
   let recommendedPath;
   let reason;
   
+  // Check if this is a snippet type based on query context
+  const isSnippet = intentDescription.toLowerCase().includes('snippet') || 
+                    intentDescription.toLowerCase().includes('script') ||
+                    intent.type === 'snippet' || 
+                    intent.type === 'script';
+  
+  // Map intent types to directory recommendations based on detected patterns
   switch (intent.type) {
     case 'script':
-      recommendedPath = context.patterns.hasScriptsDir ? 'scripts/' : 'scripts/';
-      reason = context.patterns.hasScriptsDir ? 
-        'Existing scripts directory detected - ideal for CLI and build tools' : 
-        'Create scripts/ directory for CLI and utility scripts';
+      // Scripts should go in scripts/ but if it's a snippet, use scripts/snippets/
+      recommendedPath = isSnippet ? 'scripts/snippets/' : 'scripts/';
+      reason = isSnippet ? 
+        'Scripts directory exists - using snippets subdirectory' : 
+        'Existing scripts directory detected - ideal for CLI and build tools';
       placement.confidence = 0.9;
       break;
     case 'utility':
@@ -365,11 +373,11 @@ function recommendCodePlacement(intentDescription, context) {
       placement.confidence = 0.9;
       break;
     case 'snippet':
-      recommendedPath = context.patterns.hasScriptsDir ? 'scripts/snippets/' : 'scripts/';
+      recommendedPath = context.patterns.hasScriptsDir ? 'scripts/snippets/' : 'scripts/snippets/';
       reason = context.patterns.hasScriptsDir ? 
-        'Scripts directory exists - use snippets subdirectory' : 
+        'Scripts directory exists - using snippets subdirectory' : 
         'Create scripts/snippets/ for code snippets';
-      placement.confidence = 0.8;
+      placement.confidence = 0.9;
       break;
     case 'example':
       recommendedPath = context.patterns.hasScriptsDir ? 'scripts/examples/' : 'scripts/';
@@ -513,4 +521,6 @@ module.exports = {
 };
 
 // Execute if run directly
-main();
+if (require.main === module) {
+  main();
+}
