@@ -4,13 +4,14 @@ This template makes GSD knowledge sync repeatable across projects: one Qdrant co
 
 ## What it provides
 
-When you run the setup script, it downloads and installs:
+When you run the setup script, it downloads and installs from Qdrant:
 - `lib/gsd-qdrant-sync/index.js` — sync library for `.gsd` markdown artifacts
 - `.gsd/mcp.json` — MCP servers for project knowledge + template lookup
 - `GSQ-QDRANT-SETUP.md` — local setup instructions copied into the target project
 - automatic `.git/hooks/post-commit` installation for local commit sync
 - automatic patching of `src/server.js` (when present) so the watcher starts outside production
-- this entire `qdrant-template/` folder, so the project stays self-describing
+
+**Note:** The `qdrant-template/` folder itself is NOT copied. All templates are downloaded from Qdrant's `gsd-setup-templates` collection.
 
 ## Collection contract
 
@@ -62,11 +63,24 @@ This means the common case is:
 
 ## One-command setup for a new or existing project
 
-1. Copy the template folder to the project root.
-2. Run the setup script from the project root:
+### Recommended: Use the CLI (template downloaded from Qdrant)
 
 ```bash
-node qdrant-template/scripts/setup-from-templates.js
+gsd-qdrant
+```
+
+This single command:
+1. Installs required dependencies (`@qdrant/js-client-rest`, `@xenova/transformers`)
+2. Downloads templates from Qdrant's `gsd-setup-templates` collection
+3. Creates all necessary files in the target project
+4. Runs the initial knowledge sync
+
+### Alternative: Run setup script directly
+
+If you prefer to run the script directly:
+
+```bash
+node scripts/setup-from-templates.js
 ```
 
 Project name is auto-detected from `package.json` when available. Otherwise the root folder name is used.
@@ -144,6 +158,26 @@ You still need a way to resolve **which project** and **which collection** to se
 - a custom MCP server that dispatches to the right project collection
 
 This template is the storage foundation, not the full cross-project orchestration layer.
+
+## Where templates live
+
+### In Qdrant (source of truth)
+
+Templates are stored in the Qdrant collection `gsd-setup-templates`:
+- `mcp.json.template` — MCP server configuration
+- `lib/gsd-qdrant-sync/index.js` — Sync library
+- `README.md` — Setup instructions
+- `mcp-project-registry.json.template` — Cross-project registry
+
+The setup script downloads these templates directly from Qdrant.
+
+### In the template repository (for development)
+
+The `qdrant-template/` folder in the repository contains:
+- Scripts for local development (`scripts/cli.js`, `scripts/setup-from-templates.js`, etc.)
+- Local copies of template files for updating Qdrant
+
+These files are **not** copied to target projects. They serve only to maintain the Qdrant collection.
 
 ## Troubleshooting
 
