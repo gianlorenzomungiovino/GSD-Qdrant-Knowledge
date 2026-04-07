@@ -2,9 +2,9 @@
 
 CLI globale per configurare automaticamente una knowledge base GSD indicizzata in Qdrant in qualsiasi progetto Node.js.
 
-## Installazione Rapida
+## Procedura di Installazione
 
-### 1. Installa la CLI Globalmente
+### 1. Installa la CLI Globalmente (una volta)
 
 ```bash
 # Installa da npm (pubblicato come gsd-qdrant-cli)
@@ -24,6 +24,7 @@ docker run -d --name qdrant -p 6333:6333 -p 6334:6334 qdrant/qdrant
 
 ```bash
 # In qualsiasi progetto Node.js con package.json
+cd /percorso/tuo-progetto
 gsd-qdrant
 ```
 
@@ -32,6 +33,14 @@ La CLI:
 2. Scarica i template dalla collection Qdrant `gsd-setup-templates`
 3. Crea i file necessari nel progetto
 4. Esegue l'indicizzazione iniziale
+
+### 4. Esegui il Progetto
+
+```bash
+npm run dev
+```
+
+Da questo momento, ogni commit git eseguirà automaticamente l'indicizzazione della knowledge base.
 
 ---
 
@@ -148,5 +157,5 @@ Esempi:
 
 ---
 
-**Version:** 1.0.0  
+**Version:** 1.0.1  
 **Updated:** April 2026
