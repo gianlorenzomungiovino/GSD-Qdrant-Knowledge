@@ -1,142 +1,150 @@
 # GSD + Qdrant CLI
 
-Template per rendere il sync della knowledge base GSD ripetibile tra progetti diversi.
+CLI globale per configurare automaticamente una knowledge base GSD indicizzata in Qdrant in qualsiasi progetto Node.js.
 
 ## Installazione Rapida
 
-### Installazione Globale
+### 1. Installa la CLI Globalmente
 
 ```bash
-# Installa la CLI globalmente su npm
+# Installa da npm (pubblicato come gsd-qdrant-cli)
 npm install -g gsd-qdrant-cli
 
 # Verifica l'installazione
 gsd-qdrant --version
 ```
 
-### Uso in un Progetto
+### 2. Avvia Qdrant Server
 
 ```bash
-# In qualsiasi progetto Node.js
+docker run -d --name qdrant -p 6333:6333 -p 6334:6334 qdrant/qdrant
+```
+
+### 3. Usa in un Progetto Node.js
+
+```bash
+# In qualsiasi progetto Node.js con package.json
 gsd-qdrant
 ```
 
-### Esempio: Applicare un Template
+La CLI:
+1. Installa `@qdrant/js-client-rest` e `@xenova/transformers`
+2. Scarica i template dalla collection Qdrant `gsd-setup-templates`
+3. Crea i file necessari nel progetto
+4. Esegue l'indicizzazione iniziale
+
+---
+
+## Comandi CLI
 
 ```bash
-# Applicare il template GSD + Qdrant in un progetto esistente
+# Setup completo in un progetto
 gsd-qdrant
 
-# Oppure specifica un template specifico
-gsd-qdrant apply gsd-setup-templates
-```
-
-### Esempio: Query della Knowledge Base
-
-```bash
-# Cerca snippet di codice specifici
+# Ricerca snippet con keyword matching
 gsd-qdrant snippet search 'authentication'
 gsd-qdrant snippet search 'database' --type=function --language=typescript
 
-# Esporta i risultati
-gsd-qdrant snippet search 'api' --export=results.json
+# Applica uno snippet con intent detection
+gsd-qdrant snippet apply "script per docker"
 ```
 
-## Come Funziona
-
-Il template **NON** viene copiato nel progetto target. I file template risiedono nella collection Qdrant `gsd-setup-templates` e vengono scaricati direttamente al momento del setup.
-
-**Cosa fa la CLI:**
-1. Installa `@qdrant/js-client-rest` e `@xenova/transformers`
-2. Scarica i template da Qdrant
-3. Crea i file nel progetto target
-4. Esegue la prima sync
+---
 
 ## Prerequisiti
 
-- Docker (Qdrant server)
-- Node.js 18+
-- Python 3.10+ con: `mcp`, `qdrant-client`, `fastembed`
+- **Node.js** 18+
+- **Docker** (per Qdrant server)
+- **Python** 3.10+ con: `mcp`, `qdrant-client`, `fastembed`
 
 ```bash
 python -m pip install mcp qdrant-client fastembed
 ```
 
-## Setup Completo
+- **Git** (per il post-commit hook automatico)
 
-1. **Avvia Qdrant:**
-   ```bash
-   docker run -d --name qdrant -p 6333:6333 -p 6334:6334 qdrant/qdrant
-   ```
+---
 
-2. **Esegui la CLI:**
-   ```bash
-   gsd-qdrant
-   ```
+## Come Funziona
 
-3. **Avvia il progetto:**
-   ```bash
-   npm run dev
-   ```
+I file template **non** vengono copiati localmente. Risiedono nella collection Qdrant `gsd-setup-templates` e vengono scaricati al momento del setup.
 
-## Cosa Viene Indicizzato
+**Cosa viene creato nel progetto:**
+- `lib/gsd-qdrant-sync/index.js` — Libreria di sync
+- `.mcp.json` — Configurazione MCP servers
+- `.git/hooks/post-commit` — Hook per sync automatica
+- Patch di `src/server.js` (se presente) per avviare il watcher
 
-- File `.md` in `.gsd/` (decisioni, requisiti, milestone, slice, task)
-- Code-context per componenti frontend chiave
-- Snippet di codice (funzioni, classi, config) con embeddings
+**Cosa viene indicizzato:**
+- File `.md` in `.gsd/` (PROJECT, REQUIREMENTS, DECISIONS, KNOWLEDGE)
+- Artifact milestone/slice/task (M001/S01/T01/*.md)
+- Snippet di codice con embeddings (funzioni, classi, config)
+
+**Automazione:**
+- **Post-commit:** Ogni commit git esegue `npm run sync-knowledge`
+- **Watcher:** Se in ambiente non-production, il watcher indicizza in tempo reale
+
+---
 
 ## Interrogare la Knowledge Base
 
 ```javascript
-// MCP locale del progetto
+// Cerca pattern di componenti
 mcp_call("qdrant", "qdrant-find", {
   query: "navbar header navigation pill nav component"
 })
 
-// Cross-project
-mcp_call("project-registry", "project_knowledge_search", {
-  project: "website-agency",
-  query: "navbar header navigation pill nav component",
-  limit: 5
+// Trova una decisione architettonica
+mcp_call("qdrant", "qdrant-find", {
+  query: "decision dark palette green ochre"
+})
+
+// Cerca contesto milestone
+mcp_call("qdrant", "qdrant-find", {
+  query: "M002 deploy content analytics"
 })
 ```
 
-## Comandi CLI
+---
+
+## Configurazione Avanzata
+
+### Variabili d'Ambiente
 
 ```bash
-# Configurazione
-gsd-qdrant
-
-# Ricerca snippet
-gsd-qdrant snippet search 'authentication'
-gsd-qdrant snippet search 'database' --type=function --language=typescript
-gsd-qdrant snippet search 'api' --export=results.json
+export QDRANT_URL=http://localhost:6333
+export QDRANT_API_KEY=your_api_key
+export VECTOR_NAME=fast-all-minilm-l6-v2
+export LOCAL_EMBEDDING_MODEL=Xenova/all-MiniLM-L6-v2
 ```
+
+### Collection per Progetto
+
+Ogni progetto ha una collection dedicata: `<project-name>-gsd`
+
+Esempi:
+- `website-agency-gsd`
+- `client-alpha-gsd`
+- `internal-dashboard-gsd`
+
+---
 
 ## Troubleshooting
 
 | Problema | Soluzione |
 |----------|-----------|
-| Vector search non funziona | Ricrea collection con named vector `fast-all-minilm-l6-v2` |
-| Watcher non parte | Verifica `src/server.js` e `NODE_ENV` non-production |
-| Cross-project search fallisce | Controlla registry Qdrant e dipendenze Python |
+| `Cannot find module '@qdrant/js-client-rest'` | La CLI installa automaticamente le dipendenze - se fallisce, esegui `npm install` manualmente |
+| Vector search non funziona | Ricrea la collection con named vector `fast-all-minilm-l6-v2` |
+| Watcher non parte | Verifica `src/server.js` esiste e `NODE_ENV` non è `production` |
+| Post-commit hook non esegue | Controlla che `.git/hooks/` esista e sia scrivibile |
+| Cross-project search fallisce | Verifica la registry Qdrant e le dipendenze Python |
 
-## Struttura dei Milestone
+---
 
-| Milestone | Status |
-|-----------|--------|
-| M001: CLI Creation and Testing | ✅ Complete |
-| M002: Testing and Publishing | ✅ Complete |
-| M003: Code Snippets Database | ✅ Complete |
+## Documentazione
 
-## Documentazione Dettagliata
-
-- [`GSQ-QDRANT-SETUP.md`](GSQ-QDRANT-SETUP.md) - Istruzioni di setup complete
-- [`CLI-IMPROVEMENTS.md`](CLI-IMPROVEMENTS.md) - Dettagli tecnici e architettura
-
-## License
-
-[Da definire]
+- [`GSQ-QDRANT-SETUP.md`](GSQ-QDRANT-SETUP.md) — Istruzioni complete di setup e contratto Qdrant
+- [`CLI-IMPROVEMENTS.md`](CLI-IMPROVEMENTS.md) — Architettura tecnica e dettagli di implementazione
 
 ---
 
