@@ -175,36 +175,92 @@ async function main() {
         if (key === 'tags') options.tags = value.split(',');
         if (key === 'language') options.language = value;
         if (key === 'type') options.type = value;
+        if (key === 'context') options.withContext = true;
+        if (key === 'limit') options.limit = parseInt(value, 10);
       }
     }
     
     if (!query) {
       console.log('❌ Please provide a search query.');
-      console.log('Usage: gsd-qdrant snippet search <query> [--tags <tag1,tag2>] [--language <lang>] [--type <type>]');
+      console.log('Usage: gsd-qdrant snippet search <query> [--tags <tag1,tag2>] [--language <lang>] [--type <type>] [--context] [--limit <n>]');
+      console.log('');
+      console.log('Options:');
+      console.log('  --tags      Filter by tags (comma-separated)');
+      console.log('  --language  Filter by programming language');
+      console.log('  --type      Filter by snippet type');
+      console.log('  --context   Include context from .md files in results');
+      console.log('  --limit     Maximum number of results (default: 10)');
       process.exit(1);
     }
     
-    // Load and search snippets
-    const snippetRanking = require('./snippet-ranking');
-    const snippets = snippetRanking.loadDatabase();
+    // Check if we should use Qdrant or local database
+    const useQdrant = existsSync(join(SCRIPT_DIR, '..', 'lib', 'gsd-qdrant-sync', 'index.js'));
     
-    const filtered = snippetRanking.filterAndRankSnippets(snippets, query, options);
-    const sorted = snippetRanking.sortSnippetsByRelevance(filtered);
+    // Run search (async)
+    const runSearch = async () => {
+      let sorted = [];
+      if (useQdrant) {
+        // Use Qdrant-based search
+        try {
+          const { GSDKnowledgeSync } = require(join(SCRIPT_DIR, '..', 'lib', 'gsd-qdrant-sync', 'index.js'));
+          const sync = new GSDKnowledgeSync();
+          await sync.init();
+          
+          const results = await sync.searchWithContext(query, {
+            limit: options.limit || 10,
+            withContext: options.withContext || false,
+          });
+          
+          sorted = results;
+        } catch (err) {
+          console.log('⚠️  Qdrant search failed, falling back to local database:', err.message);
+          // Fall through to local database
+        }
+      }
+      
+      // If Qdrant didn't work, use local database
+      if (sorted.length === 0) {
+        const snippetRanking = require('./snippet-ranking');
+        const snippets = snippetRanking.loadDatabase();
+        
+        const filtered = snippetRanking.filterAndRankSnippets(snippets, query, options);
+        sorted = snippetRanking.sortSnippetsByRelevance(filtered);
+      }
+      
+      console.log('🔍 Snippet Search');
+      console.log('='.repeat(50));
+      console.log(`Query: "${query}"`);
+      if (options.withContext) {
+        console.log(`With Context: Yes`);
+      }
+      console.log(`Found ${sorted.length} results:`);
+      
+      sorted.forEach((result, i) => {
+        console.log(`  ${i + 1}. ${result.path || result.name} (score: ${result.score || result.relevanceScore})`);
+        console.log(`     Type: ${result.type}, Scope: ${result.scope}`);
+        if (result.milestone || result.slice || result.task) {
+          console.log(`     GSD: ${result.milestone || ''} ${result.slice || ''} ${result.task || ''}`.trim());
+        }
+        console.log(`     ${result.content?.slice(0, 200) || 'No content'}`);
+        
+        // Show context if available
+        if (result.context && result.context.length > 0) {
+          console.log(`     Context: ${result.context.length} related documents`);
+          result.context.forEach(ctx => {
+            console.log(`       - ${ctx.source} (${ctx.ids.length} IDs: ${ctx.ids.slice(0, 3).join(', ')})`);
+          });
+        }
+      });
+      
+      console.log('='.repeat(50));
+      console.log('✅ Search complete!');
+    };
     
-    console.log('🔍 Snippet Search');
-    console.log('='.repeat(50));
-    console.log(`Query: "${query}"`);
-    console.log(`Found ${sorted.length} results:`);
-    
-    sorted.forEach((snippet, i) => {
-      console.log(`  ${i + 1}. ${snippet.name} (score: ${snippet.relevanceScore})`);
-      console.log(`     Type: ${snippet.type}, Language: ${snippet.language}`);
-      console.log(`     Source: ${snippet.sourceFile}: ${snippet.sourceLine}`);
-      console.log(`     Description: ${snippet.description}`);
+    runSearch().catch(err => {
+      console.error('Error during search:', err.message);
+      process.exit(1);
     });
-    
-    console.log('='.repeat(50));
-    console.log('✅ Search complete!');
+    return; // Exit main function early
   } else if (args[0] === 'snippet' && args[1] === 'apply') {
     // Snippet apply command
     const query = args[2] || '';
