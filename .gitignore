@@ -31,3 +31,6 @@ tmp/
 
 # npm authentication
 .npmrc
+
+# ── GSD baseline (auto-generated) ──
+.bg-shell/
