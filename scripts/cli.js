@@ -123,16 +123,23 @@ function findPackagePath() {
   return null;
 }
 
-function installDependencies(pkgPath) {
+function installDependencies(pkgPath, targetDir) {
   const pkgDir = pkgPath.replace(/\\/g, '/');
-  const target = pkgPath.includes('apps/api') ? 'apps/api' : 'project root';
   
-  console.log(`\n📦 Installing required dependencies in ${target}...`);
+  console.log(`\n📦 Installing required dependencies in ${targetDir}...`);
   run('npm', ['install', ...REQUIRED_PACKAGES], { cwd: pkgDir });
 }
 
 async function main() {
   const args = process.argv.slice(2);
+  
+  // Handle --version flag
+  if (args[0] === '--version' || args[0] === '-v') {
+    const pkgPath = join(SCRIPT_DIR, '..', 'package.json');
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    console.log(`gsd-qdrant-cli v${pkg.version}`);
+    process.exit(0);
+  }
   
   if (args.length === 0) {
     console.log('🚀 GSD + Qdrant CLI');
@@ -146,19 +153,24 @@ async function main() {
     }
 
     const apiDir = existsSync(API_PKG) ? 'apps/api' : null;
-    console.log(`📁 Using: ${apiDir || 'project root'}`);
+    const targetDir = apiDir || 'project root';
+    console.log(`📁 Using: ${apiDir ? 'apps/api' : 'project root'}`);
 
     // Install required packages FIRST (this is the key fix!)
-    installDependencies(pkgPath);
+    installDependencies(pkgPath, targetDir);
 
     // Run setup from templates
     console.log('\n🔧 Running setup...');
     run('node', [join(SCRIPT_DIR, 'setup-from-templates.js')], { cwd: PROJECT_ROOT });
 
-    // Run initial sync
-    console.log('\n🧠 Running initial knowledge sync...');
-    const syncDir = apiDir ? 'apps/api' : PROJECT_ROOT;
-    run('npm', ['run', 'sync-knowledge'], { cwd: syncDir });
+    // Run initial sync (only if we have an API directory)
+    if (apiDir) {
+      console.log('\n🧠 Running initial knowledge sync...');
+      run('npm', ['run', 'sync-knowledge'], { cwd: join(PROJECT_ROOT, apiDir) });
+    } else {
+      console.log('\n⚠️  Frontend-only project detected - no sync-knowledge script available');
+      console.log('   To sync knowledge manually: npx node scripts/sync-knowledge.js');
+    }
 
     console.log('\n✅ Setup complete!');
     console.log('\nNext step: run your project normally (e.g., `npm run dev`).');

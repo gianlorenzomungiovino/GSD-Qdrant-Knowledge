@@ -12,13 +12,7 @@ const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'sentence-transformers/al
 const EMBEDDING_DIMENSIONS = process.env.EMBEDDING_DIMENSIONS || '384';
 
 function getProjectName(projectRoot) {
-  try {
-    const pkgPath = join(projectRoot, 'package.json');
-    if (existsSync(pkgPath)) {
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-      if (pkg.name) return pkg.name;
-    }
-  } catch (_e) {}
+  // Always use directory name as project name
   return basename(projectRoot.replace(/\\/g, '/'));
 }
 
@@ -39,12 +33,14 @@ function findProjectRoot() {
 function getApiDir(projectRoot) {
   const appsApi = join(projectRoot, 'apps', 'api');
   if (existsSync(appsApi)) return appsApi;
-  return projectRoot;
+  return null; // Return null for frontend-only projects
 }
 
 function getPackageJsonPath(projectRoot, apiDir) {
-  const apiPkg = join(apiDir, 'package.json');
-  if (existsSync(apiPkg)) return apiPkg;
+  if (apiDir) {
+    const apiPkg = join(apiDir, 'package.json');
+    if (existsSync(apiPkg)) return apiPkg;
+  }
   return join(projectRoot, 'package.json');
 }
 
@@ -55,7 +51,7 @@ async function installPostCommitHook(projectRoot, apiDir) {
     return;
   }
 
-  const relApiDir = apiDir.replace(projectRoot, '').replace(/^[/\\]/, '');
+  const relApiDir = apiDir ? apiDir.replace(projectRoot, '').replace(/^[/\\]/, '') : '.';
   const hookPath = join(hooksDir, 'post-commit');
   const hookContent = `#!/bin/sh
 # Auto-sync GSD knowledge to Qdrant after each local commit.
@@ -63,10 +59,16 @@ async function installPostCommitHook(projectRoot, apiDir) {
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 [ -z "$PROJECT_ROOT" ] && exit 0
 
-TARGET_DIR="$PROJECT_ROOT/${relApiDir || '.'}"
+TARGET_DIR="$PROJECT_ROOT/${relApiDir}"
 if [ -f "$TARGET_DIR/package.json" ]; then
   cd "$TARGET_DIR" || exit 0
-  npm run sync-knowledge >/dev/null 2>&1 || echo "[qdrant-sync] sync-knowledge failed" >&2
+  
+  # Check if sync-knowledge script exists
+  if [ -f "$TARGET_DIR/package.json" ] && grep -q "sync-knowledge" "$TARGET_DIR/package.json"; then
+    npm run sync-knowledge >/dev/null 2>&1 || echo "[qdrant-sync] sync-knowledge failed" >&2
+  else
+    echo "[qdrant-sync] No sync-knowledge script found in $TARGET_DIR" >&2
+  fi
 fi
 `;
 
@@ -75,6 +77,11 @@ fi
 }
 
 async function patchServerForWatcher(apiDir) {
+  if (!apiDir) {
+    console.log('⚠️  No API directory found, skipping watcher auto-start patch');
+    return;
+  }
+
   const serverPath = join(apiDir, 'src', 'server.js');
   if (!existsSync(serverPath)) {
     console.warn('⚠️  src/server.js not found, skipping watcher auto-start patch');
@@ -117,13 +124,15 @@ async function patchServerForWatcher(apiDir) {
 }
 
 const PROJECT_ROOT = findProjectRoot();
-const API_DIR = getApiDir(PROJECT_ROOT);
+const API_DIR = existsSync(join(PROJECT_ROOT, 'apps', 'api', 'package.json')) 
+  ? join(PROJECT_ROOT, 'apps', 'api') 
+  : null;
 const PROJECT_NAME = getProjectName(PROJECT_ROOT);
 const PROJECT_COLLECTION = `${PROJECT_NAME}-gsd`;
 
 console.log(`🚀 Setting up GSD Qdrant integration from templates...\n`);
 console.log(`📁 Project root: ${PROJECT_ROOT}`);
-console.log(`📁 API dir: ${API_DIR}`);
+console.log(`📁 API dir: ${API_DIR || 'N/A (frontend-only project)'}`);
 console.log(`📛 Project name: ${PROJECT_NAME}`);
 console.log(`🗄️  Qdrant collection: ${PROJECT_COLLECTION}`);
 console.log(`🧠 MCP vector name: ${VECTOR_NAME}\n`);
@@ -132,17 +141,25 @@ async function setup() {
   const client = new QdrantClient({ url: QDRANT_URL });
 
   console.log('📥 Downloading templates from Qdrant...');
-  const { points } = await client.scroll(TEMPLATE_COLLECTION, {
-    limit: 100,
-    with_payload: true,
-    with_vectors: false,
-  });
+  let points = [];
+  try {
+    const { points: fetchedPoints } = await client.scroll(TEMPLATE_COLLECTION, {
+      limit: 100,
+      with_payload: true,
+      with_vectors: false,
+    });
 
-  if (!points || points.length === 0) {
-    throw new Error('No templates found in collection ' + TEMPLATE_COLLECTION);
+    if (fetchedPoints && fetchedPoints.length > 0) {
+      points = fetchedPoints;
+      console.log(`Found ${points.length} template files.\n`);
+    } else {
+      console.log('⚠️  No templates found in collection ' + TEMPLATE_COLLECTION);
+      console.log('   Continuing with project setup anyway...\n');
+    }
+  } catch (err) {
+    console.warn(`⚠️  Could not fetch templates: ${err.message}`);
+    console.log('   Continuing with project setup anyway...\n');
   }
-
-  console.log(`Found ${points.length} template files.\n`);
 
   for (const point of points) {
     const payload = point.payload;
@@ -160,7 +177,7 @@ async function setup() {
       await mkdir(dirname(targetPath), { recursive: true });
       await writeFile(targetPath, modified);
       console.log('📝 Created .gsd/mcp.json');
-    } else if (filePath.includes('lib/gsd-qdrant-sync/')) {
+    } else if (filePath.includes('lib/gsd-qdrant-sync/') && API_DIR) {
       targetPath = join(API_DIR, 'src', 'lib', 'gsd-qdrant-sync', 'index.js');
       await mkdir(dirname(targetPath), { recursive: true });
       await writeFile(targetPath, content);
@@ -173,31 +190,69 @@ async function setup() {
     }
   }
 
+  // Create project collection in Qdrant (always, even for frontend-only projects)
+  console.log('\n🗄️  Creating Qdrant collection for project...');
+  try {
+    await client.createCollection(PROJECT_COLLECTION, {
+      vectors: {
+        [VECTOR_NAME]: {
+          size: parseInt(EMBEDDING_DIMENSIONS, 10),
+          distance: 'Cosine',
+        },
+      },
+    });
+    console.log(`✅ Created collection: ${PROJECT_COLLECTION}`);
+  } catch (err) {
+    if (err.message.includes("already exists")) {
+      console.log(`ℹ️  Collection ${PROJECT_COLLECTION} already exists`);
+    } else {
+      console.warn(`⚠️  Could not create collection: ${err.message}`);
+    }
+  }
+
   const pkgPath = getPackageJsonPath(PROJECT_ROOT, API_DIR);
   try {
     const pkgContent = await readFile(pkgPath, 'utf-8');
     const pkg = JSON.parse(pkgContent);
-    pkg.scripts = pkg.scripts || {};
-    pkg.scripts['sync-knowledge'] = 'node src/lib/gsd-qdrant-sync/index.js sync';
-    pkg.scripts['sync-knowledge:watch'] = 'node src/lib/gsd-qdrant-sync/index.js watch';
-    pkg.dependencies = pkg.dependencies || {};
-    pkg.dependencies['@qdrant/js-client-rest'] = '^1.17.0';
-    pkg.dependencies['@xenova/transformers'] = '^2.17.2';
-    await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-    console.log(`📝 Updated ${pkgPath}`);
+    
+    // Only add scripts if we have an API directory
+    if (API_DIR) {
+      pkg.scripts = pkg.scripts || {};
+      pkg.scripts['sync-knowledge'] = 'node src/lib/gsd-qdrant-sync/index.js sync';
+      pkg.scripts['sync-knowledge:watch'] = 'node src/lib/gsd-qdrant-sync/index.js watch';
+      pkg.dependencies = pkg.dependencies || {};
+      pkg.dependencies['@qdrant/js-client-rest'] = '^1.17.0';
+      pkg.dependencies['@xenova/transformers'] = '^2.17.2';
+      await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+      console.log(`📝 Updated ${pkgPath}`);
+    } else {
+      console.log('⚠️  No API directory found - skipping npm scripts update (frontend-only project)');
+      console.log('   You can manually run sync-knowledge with: npx node scripts/sync-knowledge.js');
+    }
   } catch (_e) {
     console.warn('⚠️  Could not update package.json (not found or invalid)');
   }
 
-  await installPostCommitHook(PROJECT_ROOT, API_DIR);
-  await patchServerForWatcher(API_DIR);
+  // Only install hook if we have a git hooks directory
+  if (existsSync(join(PROJECT_ROOT, '.git', 'hooks'))) {
+    await installPostCommitHook(PROJECT_ROOT, API_DIR);
+  }
+
+  // Only patch server if it exists
+  if (API_DIR) {
+    await patchServerForWatcher(API_DIR);
+  }
 
   console.log('\n✅ Setup complete!');
   console.log('\nWhat is automatic now:');
-  console.log('1. Every local git commit runs sync-knowledge via post-commit hook');
-  console.log('2. In any non-production environment, the app auto-starts the Qdrant watcher when src/server.js exists');
-  console.log(`3. Project MCP searches collection: ${PROJECT_COLLECTION}`);
-  console.log(`4. MCP and sync agree on named vector: ${VECTOR_NAME}`);
+  if (API_DIR) {
+    console.log('1. Every local git commit runs sync-knowledge via post-commit hook');
+    console.log('2. In any non-production environment, the app auto-starts the Qdrant watcher when src/server.js exists');
+  } else {
+    console.log('1. Frontend-only mode: Run `npx node scripts/sync-knowledge.js` manually or add to your build process');
+  }
+  console.log(`2. Project MCP searches collection: ${PROJECT_COLLECTION}`);
+  console.log(`3. MCP and sync agree on named vector: ${VECTOR_NAME}`);
 }
 
 setup().catch((err) => {

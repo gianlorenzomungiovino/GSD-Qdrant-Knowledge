@@ -1,14 +1,15 @@
 # GSD + Qdrant CLI
 
-CLI globale per configurare automaticamente una knowledge base GSD indicizzata in Qdrant in qualsiasi progetto Node.js.
+CLI globale per configurare automaticamente una knowledge base GSD indicizzata in Qdrant in **qualsiasi progetto Node.js** (frontend-only, backend-only, o full-stack).
 
 ## Caratteristiche Principali
 
-- **Project-Scoped Collections:** Ogni progetto ha le proprie collection Qdrant isolate (`{project-name}-docs`, `{project-name}-snippets`)
-- **Universal Usability:** Funziona in qualsiasi progetto Node.js senza configurazione manuale
+- **Project-Scoped Collections:** Ogni progetto ha le proprie collection Qdrant isolate (`{project-name}-gsd`)
+- **Universal Usability:** Funziona in qualsiasi progetto Node.js (frontend-only, backend-only, o full-stack) senza configurazione manuale
 - **Full Source Indexing:** Indizza tutti i file sorgente, non solo .md (.js, .ts, .jsx, .tsx, .py, .go, .rs, .sql, .json, .yml, .yaml)
 - **Context-Aware Search:** Query semantiche con contesto dai file .md di .gsd/
 - **Automatic Setup:** Installazione e configurazione automatica delle dipendenze
+- **Graceful Degradation:** Funziona anche se i template non sono disponibili o se mancano componenti del progetto
 
 ## Procedura di Installazione
 
@@ -36,11 +37,14 @@ cd /percorso/tuo-progetto
 gsd-qdrant
 ```
 
-La CLI:
-1. Installa `@qdrant/js-client-rest` e `@xenova/transformers`
-2. Scarica i template dalla collection Qdrant `gsd-setup-templates`
-3. Crea i file necessari nel progetto
-4. Esegue l'indicizzazione iniziale
+**La CLI fa automaticamente:**
+1. Installa `@qdrant/js-client-rest` e `@xenova/transformers` (se necessario)
+2. Scarica i template dalla collection Qdrant `gsd-setup-templates` (se disponibili)
+3. **Crea sempre la collection Qdrant** `{project-name}-gsd`
+4. Crea i file necessari nel progetto (se possibili)
+5. Installa il post-commit hook per l'indicizzazione automatica
+
+**Nota:** Il setup continua anche se i template non sono disponibili o se mancano componenti del progetto (es. `src/lib`, `src/server.js`).
 
 ### 4. Esegui il Progetto
 
@@ -93,10 +97,11 @@ python -m pip install mcp qdrant-client fastembed
 I file template **non** vengono copiati localmente. Risiedono nella collection Qdrant `gsd-setup-templates` e vengono scaricati al momento del setup.
 
 **Cosa viene creato nel progetto:**
-- `lib/gsd-qdrant-sync/index.js` — Libreria di sync con collection scoped per progetto
-- `.mcp.json` — Configurazione MCP servers
-- `.git/hooks/post-commit` — Hook per sync automatica
-- Patch di `src/server.js` (se presente) per avviare il watcher
+- **Frontend-only projects:** `.gsd/mcp.json` configurato per usare la collection `{project-name}-gsd`
+- **Full-stack projects:** `lib/gsd-qdrant-sync/index.js` — Libreria di sync con collection scoped per progetto
+- **Full-stack projects:** `.mcp.json` — Configurazione MCP servers
+- **Full-stack projects:** `.git/hooks/post-commit` — Hook per sync automatica
+- **Full-stack projects:** Patch di `src/server.js` (se presente) per avviare il watcher
 
 **Cosa viene indicizzato:**
 - **Files .md in .gsd/:** PROJECT, REQUIREMENTS, DECISIONS, KNOWLEDGE, SUMMARY, PLAN, UAT
@@ -104,8 +109,9 @@ I file template **non** vengono copiati localmente. Risiedono nella collection Q
 - **Code snippets:** .js, .ts, .jsx, .tsx, .py, .go, .rs, .sql, .json, .yml, .yaml
 
 **Automazione:**
-- **Post-commit:** Ogni commit git esegue `npm run sync-knowledge`
+- **Post-commit:** Ogni commit git esegue `npm run sync-knowledge` (se disponibile nel progetto)
 - **Watcher:** Se in ambiente non-production, il watcher indicizza in tempo reale
+- **Frontend-only:** Esegui manualmente `npx node scripts/sync-knowledge.js` o aggiungilo al tuo build process
 
 ---
 
@@ -182,6 +188,8 @@ Il sistema indicizza automaticamente:
 | Post-commit hook non esegue | Controlla che `.git/hooks/` esista e sia scrivibile |
 | Cross-project search fallisce | Verifica la registry Qdrant e le dipendenze Python |
 | `Not Found` durante setup | Verifica che la collection Qdrant `gsd-setup-templates` esista |
+| Frontend-only project non ha sync-knowledge script | Usa `npx node scripts/sync-knowledge.js` manualmente o crea uno script custom |
+| Collection non viene creata | Il setup ora crea sempre la collection, anche se fallisce il fetch dei template |
 
 ---
 
@@ -193,6 +201,6 @@ Il sistema indicizza automaticamente:
 
 ---
 
-**Version:** 1.0.4  
+**Version:** 1.0.5  
 **Updated:** April 2026  
-**Key Features:** Project-scoped collections, universal usability, full source indexing
+**Key Features:** Project-scoped collections, universal usability, full source indexing, graceful degradation

@@ -1,187 +1,141 @@
-# GSD + Qdrant CLI - Technical Overview
+# CLI Improvements - Universal Project Support
 
-## Architecture
+## Problem Solved
 
-This CLI automates GSD knowledge base sync with Qdrant across any Node.js project.
+The `gsd-qdrant` CLI was failing to work correctly in frontend-only projects (e.g., React/Vite apps) because:
 
-## Core Problem Solved
+1. **Collection creation was skipped** - The setup script would fail early if it couldn't fetch templates from `gsd-setup-templates`
+2. **No graceful handling of missing `src/lib`** - The script assumed `src/lib` directory always exists
+3. **No graceful handling of missing `src/server.js`** - The script assumed a Node.js backend always exists
+4. **Unclear error messages** - Users didn't know why the setup failed or what to do next
 
-The original bootstrap executed setup **before** installing dependencies, causing:
+## Changes Made
 
-```
-Error: Cannot find module '@qdrant/js-client-rest'
-```
+### 1. Graceful Template Fetching
 
-## Solution: Correct Execution Order
-
+**Before:**
 ```javascript
-function main() {
-  // 1. Install dependencies FIRST ✅
-  installDependencies(pkgPath);
-  
-  // 2. Run setup ✅
-  run('node', ['scripts/setup-from-templates.js']);
-  
-  // 3. Run initial sync ✅
-  run('npm', ['run', 'sync-knowledge']);
+const { points } = await client.scroll(TEMPLATE_COLLECTION, { ... });
+if (!points || points.length === 0) {
+  throw new Error('No templates found in collection ' + TEMPLATE_COLLECTION);
 }
 ```
 
-## Files Structure
-
-### Scripts
-- `scripts/cli.js` - Main CLI entry point
-- `scripts/bootstrap-project.js` - Legacy bootstrap (alternative)
-- `scripts/setup-from-templates.js` - Template setup from Qdrant
-- `scripts/install-dependencies.js` - Dependency installation logic
-- `scripts/sync-knowledge.js` - Knowledge sync script
-
-### Core Library
-- `lib/gsd-qdrant-sync/index.js` - Main sync engine with project-scoped collections
-
-### Snippet Database
-- `scripts/snippet-db-schema.sql` - PostgreSQL schema with pgvector
-- `scripts/ast-parser.js` - AST parser for code extraction
-- `scripts/snippet-extractor.js` - Extract functions, classes, configs
-- `scripts/search-api.js` - Search API with relevance scoring
-- `scripts/snippet-ranking.js` - Ranking and filtering
-
-## Template Flow
-
-**Templates live in Qdrant**, not copied locally:
-1. Collection `gsd-setup-templates` stores all template files
-2. CLI downloads templates from Qdrant at setup time
-3. Only necessary files are created in target project
-
-## Project-Scoped Collections (M005/S02)
-
-Each project has isolated Qdrant collections:
-
-- **{project-name}-docs:** All `.md` files in `.gsd/`
-- **{project-name}-snippets:** All other source files
-
-**Collection naming:**
+**After:**
 ```javascript
-const collections = {
-  docs: `${projectName}-docs`,
-  snippets: `${projectName}-snippets`,
-};
+let points = [];
+try {
+  const { points: fetchedPoints } = await client.scroll(TEMPLATE_COLLECTION, { ... });
+  if (fetchedPoints && fetchedPoints.length > 0) {
+    points = fetchedPoints;
+  } else {
+    console.log('⚠️  No templates found in collection ' + TEMPLATE_COLLECTION);
+    console.log('   Continuing with project setup anyway...\n');
+  }
+} catch (err) {
+  console.warn(`⚠️  Could not fetch templates: ${err.message}`);
+  console.log('   Continuing with project setup anyway...\n');
+}
 ```
 
-**Example:**
-- Project: `qdrant-template` → `qdrant-template-docs`, `qdrant-template-snippets`
-- Project: `my-project` → `my-project-docs`, `my-project-snippets`
+### 2. Universal Collection Creation
 
-**Benefits:**
-- Universal usability - works in any project without manual configuration
-- Isolation between projects - no conflicts when multiple projects use the same Qdrant
-- Automatic creation on first sync
+**Always creates the project collection**, regardless of whether:
+- Templates were fetched successfully
+- An API directory exists
+- The project is frontend-only or full-stack
 
-## File Type Support
-
-The system indexes ALL source file types:
-
-| Extension | Type | Collection |
-|-----------|------|------------|
-| `.md` | context-doc | {project-name}-docs |
-| `.js`, `.ts`, `.jsx`, `.tsx` | code-snippet | {project-name}-snippets |
-| `.py` | code-snippet | {project-name}-snippets |
-| `.go` | code-snippet | {project-name}-snippets |
-| `.rs` | code-snippet | {project-name}-snippets |
-| `.sql` | code-snippet | {project-name}-snippets |
-| `.json`, `.yml`, `.yaml` | code-snippet | {project-name}-snippets |
-
-## Database Schema
-
-```sql
-CREATE TABLE snippets (
-    id UUID PRIMARY KEY,
-    type TEXT NOT NULL,        -- function, class, module, config, context-doc
-    name TEXT NOT NULL,
-    language TEXT NOT NULL,
-    sourceFile TEXT NOT NULL,
-    sourceLine INTEGER NOT NULL,
-    content TEXT NOT NULL,
-    description TEXT,
-    tags TEXT[],
-    dependencies TEXT[],
-    context TEXT,
-    metrics JSONB,
-    crossProject BOOLEAN DEFAULT false,
-    embedding vector(384),
-    createdAt TIMESTAMP,
-    updatedAt TIMESTAMP
-);
-
-CREATE INDEX idx_snippets_fts ON snippets USING gin(to_tsvector('english', content));
-CREATE INDEX idx_snippets_embedding ON snippets USING vector(embedding_ops);
+```javascript
+console.log('\n🗄️  Creating Qdrant collection for project...');
+try {
+  await client.createCollection(PROJECT_COLLECTION, {
+    vectors: { [VECTOR_NAME]: { size: 384, distance: 'Cosine' } },
+  });
+  console.log(`✅ Created collection: ${PROJECT_COLLECTION}`);
+} catch (err) {
+  if (err.message.includes("already exists")) {
+    console.log(`ℹ️  Collection ${PROJECT_COLLECTION} already exists`);
+  } else {
+    console.warn(`⚠️  Could not create collection: ${err.message}`);
+  }
+}
 ```
 
-## CLI Commands
+### 3. Conditional npm Scripts Update
 
-```bash
-# Setup
-gsd-qdrant
+**Only updates package.json** if an API directory exists:
 
-# Manual sync
-gsd-qdrant sync
-
-# Watch mode for real-time indexing
-gsd-qdrant watch
-
-# Snippet search
-gsd-qdrant snippet search 'authentication'
-gsd-qdrant snippet search 'database' --type=function --language=typescript
-gsd-qdrant snippet search 'api' --export=results.json
-
-# Search with context
-gsd-qdrant query "file operations fs" --with-context
+```javascript
+if (API_DIR) {
+  // Add sync-knowledge scripts
+  pkg.scripts['sync-knowledge'] = 'node src/lib/gsd-qdrant-sync/index.js sync';
+  // ...
+} else {
+  console.log('⚠️  No API directory found - skipping npm scripts update (frontend-only project)');
+  console.log('   You can manually run sync-knowledge with: npx node scripts/sync-knowledge.js');
+}
 ```
+
+### 4. Conditional Hook Installation
+
+**Only installs post-commit hook** if a `.git/hooks` directory exists:
+
+```javascript
+if (existsSync(join(PROJECT_ROOT, '.git', 'hooks'))) {
+  await installPostCommitHook(PROJECT_ROOT, API_DIR);
+}
+```
+
+The hook itself checks for the existence of `sync-knowledge` script before running it.
+
+### 5. Conditional Server Patching
+
+**Only patches `src/server.js`** if it exists:
+
+```javascript
+async function patchServerForWatcher(apiDir) {
+  if (!apiDir) {
+    console.log('⚠️  No API directory found, skipping watcher auto-start patch');
+    return;
+  }
+  // ... rest of the function
+}
+```
+
+### 6. Improved Error Handling for package.json
+
+**Handles null API_DIR correctly:**
+
+```javascript
+function getPackageJsonPath(projectRoot, apiDir) {
+  if (apiDir) {
+    const apiPkg = join(apiDir, 'package.json');
+    if (existsSync(apiPkg)) return apiPkg;
+  }
+  return join(projectRoot, 'package.json');
+}
+```
+
+## Result
+
+The CLI now works universally:
+
+| Project Type | Collection Created | npm Scripts | Post-Commit Hook | Server Patch |
+|--------------|-------------------|-------------|------------------|--------------|
+| Frontend-only (Vite/React) | ✅ | ⚠️ (manual only) | ✅ | N/A |
+| Backend-only (Express/Nest) | ✅ | ✅ | ✅ | ✅ |
+| Full-stack (Monorepo) | ✅ | ✅ | ✅ | ✅ |
 
 ## Testing
 
-```bash
-npm test           # Run all tests
-npm run test:watch # Watch mode
-npm run test:coverage # Coverage report
-```
-
-**Results:** 15 tests passing, 100% coverage on utility scripts.
-
-## Milestone Status
-
-| Milestone | Status |
-|-----------|--------|
-| M001: CLI Creation and Testing | ✅ 100% |
-| M002: Testing and Publishing | ✅ 100% |
-| M003: Code Snippets Database | ✅ 100% |
-| M005: Publish & Polish | 🚧 In Progress |
-
-## Key Decisions (M005)
-
-### D018: Project-Scoped Qdrant Collections
-
-**Decision:** Use project name prefix for Qdrant collections
-
-**Rationale:**
-- Ensures universal usability across any project
-- Each project has isolated collections to avoid conflicts
-- No manual configuration required
-
-**Impact:**
-- Collections are automatically created on first sync
-- Multiple projects can coexist without conflicts
-- Clean separation of concerns (docs vs snippets)
+Tested successfully with:
+- ✅ Frontend-only project (`vite-project` in `prova_landing_page`)
+- ✅ Created collection `vite-project-gsd`
+- ✅ Installed post-commit hook with graceful fallback
 
 ## Next Steps
 
-- Complete M005/S03: Fix complete indexing
-- Publish to npm (`gsd-qdrant-cli`)
-- Add integration tests
-- Performance monitoring
-
----
-
-**Version:** 1.0.2  
-**Updated:** April 2026  
-**Key Features:** Project-scoped collections, universal usability, full source indexing
+Consider adding:
+1. A standalone `sync-knowledge.js` script for frontend-only projects
+2. Better documentation on how to use the CLI in different project types
+3. Optional flag to force collection creation even if templates fail to fetch

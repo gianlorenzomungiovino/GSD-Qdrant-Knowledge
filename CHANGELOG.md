@@ -1,5 +1,56 @@
 # Changelog
 
+## [1.0.6] - 2026-04-08
+
+### 🐛 Bug Fixes
+
+- **Collection naming now uses directory name**
+  - Fixed: Collection name was incorrectly derived from `package.json` `name` field
+  - Now always uses project directory name (e.g., `my-project` → `my-project-gsd`)
+  - Ensures consistent naming regardless of `package.json` configuration
+
+### 📝 Documentation
+
+- Updated CHANGELOG.md with version 1.0.6 changes
+
+---
+
+## [1.0.5] - 2026-04-08
+
+### 🌟 New Features
+
+- **Universal Project Support**
+  - Works in frontend-only projects (Vite, React, etc.)
+  - Works in backend-only projects (Express, Nest, etc.)
+  - Works in full-stack/monorepo projects
+  - No manual configuration required for any project type
+
+- **Graceful Degradation**
+  - Setup continues even if templates are unavailable
+  - Collection creation always succeeds regardless of template fetch
+  - Clear messages for missing components (e.g., `src/lib`, `src/server.js`)
+
+### 🔧 Improvements
+
+- **Conditional Setup Logic**
+  - npm scripts only added when API directory exists
+  - Post-commit hook only installed when `.git/hooks` exists
+  - Server patching only performed when `src/server.js` exists
+  - Better error messages for each conditional operation
+
+- **Enhanced Error Handling**
+  - Handles null/undefined API directory gracefully
+  - Catches and logs template fetch errors without failing setup
+  - Collection creation uses try-catch with clear status messages
+
+### 📝 Documentation
+
+- Updated README.md with universal project support details
+- Added CLI-IMPROVEMENTS.md with architecture and implementation details
+- Updated troubleshooting section with frontend-only scenarios
+
+---
+
 ## [1.0.4] - 2026-04-08
 
 ### 🔧 Improvements
