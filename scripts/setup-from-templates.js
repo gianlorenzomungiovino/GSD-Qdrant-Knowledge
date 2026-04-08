@@ -128,13 +128,16 @@ const API_DIR = existsSync(join(PROJECT_ROOT, 'apps', 'api', 'package.json'))
   ? join(PROJECT_ROOT, 'apps', 'api') 
   : null;
 const PROJECT_NAME = getProjectName(PROJECT_ROOT);
-const PROJECT_COLLECTION = `${PROJECT_NAME}-gsd`;
+const COLLECTIONS = {
+  docs: `${PROJECT_NAME}-docs`,
+  snippets: `${PROJECT_NAME}-snippets`,
+};
 
 console.log(`🚀 Setting up GSD Qdrant integration from templates...\n`);
 console.log(`📁 Project root: ${PROJECT_ROOT}`);
 console.log(`📁 API dir: ${API_DIR || 'N/A (frontend-only project)'}`);
 console.log(`📛 Project name: ${PROJECT_NAME}`);
-console.log(`🗄️  Qdrant collection: ${PROJECT_COLLECTION}`);
+console.log(`🗄️  Qdrant collections: ${Object.values(COLLECTIONS).join(', ')}`);
 console.log(`🧠 MCP vector name: ${VECTOR_NAME}\n`);
 
 async function setup() {
@@ -170,7 +173,8 @@ async function setup() {
     if (filePath.endsWith('mcp.json.template')) {
       targetPath = join(PROJECT_ROOT, '.gsd', 'mcp.json');
       const modified = content
-        .replace(/<PROJECT_NAME>-gsd/g, `${PROJECT_NAME}-gsd`)
+        .replace(/<PROJECT_NAME>-docs/g, COLLECTIONS.docs)
+        .replace(/<PROJECT_NAME>-snippets/g, COLLECTIONS.snippets)
         .replace(/<VECTOR_NAME>/g, VECTOR_NAME)
         .replace(/<EMBEDDING_MODEL>/g, EMBEDDING_MODEL)
         .replace(/<EMBEDDING_DIMENSIONS>/g, EMBEDDING_DIMENSIONS);
@@ -190,23 +194,26 @@ async function setup() {
     }
   }
 
-  // Create project collection in Qdrant (always, even for frontend-only projects)
-  console.log('\n🗄️  Creating Qdrant collection for project...');
-  try {
-    await client.createCollection(PROJECT_COLLECTION, {
-      vectors: {
-        [VECTOR_NAME]: {
-          size: parseInt(EMBEDDING_DIMENSIONS, 10),
-          distance: 'Cosine',
+  // Create project collections in Qdrant (always, even for frontend-only projects)
+  console.log('\n🗄️  Creating Qdrant collections for project...');
+  
+  for (const [type, collectionName] of Object.entries(COLLECTIONS)) {
+    try {
+      await client.createCollection(collectionName, {
+        vectors: {
+          [VECTOR_NAME]: {
+            size: parseInt(EMBEDDING_DIMENSIONS, 10),
+            distance: 'Cosine',
+          },
         },
-      },
-    });
-    console.log(`✅ Created collection: ${PROJECT_COLLECTION}`);
-  } catch (err) {
-    if (err.message.includes("already exists")) {
-      console.log(`ℹ️  Collection ${PROJECT_COLLECTION} already exists`);
-    } else {
-      console.warn(`⚠️  Could not create collection: ${err.message}`);
+      });
+      console.log(`✅ Created collection: ${collectionName} (${type})`);
+    } catch (err) {
+      if (err.message.includes("already exists")) {
+        console.log(`ℹ️  Collection ${collectionName} already exists`);
+      } else {
+        console.warn(`⚠️  Could not create ${collectionName}: ${err.message}`);
+      }
     }
   }
 
@@ -227,7 +234,7 @@ async function setup() {
       console.log(`📝 Updated ${pkgPath}`);
     } else {
       console.log('⚠️  No API directory found - skipping npm scripts update (frontend-only project)');
-      console.log('   You can manually run sync-knowledge with: npx node scripts/sync-knowledge.js');
+      console.log('   Note: sync-knowledge runs automatically with `gsd-qdrant`');
     }
   } catch (_e) {
     console.warn('⚠️  Could not update package.json (not found or invalid)');
@@ -249,9 +256,9 @@ async function setup() {
     console.log('1. Every local git commit runs sync-knowledge via post-commit hook');
     console.log('2. In any non-production environment, the app auto-starts the Qdrant watcher when src/server.js exists');
   } else {
-    console.log('1. Frontend-only mode: Run `npx node scripts/sync-knowledge.js` manually or add to your build process');
+    console.log('1. Frontend-only mode: sync-knowledge runs automatically with gsd-qdrant');
   }
-  console.log(`2. Project MCP searches collection: ${PROJECT_COLLECTION}`);
+  console.log(`2. Project MCP searches: ${COLLECTIONS.snippets} (snippets)`);
   console.log(`3. MCP and sync agree on named vector: ${VECTOR_NAME}`);
 }
 

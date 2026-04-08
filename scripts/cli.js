@@ -163,13 +163,20 @@ async function main() {
     console.log('\n🔧 Running setup...');
     run('node', [join(SCRIPT_DIR, 'setup-from-templates.js')], { cwd: PROJECT_ROOT });
 
-    // Run initial sync (only if we have an API directory)
+    // Run initial sync (always, for both API and frontend-only projects)
+    console.log('\n🧠 Running initial knowledge sync...');
     if (apiDir) {
-      console.log('\n🧠 Running initial knowledge sync...');
-      run('npm', ['run', 'sync-knowledge'], { cwd: join(PROJECT_ROOT, apiDir) });
+      spawnSync('npm', ['run', 'sync-knowledge'], { 
+        cwd: join(PROJECT_ROOT, apiDir),
+        stdio: 'inherit'
+      });
     } else {
-      console.log('\n⚠️  Frontend-only project detected - no sync-knowledge script available');
-      console.log('   To sync knowledge manually: npx node scripts/sync-knowledge.js');
+      // For frontend-only projects, run directly
+      const syncScript = join(SCRIPT_DIR, '..', 'scripts', 'sync-knowledge.js');
+      spawnSync('node', [syncScript], { 
+        cwd: PROJECT_ROOT,
+        stdio: 'inherit'
+      });
     }
 
     console.log('\n✅ Setup complete!');
@@ -441,10 +448,15 @@ async function main() {
     console.log('\n🔧 Running setup...');
     run('node', [join(SCRIPT_DIR, 'setup-from-templates.js')], { cwd: PROJECT_ROOT });
 
-    // Run initial sync
+    // Run initial sync (always, for both API and frontend-only projects)
     console.log('\n🧠 Running initial knowledge sync...');
-    const syncDir = apiDir ? 'apps/api' : PROJECT_ROOT;
-    run('npm', ['run', 'sync-knowledge'], { cwd: syncDir });
+    if (apiDir) {
+      run('npm', ['run', 'sync-knowledge'], { cwd: join(PROJECT_ROOT, apiDir) });
+    } else {
+      // For frontend-only projects, run directly
+      const syncScript = join(SCRIPT_DIR, '..', 'scripts', 'sync-knowledge.js');
+      run('node', [syncScript], { cwd: PROJECT_ROOT });
+    }
 
     console.log('\n✅ Setup complete!');
     console.log('\nNext step: run your project normally (e.g., `npm run dev`).');

@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.0.7] - 2026-04-08
+
+### 🐛 Bug Fixes
+
+- **Fixed `pathToId()` ID generation**
+  - Fixed: Method was generating invalid ID formats for Qdrant (strings, large numbers)
+  - Now generates valid UUID v4 format for all points
+  - Ensures compatibility with Qdrant's ID requirements (unsigned integer or UUID)
+
+- **Fixed sync execution in CLI**
+  - Changed from `run()` to `spawnSync()` with `stdio: 'inherit'`
+  - Now properly shows sync output and handles errors
+  - Fixes "fetch failed" errors during batch upsert
+
+### 📦 Architecture Changes
+
+- **Two separate collections per project**
+  - `{project-name}-docs` → `.md` files in `.gsd/`
+  - `{project-name}-snippets` → all other source files
+  - Replaces single `{project-name}-gsd` collection
+
+- **Reduced batch size**
+  - Changed from 100 to 10 points per batch
+  - Avoids payload size issues with large embeddings
+
+### 📝 Documentation
+
+- Updated README.md with collection structure details
+- Updated CHANGELOG.md with version 1.0.7 changes
+- Updated GSQ-QDRANT-SETUP.md with concise instructions
+
+---
+
 ## [1.0.6] - 2026-04-08
 
 ### 🐛 Bug Fixes
