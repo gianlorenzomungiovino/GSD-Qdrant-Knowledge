@@ -193,6 +193,6 @@ Il sistema indicizza automaticamente:
 
 ---
 
-**Version:** 1.0.2  
+**Version:** 1.0.4  
 **Updated:** April 2026  
 **Key Features:** Project-scoped collections, universal usability, full source indexing
