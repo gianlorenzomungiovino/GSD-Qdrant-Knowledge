@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.4] - 2026-04-08
+
+### 🔧 Improvements
+
+- **Added `--version` flag support**
+  - `gsd-qdrant --version` now shows the CLI version
+  - Also supports `-v` as a shorthand
+
+---
+
 ## [1.0.3] - 2026-04-08
 
 ### 🚀 New Features
