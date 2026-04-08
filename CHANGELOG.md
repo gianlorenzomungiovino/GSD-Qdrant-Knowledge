@@ -1,53 +1,47 @@
 # Changelog
 
-Tutti i cambiamenti significativi in questo progetto.
+## [1.0.2] - 2026-04-08
 
-## [1.0.0] - 2026-04-05
+### 🚀 New Features
 
-### 🎉 Release Iniziale
+- **Project-Scoped Collections**
+  - Each project gets isolated collections: `{project-name}-docs` and `{project-name}-snippets`
+  - Automatic collection creation on first sync
+  - Universal usability - works in any project without manual configuration
 
-- **CLI per setup automatico GSD + Qdrant**
-  - Installazione globale tramite npm
-  - Setup automatico di knowledge base GSD in qualsiasi progetto Node.js
-  - Integrazione con Qdrant per vector search
-  - Supporto per template personalizzati
+- **Extended File Type Support**
+  - Added support for 12 file extensions: `.md`, `.js`, `.ts`, `.jsx`, `.tsx`, `.py`, `.go`, `.rs`, `.sql`, `.json`, `.yml`, `.yaml`
+  - Code snippets indexed alongside documentation
 
-- **Funzionalità Principali**
-  - Installazione automatica di dipendenze (`@qdrant/js-client-rest`, `@xenova/transformers`)
-  - Download template da Qdrant cloud
-  - Creazione file progetto target
-  - Prima sync automatica della knowledge base
+### 🔧 Improvements
 
-- **Comandi CLI**
-  - `gsd-qdrant` - Avvia il setup
-  - `gsd-qdrant snippet search <query>` - Cerca snippet di codice
-  - `gsd-qdrant snippet search <query> --type=<type>` - Filtra per tipo
-  - `gsd-qdrant snippet search <query> --export=<file>` - Esporta risultati
+- Removed hardcoded component lists
+- Enhanced search with context from `.md` files
+- Better logging and diagnostics
 
-- **Integrazioni**
-  - Qdrant cloud per storage e vector search
-  - MCP (Model Context Protocol) per integrazione con LLM
-  - Supporto Docker per Qdrant server locale
+### 📝 Documentation
 
-- **Requisiti**
-  - Node.js >= 18
-  - Docker (opzionale, per Qdrant locale)
-  - Python 3.10+ con `mcp`, `qdrant-client`, `fastembed`
-
-### 📦 Pacchetti
-
-- **Nome:** `gsd-qdrant-cli`
-- **Versione:** 1.0.0
-- **Licenza:** MIT
-- **Repository:** [GitHub](https://github.com/yourusername/gsd-qdrant-cli.git)
+- Updated README.md with new features
+- Updated CLI-IMPROVEMENTS.md with architecture details
+- Updated GSQ-QDRANT-SETUP.md with concise instructions
 
 ---
 
-## [Unreleased]
+## [1.0.1] - 2026-04-06
 
-### Planned Features
+### 🐛 Bug Fixes
 
-- [ ] Supporto per più provider vector (Pinecone, Weaviate)
-- [ ] Plugin system per estendere funzionalità
-- [ ] Dashboard web per gestione knowledge base
-- [ ] Sync incrementale con webhook
+- Fixed npm publish validation errors
+- Improved error messages
+
+---
+
+## [1.0.0] - 2026-04-05
+
+### 🎉 Initial Release
+
+- CLI for automatic GSD + Qdrant setup
+- Global installation via npm
+- Knowledge base indexing in any Node.js project
+- MCP integration for vector search
+- Post-commit automation

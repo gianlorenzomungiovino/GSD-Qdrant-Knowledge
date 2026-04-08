@@ -2,6 +2,14 @@
 
 CLI globale per configurare automaticamente una knowledge base GSD indicizzata in Qdrant in qualsiasi progetto Node.js.
 
+## Caratteristiche Principali
+
+- **Project-Scoped Collections:** Ogni progetto ha le proprie collection Qdrant isolate (`{project-name}-docs`, `{project-name}-snippets`)
+- **Universal Usability:** Funziona in qualsiasi progetto Node.js senza configurazione manuale
+- **Full Source Indexing:** Indizza tutti i file sorgente, non solo .md (.js, .ts, .jsx, .tsx, .py, .go, .rs, .sql, .json, .yml, .yaml)
+- **Context-Aware Search:** Query semantiche con contesto dai file .md di .gsd/
+- **Automatic Setup:** Installazione e configurazione automatica delle dipendenze
+
 ## Procedura di Installazione
 
 ### 1. Installa la CLI Globalmente (una volta)
@@ -50,6 +58,12 @@ Da questo momento, ogni commit git eseguirà automaticamente l'indicizzazione de
 # Setup completo in un progetto
 gsd-qdrant
 
+# Sync manuale della knowledge base
+gsd-qdrant sync
+
+# Watch mode per indicizzazione in tempo reale
+gsd-qdrant watch
+
 # Ricerca snippet con keyword matching
 gsd-qdrant snippet search 'authentication'
 gsd-qdrant snippet search 'database' --type=function --language=typescript
@@ -79,15 +93,15 @@ python -m pip install mcp qdrant-client fastembed
 I file template **non** vengono copiati localmente. Risiedono nella collection Qdrant `gsd-setup-templates` e vengono scaricati al momento del setup.
 
 **Cosa viene creato nel progetto:**
-- `lib/gsd-qdrant-sync/index.js` — Libreria di sync
+- `lib/gsd-qdrant-sync/index.js` — Libreria di sync con collection scoped per progetto
 - `.mcp.json` — Configurazione MCP servers
 - `.git/hooks/post-commit` — Hook per sync automatica
 - Patch di `src/server.js` (se presente) per avviare il watcher
 
 **Cosa viene indicizzato:**
-- File `.md` in `.gsd/` (PROJECT, REQUIREMENTS, DECISIONS, KNOWLEDGE)
-- Artifact milestone/slice/task (M001/S01/T01/*.md)
-- Snippet di codice con embeddings (funzioni, classi, config)
+- **Files .md in .gsd/:** PROJECT, REQUIREMENTS, DECISIONS, KNOWLEDGE, SUMMARY, PLAN, UAT
+- **Artifact milestone/slice/task:** M001/S01/T01/*.md
+- **Code snippets:** .js, .ts, .jsx, .tsx, .py, .go, .rs, .sql, .json, .yml, .yaml
 
 **Automazione:**
 - **Post-commit:** Ogni commit git esegue `npm run sync-knowledge`
@@ -112,6 +126,12 @@ mcp_call("qdrant", "qdrant-find", {
 mcp_call("qdrant", "qdrant-find", {
   query: "M002 deploy content analytics"
 })
+
+// Cerca snippet con contesto
+mcp_call("qdrant", "qdrant-find", {
+  query: "file operations fs",
+  withContext: true
+})
 ```
 
 ---
@@ -129,12 +149,26 @@ export LOCAL_EMBEDDING_MODEL=Xenova/all-MiniLM-L6-v2
 
 ### Collection per Progetto
 
-Ogni progetto ha una collection dedicata: `<project-name>-gsd`
+Ogni progetto ha collection dedicate automaticamente create:
+
+- **{project-name}-docs:** Contiene tutti i file .md di `.gsd/`
+- **{project-name}-snippets:** Contiene tutti gli altri file sorgente
 
 Esempi:
-- `website-agency-gsd`
-- `client-alpha-gsd`
-- `internal-dashboard-gsd`
+- `qdrant-template-docs` / `qdrant-template-snippets`
+- `website-agency-gsd-docs` / `website-agency-gsd-snippets`
+- `client-alpha-docs` / `client-alpha-snippets`
+
+### Estensioni Supportate
+
+Il sistema indicizza automaticamente:
+- `.md` (context-doc)
+- `.js`, `.ts`, `.jsx`, `.tsx` (JavaScript/TypeScript)
+- `.py` (Python)
+- `.go` (Go)
+- `.rs` (Rust)
+- `.sql` (SQL)
+- `.json`, `.yml`, `.yaml` (Configuration)
 
 ---
 
@@ -147,6 +181,7 @@ Esempi:
 | Watcher non parte | Verifica `src/server.js` esiste e `NODE_ENV` non è `production` |
 | Post-commit hook non esegue | Controlla che `.git/hooks/` esista e sia scrivibile |
 | Cross-project search fallisce | Verifica la registry Qdrant e le dipendenze Python |
+| `Not Found` durante setup | Verifica che la collection Qdrant `gsd-setup-templates` esista |
 
 ---
 
@@ -154,8 +189,10 @@ Esempi:
 
 - [`GSQ-QDRANT-SETUP.md`](GSQ-QDRANT-SETUP.md) — Istruzioni complete di setup e contratto Qdrant
 - [`CLI-IMPROVEMENTS.md`](CLI-IMPROVEMENTS.md) — Architettura tecnica e dettagli di implementazione
+- [`.gsd/KNOWLEDGE.md`](.gsd/KNOWLEDGE.md) — Regole, pattern e lezioni apprese
 
 ---
 
-**Version:** 1.0.1  
-**Updated:** April 2026
+**Version:** 1.0.2  
+**Updated:** April 2026  
+**Key Features:** Project-scoped collections, universal usability, full source indexing
