@@ -1,6 +1,6 @@
 {
   "name": "gsd-qdrant-cli",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "CLI per setup automatico GSD + Qdrant in qualsiasi progetto Node.js",
   "main": "scripts/cli.js",
   "bin": {
