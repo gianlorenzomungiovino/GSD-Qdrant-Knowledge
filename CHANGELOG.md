@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.0.3] - 2026-04-08
+
+### 🚀 New Features
+
+- **Full Source Indexing**
+  - Index all project source files for comprehensive knowledge base
+  - Enhanced search capabilities across entire codebase
+  - Automatic detection of project structure
+
+### 🔧 Improvements
+
+- Refined project-scoped collections logic
+- Better error handling in sync operations
+- Improved performance for large projects
+
+---
+
 ## [1.0.2] - 2026-04-08
 
 ### 🚀 New Features
