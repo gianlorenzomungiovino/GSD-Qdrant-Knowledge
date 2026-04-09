@@ -10,7 +10,7 @@
  */
 
 const { spawnSync } = require('child_process');
-const { existsSync, readFileSync, mkdirSync, writeFileSync } = require('fs');
+const { existsSync, readFileSync, mkdirSync, writeFileSync, copyFileSync } = require('fs');
 const { join, dirname, extname, basename } = require('path');
 const readline = require('readline');
 
@@ -109,7 +109,7 @@ const REQUIRED_PACKAGES = [
 ];
 
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, {
+  return spawnSync(command, args, {
     stdio: 'inherit',
     shell: false,
     env: process.env,
@@ -123,11 +123,70 @@ function findPackagePath() {
   return null;
 }
 
+function areRequiredPackagesInstalled(projectRoot, pkgPath) {
+  try {
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    const declaredDeps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+
+    for (const dep of REQUIRED_PACKAGES) {
+      if (!declaredDeps[dep]) return false;
+      require.resolve(dep, { paths: [projectRoot] });
+    }
+
+    return true;
+  } catch (_err) {
+    return false;
+  }
+}
+
 function installDependencies(pkgPath, targetDir) {
-  const pkgDir = pkgPath.replace(/\\/g, '/');
+  if (areRequiredPackagesInstalled(PROJECT_ROOT, pkgPath)) {
+    console.log(`📦 Dependencies: ok`);
+    return 'ok';
+  }
   
-  console.log(`\n📦 Installing required dependencies in ${targetDir}...`);
-  run('npm', ['install', ...REQUIRED_PACKAGES], { cwd: pkgDir });
+  const pkgDir = pkgPath.replace(/\\/g, '/');
+  console.log(`📦 Dependencies: installing missing packages...`);
+  const result = run('npm', ['install', ...REQUIRED_PACKAGES], { cwd: pkgDir });
+  if (result.status !== 0) {
+    console.error('❌ Dependency installation failed.');
+    process.exit(result.status || 1);
+  }
+  return 'installed';
+}
+
+/**
+ * Create gsd-qdrant directory and required files
+ * @param {string} projectRoot - The project root directory
+ */
+function createGsdQdrantDirectory(projectRoot) {
+  const gsdQdrantDir = join(projectRoot, 'gsd-qdrant');
+  const stateFile = join(gsdQdrantDir, '.qdrant-sync-state.json');
+  const indexFile = join(gsdQdrantDir, 'index.js');
+  
+  // Create gsd-qdrant directory
+  if (!existsSync(gsdQdrantDir)) {
+    mkdirSync(gsdQdrantDir, { recursive: true });
+    console.log(`📂 Created directory: gsd-qdrant/`);
+  }
+  
+  // Create .qdrant-sync-state.json if it doesn't exist
+  if (!existsSync(stateFile)) {
+    const state = {
+      lastSync: null,
+      collections: {},
+      files: {}
+    };
+    writeFileSync(stateFile, JSON.stringify(state, null, 2), 'utf8');
+    console.log(`📝 Created: gsd-qdrant/.qdrant-sync-state.json`);
+  }
+  
+  // Create index.js if it doesn't exist
+  if (!existsSync(indexFile)) {
+    const templateIndexFile = join(SCRIPT_DIR, 'gsd-qdrant-template.js');
+    copyFileSync(templateIndexFile, indexFile);
+    console.log(`📝 Created: gsd-qdrant/index.js`);
+  }
 }
 
 async function main() {
@@ -142,8 +201,10 @@ async function main() {
   }
   
   if (args.length === 0) {
-    console.log('🚀 GSD + Qdrant CLI');
-    console.log('==================\n');
+    console.log('🚀 GSD + Qdrant CLI\n');
+
+    // Create gsd-qdrant directory and files
+    createGsdQdrantDirectory(PROJECT_ROOT);
 
     // Find which package.json to use
     const pkgPath = findPackagePath();
@@ -152,35 +213,23 @@ async function main() {
       process.exit(1);
     }
 
-    const apiDir = existsSync(API_PKG) ? 'apps/api' : null;
-    const targetDir = apiDir || 'project root';
-    console.log(`📁 Using: ${apiDir ? 'apps/api' : 'project root'}`);
+    console.log(`📁 Project: ${basename(PROJECT_ROOT)}`);
+    installDependencies(pkgPath, 'project root');
 
-    // Install required packages FIRST (this is the key fix!)
-    installDependencies(pkgPath, targetDir);
-
-    // Run setup from templates
-    console.log('\n🔧 Running setup...');
     run('node', [join(SCRIPT_DIR, 'setup-from-templates.js')], { cwd: PROJECT_ROOT });
 
-    // Run initial sync (always, for both API and frontend-only projects)
-    console.log('\n🧠 Running initial knowledge sync...');
-    if (apiDir) {
-      spawnSync('npm', ['run', 'sync-knowledge'], { 
-        cwd: join(PROJECT_ROOT, apiDir),
-        stdio: 'inherit'
-      });
-    } else {
-      // For frontend-only projects, run directly
-      const syncScript = join(SCRIPT_DIR, '..', 'scripts', 'sync-knowledge.js');
-      spawnSync('node', [syncScript], { 
-        cwd: PROJECT_ROOT,
-        stdio: 'inherit'
-      });
+    const syncScript = join(SCRIPT_DIR, '..', 'scripts', 'sync-knowledge.js');
+    const syncResult = spawnSync('node', [syncScript], { 
+      cwd: PROJECT_ROOT,
+      stdio: 'inherit'
+    });
+
+    if (syncResult.status !== 0) {
+      console.error('\n❌ Initial knowledge sync failed. Collections may be empty.');
+      process.exit(syncResult.status || 1);
     }
 
-    console.log('\n✅ Setup complete!');
-    console.log('\nNext step: run your project normally (e.g., `npm run dev`).');
+    console.log('\n✅ Ready');
   } else if (args[0] === 'snippet' && args[1] === 'search') {
     // Snippet search command
     const query = args[2] || '';
@@ -213,7 +262,8 @@ async function main() {
     }
     
     // Check if we should use Qdrant or local database
-    const useQdrant = existsSync(join(SCRIPT_DIR, '..', 'lib', 'gsd-qdrant-sync', 'index.js'));
+    const runtimeSyncPath = join(PROJECT_ROOT, 'gsd-qdrant', 'index.js');
+    const useQdrant = existsSync(runtimeSyncPath);
     
     // Run search (async)
     const runSearch = async () => {
@@ -221,7 +271,7 @@ async function main() {
       if (useQdrant) {
         // Use Qdrant-based search
         try {
-          const { GSDKnowledgeSync } = require(join(SCRIPT_DIR, '..', 'lib', 'gsd-qdrant-sync', 'index.js'));
+          const { GSDKnowledgeSync } = require(runtimeSyncPath);
           const sync = new GSDKnowledgeSync();
           await sync.init();
           
@@ -427,39 +477,29 @@ async function main() {
     console.log('='.repeat(50));
     console.log('✅ Snippet applied successfully!');
   } else {
-    // Default behavior - run setup
-    console.log('🚀 GSD + Qdrant CLI');
-    console.log('==================\n');
+    createGsdQdrantDirectory(PROJECT_ROOT);
 
-    // Find which package.json to use
+    console.log('🚀 GSD + Qdrant CLI\n');
+
     const pkgPath = findPackagePath();
     if (!pkgPath) {
       console.error('❌ No package.json found. Are you in a Node.js project?');
       process.exit(1);
     }
 
-    const apiDir = existsSync(API_PKG) ? 'apps/api' : null;
-    console.log(`📁 Using: ${apiDir || 'project root'}`);
+    console.log(`📁 Project: ${basename(PROJECT_ROOT)}`);
+    installDependencies(pkgPath, 'project root');
 
-    // Install required packages FIRST (this is the key fix!)
-    installDependencies(pkgPath);
-
-    // Run setup from templates
-    console.log('\n🔧 Running setup...');
     run('node', [join(SCRIPT_DIR, 'setup-from-templates.js')], { cwd: PROJECT_ROOT });
 
-    // Run initial sync (always, for both API and frontend-only projects)
-    console.log('\n🧠 Running initial knowledge sync...');
-    if (apiDir) {
-      run('npm', ['run', 'sync-knowledge'], { cwd: join(PROJECT_ROOT, apiDir) });
-    } else {
-      // For frontend-only projects, run directly
-      const syncScript = join(SCRIPT_DIR, '..', 'scripts', 'sync-knowledge.js');
-      run('node', [syncScript], { cwd: PROJECT_ROOT });
+    const syncScript = join(SCRIPT_DIR, '..', 'scripts', 'sync-knowledge.js');
+    const syncResult = spawnSync('node', [syncScript], { cwd: PROJECT_ROOT, stdio: 'inherit' });
+    if (syncResult.status !== 0) {
+      console.error('\n❌ Initial knowledge sync failed. Collections may be empty.');
+      process.exit(syncResult.status || 1);
     }
 
-    console.log('\n✅ Setup complete!');
-    console.log('\nNext step: run your project normally (e.g., `npm run dev`).');
+    console.log('\n✅ Ready');
   }
 }
 

@@ -10,8 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "sync-knowledge": "node src/lib/gsd-qdrant-sync/index.js sync",
-    "sync-knowledge:watch": "node src/lib/gsd-qdrant-sync/index.js watch"
+    "sync-knowledge": "node scripts/sync-knowledge.js"
   },
   "keywords": [
     "gsd",
@@ -35,11 +34,12 @@
   },
   "files": [
     "scripts/cli.js",
-    "scripts/bootstrap-project.js",
+    "scripts/sync-knowledge.js",
     "scripts/setup-from-templates.js",
-    "scripts/load-gsd-templates.js",
-    "lib/",
-    "README.md"
+    "scripts/gsd-qdrant-template.js",
+    "README.md",
+    "GSD-QDRANT-SETUP.md",
+    "CHANGELOG.md"
   ],
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.2",

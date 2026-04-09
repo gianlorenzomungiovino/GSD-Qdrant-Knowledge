@@ -1,0 +1,573 @@
+{
+  "lastSync": "2026-04-09T15:50:56.537Z",
+  "collections": {},
+  "files": {},
+  "docs": {
+    "9708856": {
+      "path": ".gsd/milestones/M005/slices/S02/tasks/T05-PLAN.md",
+      "hash": "9f18ad3a8a9645d3377fb6f3cd139a3a"
+    },
+    "61291556": {
+      "path": ".gsd/milestones/M003/slices/S03/S03-UAT.md",
+      "hash": "381c3bfffbd49ac56f0e772fd75be7e9"
+    },
+    "109306734": {
+      "path": ".gsd/milestones/M003/slices/S02/tasks/T01-PLAN.md",
+      "hash": "5de977a7d5ee6b89ff876af814ae5287"
+    },
+    "128775306": {
+      "path": ".gsd/milestones/M001/slices/S01/tasks/T02-SUMMARY.md",
+      "hash": "310b0b5fa157d4db378b4b5e5f191217"
+    },
+    "164442930": {
+      "path": ".gsd/milestones/M004/slices/S02/tasks/T04-PLAN.md",
+      "hash": "e6c8da683ff66fb00b6ee44d57697a9a"
+    },
+    "202513290": {
+      "path": ".gsd/milestones/M006/M006-ROADMAP.md",
+      "hash": "31dab87dbe63101f13703ef49a15136c"
+    },
+    "244990702": {
+      "path": ".gsd/milestones/M003/slices/S01/tasks/T01-SUMMARY.md",
+      "hash": "1b3b1211eed96b8929373676340fbe22"
+    },
+    "246661235": {
+      "path": ".gsd/PROJECT.md",
+      "hash": "675cf3f75265926ffacf6812a52b528c"
+    },
+    "262812788": {
+      "path": ".gsd/milestones/M001/M001-ROADMAP.md",
+      "hash": "db745ca23efc62a9d9250c71c9d38c46"
+    },
+    "297769695": {
+      "path": ".gsd/milestones/M004/M004-CONTEXT.md",
+      "hash": "a05230041a48182fa5f49286951571b5"
+    },
+    "332408012": {
+      "path": ".gsd/milestones/M003/slices/S03/tasks/T02-PLAN.md",
+      "hash": "7716c424d6c6f0fe0a71c8f1d23c03b1"
+    },
+    "355363836": {
+      "path": ".gsd/milestones/M002/slices/S01/tasks/T01-PLAN.md",
+      "hash": "726f2c697f3208891e9c81172fb2a599"
+    },
+    "384551935": {
+      "path": ".gsd/milestones/M003/slices/S03/tasks/T01-PLAN.md",
+      "hash": "4f91cfd13f1a5a54abf0af66f6e6fed2"
+    },
+    "408029505": {
+      "path": ".gsd/milestones/M002/slices/S01/S01-SUMMARY.md",
+      "hash": "592786c8d93f2ddbb2355a6f96358b5e"
+    },
+    "465886271": {
+      "path": ".gsd/milestones/M003/slices/S03/S03-PLAN.md",
+      "hash": "98c1e565b0c0c7301b0bfb47dcbac083"
+    },
+    "514954825": {
+      "path": ".gsd/milestones/M005/slices/S02/tasks/T05-SUMMARY.md",
+      "hash": "28df677098acc0f727a439d57cdc2ac5"
+    },
+    "534523042": {
+      "path": ".gsd/milestones/M002/slices/S01/tasks/T03-SUMMARY.md",
+      "hash": "3f22d2e6de1a167db3d66fe89bc8f380"
+    },
+    "561803848": {
+      "path": ".gsd/milestones/M004/slices/S02/tasks/T03-PLAN.md",
+      "hash": "855c47b51115f1b963d75c59261d4da6"
+    },
+    "591082889": {
+      "path": ".gsd/milestones/M003/slices/S01/S01-UAT.md",
+      "hash": "3931ebbaa288209dc087294ae57437c3"
+    },
+    "595086197": {
+      "path": ".gsd/milestones/M003/slices/S01/S01-PLAN.md",
+      "hash": "6eccf90d9d6de5ef4c837448223db095"
+    },
+    "639777133": {
+      "path": ".gsd/milestones/M002/slices/S01/tasks/T05-SUMMARY.md",
+      "hash": "9f7c1671673865874ba7141f79ca6161"
+    },
+    "714657048": {
+      "path": ".gsd/milestones/M002/slices/S01/S01-UAT.md",
+      "hash": "7ee58b4164bc51b5804e24b6971e888a"
+    },
+    "719751251": {
+      "path": ".gsd/REQUIREMENTS.md",
+      "hash": "7fcfbf71722281fd52f4f6f900615dd7"
+    },
+    "768728703": {
+      "path": ".gsd/milestones/M003/slices/S02/S02-UAT.md",
+      "hash": "e16eac197130fd9d8cbbbb3804f6690c"
+    },
+    "831274450": {
+      "path": ".gsd/milestones/M005/slices/S02/tasks/T01-PLAN.md",
+      "hash": "6a1c5042220a7c78dfc82b4928a5bb6c"
+    },
+    "847436893": {
+      "path": ".gsd/milestones/M003/slices/S03/tasks/T01-SUMMARY.md",
+      "hash": "8bc6b8a5994dc32f9c24974783c2227c"
+    },
+    "861250142": {
+      "path": ".gsd/milestones/M004/slices/S02/S02-UAT.md",
+      "hash": "28f5864519d5f45622b194e4a2542eb5"
+    },
+    "972421545": {
+      "path": ".gsd/milestones/M004/M004-DISCUSSION.md",
+      "hash": "fa491d5732973fb2c56945c3cdf335f5"
+    },
+    "977874849": {
+      "path": ".gsd/milestones/M005/slices/S02/tasks/T06-SUMMARY.md",
+      "hash": "589ade67f4a0b9e45dd94c080b91a0f1"
+    },
+    "1051591988": {
+      "path": ".gsd/milestones/M005/slices/S02/tasks/T03-PLAN.md",
+      "hash": "68fcb3dc22b4a52a3950ea15d1e8b3ea"
+    },
+    "1077506428": {
+      "path": ".gsd/milestones/M005/M005-CONTEXT.md",
+      "hash": "edb07ca266726611b73ce7ab7228add4"
+    },
+    "1100847209": {
+      "path": ".gsd/milestones/M002/slices/S01/tasks/T01-SUMMARY.md",
+      "hash": "91a8355dd4b0a89af8f3bdfbf0a784e4"
+    },
+    "1187669249": {
+      "path": ".gsd/milestones/M005/slices/S02/tasks/T04-PLAN.md",
+      "hash": "66b97e5345385ce2adf621c0bf28d3f4"
+    },
+    "1269805245": {
+      "path": ".gsd/milestones/M002/slices/S01/tasks/T02-SUMMARY.md",
+      "hash": "e2d29c111aeb6494b732d7906df3f1e2"
+    },
+    "1325218869": {
+      "path": ".gsd/milestones/M003/slices/S03/S03-SUMMARY.md",
+      "hash": "dcb08b6aa29ca8300aa82dbf57955246"
+    },
+    "1362704836": {
+      "path": ".gsd/milestones/M002/M002-VALIDATION.md",
+      "hash": "651070b545afadcb620291d0aa354893"
+    },
+    "1362795078": {
+      "path": ".gsd/milestones/M005/slices/S02/S02-SUMMARY.md",
+      "hash": "b3860dfd7e8e48aefbb0504b7051f18c"
+    },
+    "1372881245": {
+      "path": ".gsd/milestones/M002/M002-CONTEXT.md",
+      "hash": "b8f420a53a9ca46db6d7b744827fc9a0"
+    },
+    "1435344702": {
+      "path": ".gsd/milestones/M005/slices/S02/S02-UAT.md",
+      "hash": "d36f61d12008e1ac20e042585e9afba8"
+    },
+    "1496415593": {
+      "path": ".gsd/milestones/M003/slices/S03/tasks/T03-SUMMARY.md",
+      "hash": "bcc8930053a7ed4afdf2c44a6ac2e39b"
+    },
+    "1536317519": {
+      "path": ".gsd/milestones/M005/M005-ROADMAP.md",
+      "hash": "36c4b9c2cba8c0502a741fbbbfc3cd8d"
+    },
+    "1537633843": {
+      "path": ".gsd/milestones/M004/slices/S02/tasks/T01-PLAN.md",
+      "hash": "e7f05ac4772d367ade5443f9e670454d"
+    },
+    "1549063458": {
+      "path": ".gsd/milestones/M004/slices/S01/tasks/T01-PLAN.md",
+      "hash": "de507188adf18ea5aa6cc14162d88887"
+    },
+    "1569262629": {
+      "path": ".gsd/milestones/M002/M002-SUMMARY.md",
+      "hash": "1f470ce37ddacfc894bc1483100a6242"
+    },
+    "1576413100": {
+      "path": ".gsd/milestones/M004/M004-VALIDATION.md",
+      "hash": "dbb2ac9146ee9afca7e8ed8aebb2998f"
+    },
+    "1623180491": {
+      "path": ".gsd/milestones/M003/M003-ROADMAP.md",
+      "hash": "ead98d35a916d16e88986502f42abdfb"
+    },
+    "1686627455": {
+      "path": ".gsd/milestones/M004/slices/S02/tasks/T04-SUMMARY.md",
+      "hash": "0b4443c4813193a7de0dc69a81bcf6d4"
+    },
+    "1691239669": {
+      "path": ".gsd/milestones/M001/slices/S01/S01-PLAN.md",
+      "hash": "3514a4fd9758831aae14eb293c890674"
+    },
+    "1722027153": {
+      "path": ".gsd/KNOWLEDGE.md",
+      "hash": "6f716db83a0ef34c6fa5143321cc6db1"
+    },
+    "1741526534": {
+      "path": ".gsd/milestones/M005/slices/S02/tasks/T07-SUMMARY.md",
+      "hash": "add2a7027c3ff4cf123641cc2f8a9aec"
+    },
+    "1750182234": {
+      "path": ".gsd/milestones/M005/slices/S01/S01-PLAN.md",
+      "hash": "05a1ab3461d8dc1fbbd385d588f3240f"
+    },
+    "1767173914": {
+      "path": ".gsd/milestones/M004/M004-ROADMAP.md",
+      "hash": "d62400c97246b010c53bf15b47c39b7b"
+    },
+    "1774051893": {
+      "path": ".gsd/milestones/M001/M001-SUMMARY.md",
+      "hash": "ea67ac8dc8fd259c9fdcfc6ba48f22c2"
+    },
+    "1823938337": {
+      "path": ".gsd/milestones/M004/slices/S03/tasks/T02-PLAN.md",
+      "hash": "0ad8f02eb1e13212ebe27f402be31549"
+    },
+    "1934442357": {
+      "path": ".gsd/milestones/M003/slices/S03/tasks/T02-SUMMARY.md",
+      "hash": "73cfbe134fd5d8d45e50dc0506f1582a"
+    },
+    "1968989142": {
+      "path": ".gsd/milestones/M004/slices/S03/S03-PLAN.md",
+      "hash": "fad7513656b0b0acf73d614932c633db"
+    },
+    "1978748754": {
+      "path": ".gsd/milestones/M004/slices/S03/S03-RESEARCH.md",
+      "hash": "874f01c358c05e0c232261cd0092631d"
+    },
+    "2041846403": {
+      "path": ".gsd/milestones/M005/slices/S02/tasks/T01-SUMMARY.md",
+      "hash": "7c8b6899a73f1eff320e2d03b36bdd59"
+    },
+    "2062448412": {
+      "path": ".gsd/milestones/M002/slices/S01/S01-PLAN.md",
+      "hash": "50f8db7496950d805ac4707e34e36cd0"
+    },
+    "2179901578": {
+      "path": ".gsd/milestones/M003/slices/S01/tasks/T01-PLAN.md",
+      "hash": "a32b671c6afb6b23245e295875e9af8a"
+    },
+    "2192819494": {
+      "path": ".gsd/milestones/M004/slices/S03/tasks/T01-SUMMARY.md",
+      "hash": "34248bbbf5063f4697ee07008533c8e8"
+    },
+    "2240470771": {
+      "path": ".gsd/milestones/M004/slices/S01/S01-SUMMARY.md",
+      "hash": "56a1704076df3f16447ba43763ad5f7b"
+    },
+    "2269687049": {
+      "path": ".gsd/milestones/M001/M001-CONTEXT.md",
+      "hash": "6d7dd3f63d163e452d871bd13d8d6a6b"
+    },
+    "2288674566": {
+      "path": ".gsd/milestones/M003/slices/S02/S02-ASSESSMENT.md",
+      "hash": "56e8da8352cf1ce78b73c33753078452"
+    },
+    "2325321326": {
+      "path": ".gsd/milestones/M001/slices/S01/tasks/T02-PLAN.md",
+      "hash": "c3b125122bea8e5eed92a7d307a1fc52"
+    },
+    "2330051583": {
+      "path": ".gsd/milestones/M001/slices/S01/S01-RESEARCH.md",
+      "hash": "3adb4fdcaae0a2c4a7168ffb1dc819ce"
+    },
+    "2357183025": {
+      "path": ".gsd/milestones/M002/slices/S01/tasks/T05-PLAN.md",
+      "hash": "210086f7d096181f4bfcb07b605e020b"
+    },
+    "2360080913": {
+      "path": ".gsd/milestones/M003/M003-SUMMARY.md",
+      "hash": "471626225f487954a6661e12f6dc4dc1"
+    },
+    "2369318840": {
+      "path": ".gsd/milestones/M004/slices/S02/tasks/T05-PLAN.md",
+      "hash": "21efa555d58478323527cf053bdc24a0"
+    },
+    "2392405977": {
+      "path": ".gsd/milestones/M002/slices/S01/tasks/T02-PLAN.md",
+      "hash": "ddf30708fa41d35a65edfb2d25b8451a"
+    },
+    "2431602362": {
+      "path": ".gsd/milestones/M002/slices/S01/tasks/T04-SUMMARY.md",
+      "hash": "c717302896fb64a5fc339b6d1d58b94d"
+    },
+    "2444575038": {
+      "path": ".gsd/milestones/M003/slices/S02/S02-SUMMARY.md",
+      "hash": "b04fb193d19fa571452c58811dc13c18"
+    },
+    "2460878252": {
+      "path": ".gsd/milestones/M004/slices/S03/S03-UAT.md",
+      "hash": "53bb66ae61d0337d5a56f30d81694b7d"
+    },
+    "2471935462": {
+      "path": ".gsd/milestones/M004/slices/S03/tasks/T01-PLAN.md",
+      "hash": "f682c06ac7e66da1d52222695703ac2d"
+    },
+    "2500379955": {
+      "path": ".gsd/milestones/M004/slices/S03/tasks/T03-PLAN.md",
+      "hash": "7af6056e3156c4590876e81a7adb8589"
+    },
+    "2519255569": {
+      "path": ".gsd/milestones/M005/slices/S02/S02-PLAN.md",
+      "hash": "3e714f92131f2dae3e757a6cc85369bc"
+    },
+    "2584623769": {
+      "path": ".gsd/milestones/M003/slices/S02/tasks/T01-SUMMARY.md",
+      "hash": "e1d9912f18fec99ef8908a32bb5cd787"
+    },
+    "2607851821": {
+      "path": ".gsd/milestones/M005/slices/S01/S01-RESEARCH.md",
+      "hash": "9f5efa4ab3e45aeb068acedb90184a24"
+    },
+    "2614074247": {
+      "path": ".gsd/milestones/M002/slices/S01/tasks/T04-PLAN.md",
+      "hash": "118e298c87c1b0fcc44ae4fac1738fa2"
+    },
+    "2625818260": {
+      "path": ".gsd/DECISIONS.md",
+      "hash": "eabe0ed4f06f46f977e86a0109b33a84"
+    },
+    "2688982674": {
+      "path": ".gsd/milestones/M001/slices/S01/S01-UAT.md",
+      "hash": "826d3a0b1a5a44ecf9dd16894e355f05"
+    },
+    "2696186449": {
+      "path": ".gsd/milestones/M005/slices/S02/tasks/T03-SUMMARY.md",
+      "hash": "c4b574135e46c6e1552363cff1260d7d"
+    },
+    "2712342596": {
+      "path": ".gsd/milestones/M005/slices/S03/S03-CONTINUE.md",
+      "hash": "f4183b071f0618138d172527c53ab55a"
+    },
+    "2738036408": {
+      "path": ".gsd/milestones/M004/slices/S02/S02-PLAN.md",
+      "hash": "2553a6c71214375a5e3ac77675467fe5"
+    },
+    "2805860728": {
+      "path": ".gsd/milestones/M005/slices/S01/S01-UAT.md",
+      "hash": "0e546d2fc4b7f65b7e74309dd6111f58"
+    },
+    "2845717580": {
+      "path": ".gsd/milestones/M004/slices/S03/tasks/T02-SUMMARY.md",
+      "hash": "e23b5e006daec7aa2c52f89a457dd817"
+    },
+    "2901033136": {
+      "path": ".gsd/milestones/M001/M001-RESEARCH.md",
+      "hash": "7a334078602bbba0358bb3d20922ca93"
+    },
+    "2948557488": {
+      "path": ".gsd/milestones/M001/slices/S01/tasks/T01-SUMMARY.md",
+      "hash": "f91f3ad2575acb61f14a7e6cabfe5fb6"
+    },
+    "2968418349": {
+      "path": ".gsd/milestones/M005/slices/S02/tasks/T07-PLAN.md",
+      "hash": "a77500b587576f30b36da015c4f050dc"
+    },
+    "3022306326": {
+      "path": ".gsd/milestones/M004/slices/S02/tasks/T03-SUMMARY.md",
+      "hash": "66eda95ea92845dac3d210d9d2f73bda"
+    },
+    "3041185049": {
+      "path": ".gsd/milestones/M004/slices/S03/tasks/T03-SUMMARY.md",
+      "hash": "bfda0d8b08d43ecab5319b5128c454cc"
+    },
+    "3088103745": {
+      "path": ".gsd/milestones/M003/slices/S02/tasks/T02-PLAN.md",
+      "hash": "6e4dd253169076b758cabf03047d76e5"
+    },
+    "3089707285": {
+      "path": ".gsd/milestones/M005/M005-RESEARCH.md",
+      "hash": "dd36a770c56369081118368e1a31cb2c"
+    },
+    "3159461568": {
+      "path": ".gsd/milestones/M004/slices/S02/tasks/T02-SUMMARY.md",
+      "hash": "35692c60137838bd0c972a4078167f2a"
+    },
+    "3179025309": {
+      "path": ".gsd/milestones/M005/slices/S02/tasks/T06-PLAN.md",
+      "hash": "a3a98d4ebfd09cd2d36fe1b816531e64"
+    },
+    "3204100436": {
+      "path": ".gsd/milestones/M005/slices/S02/tasks/T04-SUMMARY.md",
+      "hash": "bce8c820b5b22df42f2594492d2eb886"
+    },
+    "3250176557": {
+      "path": ".gsd/milestones/M003/slices/S02/S02-PLAN.md",
+      "hash": "7e3d5c55e277c4d58831cccd3c893fd2"
+    },
+    "3280958922": {
+      "path": ".gsd/milestones/M004/slices/S02/S02-SUMMARY.md",
+      "hash": "e506f2e6e63c17cb5208c13cce38c10d"
+    },
+    "3286531154": {
+      "path": ".gsd/milestones/M005/slices/S02/S02-RESEARCH.md",
+      "hash": "623d56599a53e33fd2b9c719d47649b3"
+    },
+    "3303846073": {
+      "path": ".gsd/milestones/M003/slices/S02/tasks/T02-SUMMARY.md",
+      "hash": "aecb34cc04eda7f3a58387b89bf94166"
+    },
+    "3359400437": {
+      "path": ".gsd/milestones/M003/slices/S03/tasks/T03-PLAN.md",
+      "hash": "3bb77749135f12f4bfd7a45b18a97a23"
+    },
+    "3363463901": {
+      "path": ".gsd/milestones/M003/slices/S01/S01-SUMMARY.md",
+      "hash": "1feec6fbcaa8568a4124a416952bf46c"
+    },
+    "3401112127": {
+      "path": ".gsd/milestones/M002/slices/S01/tasks/T03-PLAN.md",
+      "hash": "ab172eb314c6e235552188ffb48779b2"
+    },
+    "3442181078": {
+      "path": ".gsd/milestones/M005/slices/S03/S03-RESEARCH.md",
+      "hash": "dd36a770c56369081118368e1a31cb2c"
+    },
+    "3444954900": {
+      "path": ".gsd/milestones/M004/slices/S02/tasks/T01-SUMMARY.md",
+      "hash": "8647334c280d2b29efdc906797187829"
+    },
+    "3465846880": {
+      "path": ".gsd/milestones/M005/slices/S01/tasks/T01-PLAN.md",
+      "hash": "ba5520d39f98d04b8aacc3a845ec4a2f"
+    },
+    "3486437530": {
+      "path": ".gsd/FUTURE-REQUIREMENTS.md",
+      "hash": "e4f48b3c143fc9c91c7301dbe2789510"
+    },
+    "3572598344": {
+      "path": ".gsd/milestones/M005/slices/S03/S03-CONTEXT.md",
+      "hash": "3a7f32f9f4a920f5ea4b7ab8328cc5fb"
+    },
+    "3615344436": {
+      "path": ".gsd/milestones/M005/slices/S03/S03-PLAN.md",
+      "hash": "f9ae01901a8cac1918b1755f127b2ada"
+    },
+    "3663217850": {
+      "path": ".gsd/milestones/M004/slices/S02/tasks/T02-PLAN.md",
+      "hash": "2ca9c58b29eb59cc624f21fb6263a3aa"
+    },
+    "3706232528": {
+      "path": ".gsd/milestones/M003/slices/S02/tasks/T03-SUMMARY.md",
+      "hash": "fe029308557dd66214fbde90aa07a7a1"
+    },
+    "3774891955": {
+      "path": ".gsd/milestones/M004/slices/S01/S01-PLAN.md",
+      "hash": "5cc8af301862e382723bb2099f3fbb62"
+    },
+    "3808180358": {
+      "path": ".gsd/milestones/M001/slices/S01/tasks/T01-PLAN.md",
+      "hash": "cdaac9e7cd059a2bc01836cd40789c76"
+    },
+    "4005654886": {
+      "path": ".gsd/milestones/M005/slices/S02/tasks/T02-PLAN.md",
+      "hash": "fc46fa431daa494a6a770ef6b8322d6b"
+    },
+    "4028303414": {
+      "path": ".gsd/milestones/M005/slices/S01/tasks/T01-SUMMARY.md",
+      "hash": "784573fef0ae805e0da149ba7aaecb33"
+    },
+    "4048969626": {
+      "path": ".gsd/milestones/M004/M004-SUMMARY.md",
+      "hash": "391e0f96595c72ebc59e02913217c82e"
+    },
+    "4110951623": {
+      "path": ".gsd/milestones/M001/slices/S01/S01-SUMMARY.md",
+      "hash": "3b6b28cba96b87a29a2b6bda294860a4"
+    },
+    "4114869219": {
+      "path": ".gsd/milestones/M005/slices/S01/S01-SUMMARY.md",
+      "hash": "d5bee791ca6248d8a9099b4cea4dc4ff"
+    },
+    "4121650782": {
+      "path": ".gsd/milestones/M004/slices/S01/tasks/T01-SUMMARY.md",
+      "hash": "b62cc75e5429faacb92ebbb78a0c367e"
+    },
+    "4129969136": {
+      "path": ".gsd/README.md",
+      "hash": "37c125a87c7c8e902ca546dc2f972ef3"
+    },
+    "4149191323": {
+      "path": ".gsd/milestones/M003/slices/S02/tasks/T03-PLAN.md",
+      "hash": "aba389dca96d1bd20c41ad0162e05d2a"
+    },
+    "4153118955": {
+      "path": ".gsd/STATE.md",
+      "hash": "ce71c68ef4c447499bd896e298e0348f"
+    },
+    "4156018508": {
+      "path": ".gsd/milestones/M001/slices/S01/tasks/T01-RESEARCH.md",
+      "hash": "d503f5e77376edefc414144b09dc2b49"
+    },
+    "4166538475": {
+      "path": ".gsd/milestones/M005/slices/S02/tasks/T02-SUMMARY.md",
+      "hash": "bad3ff52cfe943e47ae8de1f4d8534eb"
+    },
+    "4204407203": {
+      "path": ".gsd/milestones/M004/slices/S01/S01-UAT.md",
+      "hash": "5eefe87a8915b05fca430ecd7dd255ad"
+    },
+    "4204931806": {
+      "path": ".gsd/milestones/M002/M002-ROADMAP.md",
+      "hash": "304cefdc9c2988e683901f83f0e1223c"
+    },
+    "4218929622": {
+      "path": ".gsd/milestones/M004/slices/S03/S03-SUMMARY.md",
+      "hash": "b0e6857f54d8cee668d33fdd495d38e7"
+    },
+    "4256105566": {
+      "path": ".gsd/milestones/M004/slices/S02/S02-REPLAN.md",
+      "hash": "293c573448d118993a300e56e3f2314c"
+    },
+    "4283942477": {
+      "path": ".gsd/milestones/M003/slices/S01/S01-ASSESSMENT.md",
+      "hash": "66ce5bacb8fdf85a92ee62b3c550a8ea"
+    }
+  },
+  "snippets": {
+    "124614170": {
+      "path": "scripts/snippets/docker-setup.js",
+      "hash": "109ce48dba5f94129334d0c63f8d9a72"
+    },
+    "792435943": {
+      "path": "scripts/intent-detector.js",
+      "hash": "03cb096e8c85b7dc6e86c8f36c7a025b"
+    },
+    "1750717121": {
+      "path": "scripts/sync-knowledge.js",
+      "hash": "4c9a7b1918b8944d26d9ec0cc88510ec"
+    },
+    "2030369958": {
+      "path": "scripts/gsd-qdrant-template.js",
+      "hash": "4e8d4bdc1e30be8371353dd354864ea9"
+    },
+    "2361902221": {
+      "path": "package.json",
+      "hash": "e101d41a32a948da78d0c7eab4b9187b"
+    },
+    "2547407782": {
+      "path": "scripts/cli.js",
+      "hash": "9f339f057cf3ac351aa029282c2ae384"
+    },
+    "2832978436": {
+      "path": "scripts/snippet-ranking.js",
+      "hash": "8d33c57e514140ae12c9aa1d8ac5cc1f"
+    },
+    "3160572086": {
+      "path": "scripts/setup-from-templates.js",
+      "hash": "81d4a0e1bbff39c275933dc71e368aeb"
+    },
+    "3192746156": {
+      "path": "scripts/context-analyzer.js",
+      "hash": "6b7833631dd786d4d9eae2faeee136c9"
+    },
+    "3888490865": {
+      "path": "scripts/snippet-database.json",
+      "hash": "d11e98948d9a5d3893cc2ed28b7fc2c7"
+    },
+    "3932426904": {
+      "path": "projects-registry.json",
+      "hash": "13ebea4bde2ce67f746db60a9443a426"
+    },
+    "3973374854": {
+      "path": "vitest.config.ts",
+      "hash": "6eaec33d7e55c90d72a14334745bac9c"
+    }
+  }
+}

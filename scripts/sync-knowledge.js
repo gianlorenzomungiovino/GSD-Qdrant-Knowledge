@@ -6,7 +6,7 @@
  * This script syncs GSD knowledge to Qdrant vector database.
  */
 
-const { GSDKnowledgeSync } = require('../lib/gsd-qdrant-sync');
+const { GSDKnowledgeSync } = require('../gsd-qdrant/index.js');
 
 async function main() {
   const sync = new GSDKnowledgeSync();
@@ -18,11 +18,11 @@ async function main() {
     console.log('🧠 Running in watch mode...');
   } else {
     await sync.syncAll();
-    console.log('✅ Sync complete!');
   }
 }
 
 main().catch((err) => {
   console.error('❌ Sync failed:', err.message);
+  console.error('Stack:', err.stack);
   process.exit(1);
 });
