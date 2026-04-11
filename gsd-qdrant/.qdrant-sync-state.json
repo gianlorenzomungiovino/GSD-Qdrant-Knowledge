@@ -1,5 +1,5 @@
 {
-  "lastSync": "2026-04-09T16:09:33.861Z",
+  "lastSync": "2026-04-11T11:14:00.582Z",
   "collections": {},
   "files": {},
   "docs": {
@@ -33,7 +33,7 @@
     },
     "246661235": {
       "path": ".gsd/PROJECT.md",
-      "hash": "bf42af2f9066fec5ce8fa95abb2be692"
+      "hash": "024a789d496f2150deb811d2a72af52d"
     },
     "262812788": {
       "path": ".gsd/milestones/M001/M001-ROADMAP.md",
@@ -165,7 +165,7 @@
     },
     "1536317519": {
       "path": ".gsd/milestones/M005/M005-ROADMAP.md",
-      "hash": "36c4b9c2cba8c0502a741fbbbfc3cd8d"
+      "hash": "95879c3292d0eea9ae96b2fb8e49ee61"
     },
     "1537633843": {
       "path": ".gsd/milestones/M004/slices/S02/tasks/T01-PLAN.md",
@@ -197,7 +197,7 @@
     },
     "1722027153": {
       "path": ".gsd/KNOWLEDGE.md",
-      "hash": "995bdeb8359eded7042f2dd241441039"
+      "hash": "377562f22977e866cf2988088c6d763f"
     },
     "1741526534": {
       "path": ".gsd/milestones/M005/slices/S02/tasks/T07-SUMMARY.md",
@@ -521,10 +521,6 @@
     }
   },
   "snippets": {
-    "124614170": {
-      "path": "scripts/snippets/docker-setup.js",
-      "hash": "109ce48dba5f94129334d0c63f8d9a72"
-    },
     "792435943": {
       "path": "scripts/intent-detector.js",
       "hash": "03cb096e8c85b7dc6e86c8f36c7a025b"
@@ -543,7 +539,7 @@
     },
     "2547407782": {
       "path": "scripts/cli.js",
-      "hash": "9f339f057cf3ac351aa029282c2ae384"
+      "hash": "b37684f62a4b3cfa2a9541e169cadbe7"
     },
     "2832978436": {
       "path": "scripts/snippet-ranking.js",
@@ -555,11 +551,11 @@
     },
     "3192746156": {
       "path": "scripts/context-analyzer.js",
-      "hash": "6b7833631dd786d4d9eae2faeee136c9"
+      "hash": "5d93d76386c958d8b14d3315ededf8e9"
     },
     "3888490865": {
       "path": "scripts/snippet-database.json",
-      "hash": "d11e98948d9a5d3893cc2ed28b7fc2c7"
+      "hash": "58e0494c51d30eb3494f7c9198986bb9"
     },
     "3932426904": {
       "path": "projects-registry.json",
