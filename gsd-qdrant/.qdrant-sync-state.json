@@ -1,5 +1,5 @@
 {
-  "lastSync": "2026-04-11T11:14:00.582Z",
+  "lastSync": "2026-04-11T11:30:30.502Z",
   "collections": {},
   "files": {},
   "docs": {
@@ -259,6 +259,10 @@
       "path": ".gsd/milestones/M003/slices/S02/S02-ASSESSMENT.md",
       "hash": "56e8da8352cf1ce78b73c33753078452"
     },
+    "2299102854": {
+      "path": ".gsd/test-indexing.md",
+      "hash": "af6d18e7bb0cff1047dc9ca9cf313c27"
+    },
     "2325321326": {
       "path": ".gsd/milestones/M001/slices/S01/tasks/T02-PLAN.md",
       "hash": "c3b125122bea8e5eed92a7d307a1fc52"
@@ -437,7 +441,7 @@
     },
     "3615344436": {
       "path": ".gsd/milestones/M005/slices/S03/S03-PLAN.md",
-      "hash": "f9ae01901a8cac1918b1755f127b2ada"
+      "hash": "c3566403411abadcb5828e4e4759cfd9"
     },
     "3663217850": {
       "path": ".gsd/milestones/M004/slices/S02/tasks/T02-PLAN.md",
@@ -552,6 +556,10 @@
     "3192746156": {
       "path": "scripts/context-analyzer.js",
       "hash": "5d93d76386c958d8b14d3315ededf8e9"
+    },
+    "3823638279": {
+      "path": "test-temp/test-snippet.js",
+      "hash": "db032aeaaf21035fcc9581a43799dc3e"
     },
     "3888490865": {
       "path": "scripts/snippet-database.json",
