@@ -1,5 +1,5 @@
 {
-  "lastSync": "2026-04-09T15:50:56.537Z",
+  "lastSync": "2026-04-09T16:09:33.861Z",
   "collections": {},
   "files": {},
   "docs": {
@@ -33,7 +33,7 @@
     },
     "246661235": {
       "path": ".gsd/PROJECT.md",
-      "hash": "675cf3f75265926ffacf6812a52b528c"
+      "hash": "bf42af2f9066fec5ce8fa95abb2be692"
     },
     "262812788": {
       "path": ".gsd/milestones/M001/M001-ROADMAP.md",
@@ -93,7 +93,7 @@
     },
     "719751251": {
       "path": ".gsd/REQUIREMENTS.md",
-      "hash": "7fcfbf71722281fd52f4f6f900615dd7"
+      "hash": "99c1873e7fbe1cb90a84a9ef137e699b"
     },
     "768728703": {
       "path": ".gsd/milestones/M003/slices/S02/S02-UAT.md",
@@ -197,7 +197,7 @@
     },
     "1722027153": {
       "path": ".gsd/KNOWLEDGE.md",
-      "hash": "6f716db83a0ef34c6fa5143321cc6db1"
+      "hash": "995bdeb8359eded7042f2dd241441039"
     },
     "1741526534": {
       "path": ".gsd/milestones/M005/slices/S02/tasks/T07-SUMMARY.md",
@@ -321,7 +321,7 @@
     },
     "2625818260": {
       "path": ".gsd/DECISIONS.md",
-      "hash": "eabe0ed4f06f46f977e86a0109b33a84"
+      "hash": "70704887dc10c9e82efdf3c37fe7292e"
     },
     "2688982674": {
       "path": ".gsd/milestones/M001/slices/S01/S01-UAT.md",
@@ -539,7 +539,7 @@
     },
     "2361902221": {
       "path": "package.json",
-      "hash": "e101d41a32a948da78d0c7eab4b9187b"
+      "hash": "d2d9b563baca315db1bca415480cf2b5"
     },
     "2547407782": {
       "path": "scripts/cli.js",

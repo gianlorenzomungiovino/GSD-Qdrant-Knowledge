@@ -162,6 +162,7 @@ function installDependencies(pkgPath, targetDir) {
 function createGsdQdrantDirectory(projectRoot) {
   const gsdQdrantDir = join(projectRoot, 'gsd-qdrant');
   const stateFile = join(gsdQdrantDir, '.qdrant-sync-state.json');
+  const packageFile = join(gsdQdrantDir, 'package.json');
   const indexFile = join(gsdQdrantDir, 'index.js');
   
   // Create gsd-qdrant directory
@@ -179,6 +180,11 @@ function createGsdQdrantDirectory(projectRoot) {
     };
     writeFileSync(stateFile, JSON.stringify(state, null, 2), 'utf8');
     console.log(`📝 Created: gsd-qdrant/.qdrant-sync-state.json`);
+  }
+
+  if (!existsSync(packageFile)) {
+    writeFileSync(packageFile, JSON.stringify({ type: 'commonjs' }, null, 2) + '\n', 'utf8');
+    console.log(`📝 Created: gsd-qdrant/package.json`);
   }
   
   // Create index.js if it doesn't exist
