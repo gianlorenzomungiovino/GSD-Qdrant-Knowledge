@@ -9,13 +9,10 @@ const existsSync = fs.existsSync;
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
 const VECTOR_NAME = process.env.VECTOR_NAME || 'fast-all-minilm-l6-v2';
-const EMBEDDING_DIMENSIONS = parseInt(process.env.EMBEDDING_DIMENSIONS || '384', 10);
+const EMBEDDING_DIMENSIONS = parseInt(process.env.EMBEDDING_DIMENSIONS || '1024', 10);
 const PROJECT_ROOT = process.cwd();
 const PROJECT_NAME = basename(PROJECT_ROOT.replace(/\\/g, '/'));
-const COLLECTIONS = {
-  docs: `${PROJECT_NAME}-docs`,
-  snippets: `${PROJECT_NAME}-snippets`,
-};
+const COLLECTION_NAME = 'gsd_memory'; // Unified collection for all projects
 
 async function installPostCommitHook(projectRoot) {
   const hooksDir = join(projectRoot, '.git', 'hooks');
@@ -41,29 +38,27 @@ node scripts/sync-knowledge.js >/dev/null 2>&1 || echo "[qdrant-sync] sync-knowl
 }
 
 async function ensureProjectCollections(client) {
-  console.log(`🗄️ Collections: ${COLLECTIONS.docs}, ${COLLECTIONS.snippets}`);
-  for (const [type, collectionName] of Object.entries(COLLECTIONS)) {
+  console.log(`🗄️ Collection: ${COLLECTION_NAME}`);
+  try {
     try {
-      try {
-        await client.getCollection(collectionName);
-        console.log(`ℹ️  Collection ${collectionName} already exists`);
-        continue;
-      } catch (getErr) {
-        if (getErr.status !== 404) throw getErr;
-      }
-
-      await client.createCollection(collectionName, {
-        vectors: {
-          [VECTOR_NAME]: {
-            size: EMBEDDING_DIMENSIONS,
-            distance: 'Cosine',
-          },
-        },
-      });
-      console.log(`✅ Created collection: ${collectionName} (${type})`);
-    } catch (err) {
-      console.warn(`⚠️  Could not create ${collectionName}: ${err.message}`);
+      await client.getCollection(COLLECTION_NAME);
+      console.log(`ℹ️  Collection ${COLLECTION_NAME} already exists`);
+      return;
+    } catch (getErr) {
+      if (getErr.status !== 404) throw getErr;
     }
+
+    await client.createCollection(COLLECTION_NAME, {
+      vectors: {
+        [VECTOR_NAME]: {
+          size: EMBEDDING_DIMENSIONS,
+          distance: 'Cosine',
+        },
+      },
+    });
+    console.log(`✅ Created collection: ${COLLECTION_NAME} (unified)`);
+  } catch (err) {
+    console.warn(`⚠️  Could not create ${COLLECTION_NAME}: ${err.message}`);
   }
 }
 
@@ -76,7 +71,7 @@ async function setup() {
   await installPostCommitHook(PROJECT_ROOT);
 
   console.log('\n✅ Setup ready.');
-  console.log('   Collections are ready and `gsd-qdrant` will sync docs + code.');
+  console.log(`   Collection '${COLLECTION_NAME}' is ready for unified indexing.`);
 }
 
 setup().catch((err) => {

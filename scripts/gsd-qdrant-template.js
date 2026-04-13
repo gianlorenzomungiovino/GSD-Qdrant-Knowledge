@@ -23,20 +23,15 @@ class GSDKnowledgeSync {
   constructor() {
     this.client = new QdrantClient({ url: QDRANT_URL });
     this.projectName = basename(PROJECT_ROOT);
-    this.collections = {
-      docs: `${this.projectName}-docs`,
-      snippets: `${this.projectName}-snippets`,
-    };
+    this.collectionName = 'gsd_memory'; // Unified collection for all projects
     this.vectorName = process.env.VECTOR_NAME || 'fast-all-minilm-l6-v2';
-    this.embeddingDimensions = parseInt(process.env.EMBEDDING_DIMENSIONS || '384', 10);
+    this.embeddingDimensions = parseInt(process.env.EMBEDDING_DIMENSIONS || '1024', 10);
     this.embeddingModel = process.env.EMBEDDING_MODEL || 'sentence-transformers/all-MiniLM-L6-v2';
     this.pipeline = null;
   }
 
   async init() {
-    for (const collectionName of Object.values(this.collections)) {
-      await this.ensureCollection(collectionName);
-    }
+    await this.ensureCollection(this.collectionName);
     try {
       const { pipeline } = require('@xenova/transformers');
       this.pipeline = await pipeline('feature-extraction', this.embeddingModel);
@@ -67,124 +62,391 @@ class GSDKnowledgeSync {
   }
 
   async syncAll() {
-    const docsSummary = await this.syncDocs();
-    const snippetsSummary = await this.syncSnippets();
-    console.log(`✅ Sync complete! docs=${docsSummary.total} snippets=${snippetsSummary.total}`);
-    return { docsSummary, snippetsSummary };
+    const summary = await this.syncToGsdMemory();
+    console.log(`✅ Sync complete! Total points indexed: ${summary.total}`);
+    return summary;
   }
 
-  async syncDocs() {
-    console.log('📄 Syncing GSD documentation...');
+  indexedFileKey(relPath) {
+    return `indexed_${relPath.replace(/\//g, '_').replace(/\\/g, '_')}`;
+  }
+
+  async syncToGsdMemory() {
+    console.log('📦 Syncing to unified gsd_memory collection...');
     const gsdDir = join(PROJECT_ROOT, '.gsd');
-    const syncState = await this.loadSyncState();
-    const docsState = syncState.docs || {};
+    
     if (!existsSync(gsdDir)) {
       console.log('  ℹ️  .gsd directory not found');
-      syncState.docs = docsState;
-      await this.saveSyncState(syncState);
       return { total: 0, updated: 0, deleted: 0 };
     }
-    const files = await this.walkGsd(gsdDir);
-    console.log(`📄 Docs: ${files.length} files`);
-    const seenIds = new Set();
-    let updated = 0;
-    for (const filePath of files) {
-      const content = await fs.readFile(filePath, 'utf8');
-      const relPath = this.toProjectRelative(filePath);
-      const id = this.makePointId('docs', relPath);
-      const hash = this.hashContent(content);
-      seenIds.add(String(id));
-      if (docsState[id]?.hash === hash) continue;
-      const metadata = this.extractMetadata(filePath, content);
-      const vector = await this.embedText(this.buildDocText(relPath, content, metadata));
-      await this.upsertPoint(this.collections.docs, {
-        id,
-        vector: { [this.vectorName]: vector },
-        payload: { kind: 'docs', project: this.projectName, path: relPath, hash, title: metadata.title || basename(filePath), date: metadata.date || null, content, ids: this.extractGsdIds(relPath, content), linksTo: this.extractReferencedPaths(content) },
-      });
-      docsState[id] = { path: relPath, hash };
-      updated += 1;
-    }
-    const deleted = await this.deleteMissingPoints(this.collections.docs, docsState, seenIds);
-    syncState.docs = docsState;
-    syncState.lastSync = new Date().toISOString();
-    await this.saveSyncState(syncState);
-    console.log(`  ✅ Updated ${updated}, deleted ${deleted}`);
-    return { total: files.length, updated, deleted };
-  }
 
-  async syncSnippets() {
-    console.log('🔧 Syncing code snippets...');
-    const syncState = await this.loadSyncState();
-    const snippetsState = syncState.snippets || {};
-    const gsdDir = join(PROJECT_ROOT, '.gsd');
-    const files = await this.walkProjectCode(PROJECT_ROOT);
-    console.log(`🔧 Snippets: ${files.length} files`);
-    const docIndex = existsSync(gsdDir) ? await this.buildDocReferenceIndex(gsdDir) : { allDocs: [] };
+    const mdFiles = await this.walkGsd(gsdDir);
+    const codeFiles = await this.walkProjectCode(PROJECT_ROOT);
+    
+    console.log(`📄 Found ${mdFiles.length} documentation files to index`);
+    console.log(`💻 Found ${codeFiles.length} code files to index`);
+    
+    // First, build the document reference index (for finding related docs)
+    const docIndex = await this.buildDocReferenceIndex(gsdDir);
+    
     const seenIds = new Set();
     let updated = 0;
-    for (const filePath of files) {
+    const syncState = await this.loadSyncState();
+    
+    // Index documentation files (.md)
+    for (const filePath of mdFiles) {
       const content = await fs.readFile(filePath, 'utf8');
       const relPath = this.toProjectRelative(filePath);
-      const id = this.makePointId('snippets', relPath);
+      const id = this.makePointId('doc', relPath);
       const hash = this.hashContent(content);
-      seenIds.add(String(id));
-      if (snippetsState[id]?.hash === hash) continue;
-      const contextRefs = this.findRelevantDocsForSnippet(relPath, content, docIndex);
-      const codeMetadata = this.extractCodeMetadata(filePath, content, relPath);
-      const payload = {
-        kind: 'snippet', project: this.projectName, path: relPath, hash,
-        language: this.detectLanguage(filePath), scope: this.detectScope(relPath), ids: this.extractGsdIds(relPath, content),
-        name: codeMetadata.name,
-        symbolNames: codeMetadata.symbolNames,
-        exports: codeMetadata.exports,
-        imports: codeMetadata.imports,
-        workspace: codeMetadata.workspace,
-        kindDetail: codeMetadata.kindDetail,
-        relatedDocs: contextRefs.map((doc) => ({ path: doc.path, title: doc.title || basename(doc.path), ids: doc.ids, reason: doc.reason })),
-        relatedDocPaths: contextRefs.map((doc) => doc.path),
-        relatedDocIds: [...new Set(contextRefs.flatMap((doc) => doc.ids))],
-        content,
-      };
-      const vector = await this.embedText(this.buildSnippetText(relPath, content, payload));
-      await this.upsertPoint(this.collections.snippets, { id, vector: { [this.vectorName]: vector }, payload });
-      snippetsState[id] = { path: relPath, hash };
+      seenIds.add(relPath);
+      
+      // Check if already indexed
+      if (syncState[this.indexedFileKey(relPath)]?.hash === hash) continue;
+      
+      const payload = await this.buildDocPayload(filePath, content, relPath, content);
+      const vector = await this.embedText(this.buildDocText(relPath, content, payload));
+      
+      await this.client.upsert(this.collectionName, { points: [{ id, vector: { [this.vectorName]: vector }, payload }] });
+      syncState[this.indexedFileKey(relPath)] = { path: relPath, hash };
       updated += 1;
     }
-    const deleted = await this.deleteMissingPoints(this.collections.snippets, snippetsState, seenIds);
-    syncState.snippets = snippetsState;
+    
+    // Index code files (with related docs)
+    for (const filePath of codeFiles) {
+      const content = await fs.readFile(filePath, 'utf8');
+      const relPath = this.toProjectRelative(filePath);
+      const id = this.makePointId('code', relPath);
+      const hash = this.hashContent(content);
+      seenIds.add(relPath);
+      
+      // Check if already indexed
+      if (syncState[this.indexedFileKey(relPath)]?.hash === hash) continue;
+      
+      const payload = await this.buildCodePayload(filePath, content, relPath, docIndex);
+      const vector = await this.embedText(this.buildCodeText(relPath, content, payload));
+      
+      await this.client.upsert(this.collectionName, { points: [{ id, vector: { [this.vectorName]: vector }, payload }] });
+      syncState[this.indexedFileKey(relPath)] = { path: relPath, hash };
+      updated += 1;
+    }
+    
+    const deleted = await this.deleteMissingPoints(seenIds, syncState);
     syncState.lastSync = new Date().toISOString();
     await this.saveSyncState(syncState);
+    
     console.log(`  ✅ Updated ${updated}, deleted ${deleted}`);
-    return { total: files.length, updated, deleted };
+    return { total: mdFiles.length + codeFiles.length, updated, deleted };
   }
 
   async searchWithContext(query, options = {}) {
     const limit = options.limit || 10;
     const vector = await this.embedText(query);
-    const snippetHits = await this.client.search(this.collections.snippets, { vector: { name: this.vectorName, vector }, limit, with_payload: true, with_vector: false });
-    if (!options.withContext) return snippetHits.map((hit) => ({ score: hit.score, ...hit.payload }));
-    const docPaths = [...new Set(snippetHits.flatMap((hit) => hit.payload?.relatedDocPaths || []))];
-    const docPayloads = [];
-    for (const path of docPaths.slice(0, limit * 3)) {
-      const id = this.makePointId('docs', path);
-      try {
-        const response = await this.client.retrieve(this.collections.docs, { ids: [id], with_payload: true, with_vector: false });
-        if (response?.[0]?.payload) docPayloads.push(response[0].payload);
-      } catch (_) {}
+    
+    // Search without filter first
+    const hits = await this.client.search(this.collectionName, { 
+      vector: { name: this.vectorName, vector }, 
+      limit,
+      with_payload: true, 
+      with_vector: false
+    });
+    
+    // Filter results locally
+    let filtered = hits;
+    if (options.type) {
+      filtered = filtered.filter(h => h.payload.type === options.type);
     }
-    return snippetHits.map((hit) => ({ score: hit.score, ...hit.payload, context: docPayloads.filter((doc) => (hit.payload?.relatedDocPaths || []).includes(doc.path)).map((doc) => ({ source: doc.path, ids: doc.ids || [], title: doc.title })) }));
+    
+    return filtered.map((hit) => ({ score: hit.score, ...hit.payload }));
+  }
+
+  async indexFile(filePath, syncState, seenIds, fileType, count, docIndex = null) {
+    const content = await fs.readFile(filePath, 'utf8');
+    const relPath = this.toProjectRelative(filePath);
+    const id = this.makePointId(fileType, relPath);
+    const hash = this.hashContent(content);
+    seenIds.add(relPath);
+    
+    // Check if already indexed
+    if (syncState[this.indexedFileKey(relPath)]?.hash === hash) return;
+    
+    // Build payload based on file type
+    const payload = fileType === 'doc' 
+      ? await this.buildDocPayload(filePath, content, relPath, content)
+      : await this.buildCodePayload(filePath, content, relPath, docIndex);
+    
+    const vector = await this.embedText(fileType === 'doc' 
+      ? this.buildDocText(relPath, content, metadata || {})
+      : this.buildCodeText(relPath, content, payload)
+    );
+    
+    await this.client.upsert(this.collectionName, { points: [{ id, vector: { [this.vectorName]: vector }, payload }] });
+    syncState[this.indexedFileKey(relPath)] = { path: relPath, hash };
   }
 
   startWatcher() { console.log('👀 Watch mode not implemented yet. Run `gsd-qdrant` or `node scripts/sync-knowledge.js`.'); }
   async walkGsd(dir) { const files = []; for (const entry of await fs.readdir(dir, { withFileTypes: true })) { const fullPath = join(dir, entry.name); if (entry.isDirectory()) files.push(...await this.walkGsd(fullPath)); else if (entry.isFile() && entry.name.endsWith('.md')) files.push(fullPath); } return files; }
   async walkProjectCode(dir) { const files = []; for (const entry of await fs.readdir(dir, { withFileTypes: true })) { const fullPath = join(dir, entry.name); if (entry.isDirectory()) { if (EXCLUDED_DIRS.has(entry.name)) continue; files.push(...await this.walkProjectCode(fullPath)); continue; } if (!entry.isFile()) continue; if (entry.name === 'package-lock.json') continue; const ext = extname(entry.name).toLowerCase(); if (EXCLUDED_FILE_EXTENSIONS.has(ext) || !CODE_EXTENSIONS.has(ext)) continue; files.push(fullPath); } return files; }
-  async buildDocReferenceIndex(gsdDir) { const allDocs = []; for (const filePath of await this.walkGsd(gsdDir)) { const content = await fs.readFile(filePath, 'utf8'); const relPath = this.toProjectRelative(filePath); const title = this.extractMetadata(filePath, content).title || basename(filePath); const ids = this.extractGsdIds(relPath, content); const keywords = this.buildKeywords(relPath, content, ids); allDocs.push({ path: relPath, title, ids, keywords }); } return { allDocs }; }
+  async buildDocReferenceIndex(gsdDir) {
+    const allDocs = [];
+    for (const filePath of await this.walkGsd(gsdDir)) {
+      const content = await fs.readFile(filePath, 'utf8');
+      const relPath = this.toProjectRelative(filePath);
+      const title = this.extractMetadata(filePath, content).title || basename(filePath);
+      const ids = this.extractGsdIds(relPath, content);
+      const keywords = this.buildKeywords(relPath, content, ids);
+      allDocs.push({ path: relPath, title, ids, keywords });
+    }
+    return allDocs;
+  }
+  findRelatedDocsForCode(codeRelPath, codeContent, docIndex) {
+    const codeIds = new Set(this.extractGsdIds(codeRelPath, codeContent));
+    const lowerPath = codeRelPath.toLowerCase();
+    const contentSlice = codeContent.toLowerCase().slice(0, 4000);
+    const scored = [];
+    for (const doc of docIndex) {
+      let score = 0;
+      const reasons = [];
+      if (doc.ids.some((id) => codeIds.has(id))) {
+        score += 6;
+        reasons.push('shared-gsd-id');
+      }
+      for (const id of doc.ids) {
+        if (lowerPath.includes(id.toLowerCase())) {
+          score += 4;
+          reasons.push('path-id-match');
+          break;
+        }
+      }
+      for (const keyword of doc.keywords) {
+        if (keyword.length < 4) continue;
+        if (lowerPath.includes(keyword) || contentSlice.includes(keyword)) {
+          score += 1;
+          reasons.push(`keyword:${keyword}`);
+          if (score >= 10) break;
+        }
+      }
+      if (score > 0) scored.push({ ...doc, score, reason: [...new Set(reasons)].join(',') });
+    }
+    scored.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
+    return scored.slice(0, 5);
+  }
   findRelevantDocsForSnippet(relPath, content, docIndex) { const snippetIds = new Set(this.extractGsdIds(relPath, content)); const lowerPath = relPath.toLowerCase(); const contentSlice = content.toLowerCase().slice(0, 4000); const scored = []; for (const doc of docIndex.allDocs) { let score = 0; const reasons = []; if (doc.ids.some((id) => snippetIds.has(id))) { score += 6; reasons.push('shared-gsd-id'); } for (const id of doc.ids) { if (lowerPath.includes(id.toLowerCase())) { score += 4; reasons.push('path-id-match'); break; } } for (const keyword of doc.keywords) { if (keyword.length < 4) continue; if (lowerPath.includes(keyword) || contentSlice.includes(keyword)) { score += 1; reasons.push(`keyword:${keyword}`); if (score >= 10) break; } } if (score > 0) scored.push({ ...doc, score, reason: [...new Set(reasons)].join(',') }); } scored.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path)); return scored.slice(0, 5); }
   buildDocText(relPath, content, metadata) { return [`project:${this.projectName}`, `path:${relPath}`, metadata.title ? `title:${metadata.title}` : null, content].filter(Boolean).join('\n'); }
   buildSnippetText(relPath, content, payload) { const contextLine = payload.relatedDocPaths.length ? `related-docs:${payload.relatedDocPaths.join(', ')}` : null; const idsLine = payload.relatedDocIds.length ? `related-ids:${payload.relatedDocIds.join(', ')}` : null; const nameLine = payload.name ? `name:${payload.name}` : null; const symbolLine = payload.symbolNames?.length ? `symbols:${payload.symbolNames.join(', ')}` : null; const exportLine = payload.exports?.length ? `exports:${payload.exports.join(', ')}` : null; return [`project:${this.projectName}`, `path:${relPath}`, `language:${payload.language}`, `scope:${payload.scope}`, `workspace:${payload.workspace}`, `kind-detail:${payload.kindDetail}`, nameLine, symbolLine, exportLine, idsLine, contextLine, content].filter(Boolean).join('\n'); }
   async upsertPoint(collection, point) { await this.client.upsert(collection, { points: [point] }); }
-  async deleteMissingPoints(collection, stateBucket, seenIds) { const deletedIds = Object.keys(stateBucket).filter((id) => !seenIds.has(String(id))); if (deletedIds.length) { await this.client.delete(collection, { points: deletedIds.map((id) => Number(id)) }); for (const id of deletedIds) delete stateBucket[id]; } return deletedIds.length; }
+  async deleteMissingPoints(seenIds, syncState) {
+    const deletedIds = Object.keys(syncState).filter((key) => {
+      // Protect reserved keys that are not file indices
+      if (key === 'lastSync' || key === 'indexed') return false;
+      // This is a file index key (indexed_<path>), check if file still exists
+      // Transform path the same way indexedFileKey does: replace slashes with underscores
+      // Need to try both forward and backward slashes since we lost that info
+      const relPath = key.replace('indexed_', '').replace(/_/g, '\\');
+      const relPathAlt = key.replace('indexed_', '').replace(/_/g, '/');
+      return !seenIds.has(relPath) && !seenIds.has(relPathAlt);
+    });
+    if (deletedIds.length) {
+      const pointsToDelete = deletedIds.map((key) => {
+        const relPath = key.replace('indexed_', '');
+        return this.makePointId(relPath);
+      });
+      await this.client.delete(this.collectionName, { points: pointsToDelete });
+      for (const id of deletedIds) delete syncState[id];
+    }
+    return deletedIds.length;
+  }
+
+  inferType(filePath, content) {
+    if (filePath.includes('STATE.md')) return 'state';
+    if (filePath.includes('REQUIREMENTS.md')) return 'requirements';
+    if (filePath.includes('DECISIONS.md')) return 'decision';
+    if (filePath.includes('KNOWLEDGE.md')) return 'knowledge';
+    if (content.includes('## Active Milestone') || content.includes('## Current State')) return 'activity';
+    return 'context';
+  }
+
+  async buildDocPayload(filePath, content, relPath, fullContent) {
+    const metadata = this.extractMetadata(filePath, content);
+    return {
+      project_id: this.projectName,
+      type: 'doc',
+      subtype: this.inferType(filePath, content),
+      source: relPath,
+      section: this.inferSection(content),
+      content: content,
+      summary: metadata.title || basename(filePath),
+      language: 'markdown',
+      reusable: await this.isReusable(filePath, fullContent || content),
+      tags: this.extractTags(content),
+      importance: this.calculateImportance(filePath, content),
+      timestamp: Date.now(),
+      hash: this.hashContent(content)
+    };
+  }
+
+  async buildCodePayload(filePath, content, relPath, docIndex = null) {
+    const metadata = this.extractCodeMetadata(filePath, content, relPath);
+    const lang = this.detectLanguage(filePath);
+    
+    // Extract only function/class signatures (not full body)
+    const signatures = this.extractSignatures(content);
+    
+    // Extract comments (JSDoc, single-line, multi-line) - these act as semantic summaries
+    const comments = this.extractComments(content);
+    
+    // Extract GSD IDs from code file (M003, S01, T02, etc.)
+    const snippetIds = this.extractGsdIds(relPath, content);
+    
+    // Find related documentation files based on shared GSD IDs
+    let relatedDocPaths = [];
+    let relatedDocIds = [];
+    if (docIndex && docIndex.length > 0) {
+      const docMatches = this.findRelatedDocsForCode(relPath, content, docIndex);
+      relatedDocPaths = docMatches.map(d => d.path);
+      relatedDocIds = docMatches.flatMap(d => d.ids);
+    }
+    
+    return {
+      project_id: this.projectName,
+      type: 'code',
+      language: lang,
+      source: relPath,
+      summary: metadata.name || basename(filePath),
+      kindDetail: metadata.kindDetail,
+      scope: metadata.scope,
+      workspace: metadata.workspace,
+      content: content, // Keep full content for reference
+      signatures: signatures, // Only signatures for embedding
+      exports: metadata.exports,
+      imports: metadata.imports,
+      symbolNames: metadata.symbolNames,
+      comments: comments, // JSDoc and comments for semantic context
+      relatedDocPaths: relatedDocPaths, // Related documentation files
+      relatedDocIds: relatedDocIds, // Related GSD IDs from docs
+      timestamp: Date.now(),
+      hash: this.hashContent(content)
+    };
+  }
+
+  extractSignatures(content) {
+    const signatures = [];
+    
+    // Function declarations: function name(params) { }
+    const funcDecls = content.match(/function\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*\([^)]*\)/g) || [];
+    signatures.push(...funcDecls);
+    
+    // Class declarations: class Name { }
+    const classDecls = content.match(/class\s+([A-Za-z_$][A-Za-z0-9_$]*)/g) || [];
+    signatures.push(...classDecls);
+    
+    // Method declarations: methodName(params) { }
+    const methodDecls = content.match(/[A-Za-z_$][A-Za-z0-9_$]*\s*\([^)]*\)\s*{/g) || [];
+    signatures.push(...methodDecls.filter(m => !m.includes('function') && !m.includes('class')));
+    
+    // Arrow functions: const name = (params) =>
+    const arrowFuncs = content.match(/const\s+[A-Za-z_$][A-Za-z0-9_$]*\s*=\s*\([^)]*\)\s*=>/g) || [];
+    signatures.push(...arrowFuncs);
+    
+    // Async functions: async function name
+    const asyncFuncs = content.match(/async\s+function\s+([A-Za-z_$][A-Za-z0-9_$]*)/g) || [];
+    signatures.push(...asyncFuncs);
+    
+    return [...new Set(signatures)].slice(0, 50); // Limit to avoid large embeddings
+  }
+
+  extractComments(content) {
+    const comments = [];
+    
+    // JSDoc comments: /** ... */
+    const jsdoc = content.match(/\/\*\*[\s\S]*?\*\/|\/\*\*[\s\S]*?\*$/g) || [];
+    comments.push(...jsdoc);
+    
+    // Single-line comments: // ...
+    const singleLine = content.match(/\/\/[^\n]{0,200}/g) || [];
+    comments.push(...singleLine);
+    
+    // Multi-line comments: /* ... */
+    const multiLine = content.match(/\/\*[\s\S]{0,500}\*\//g) || [];
+    comments.push(...multiLine);
+    
+    return comments.slice(0, 30); // Limit to avoid large embeddings
+  }
+
+  inferSection(content) {
+    if (content.includes('## Active Milestone')) return 'current_state';
+    if (content.includes('## Milestone Registry')) return 'milestone_registry';
+    if (content.includes('## Recent Decisions')) return 'recent_decisions';
+    if (content.includes('## Blockers')) return 'blockers';
+    if (content.includes('## Next Action')) return 'next_action';
+    if (content.includes('## Requirements')) return 'requirements';
+    if (content.includes('## Decisions')) return 'decisions';
+    if (content.includes('## Knowledge')) return 'knowledge';
+    return 'general';
+  }
+
+  async isReusable(filePath, content) {
+    // For documentation files: DECISIONS.md and KNOWLEDGE.md are always reusable
+    if (filePath.includes('DECISIONS.md') || filePath.includes('KNOWLEDGE.md')) {
+      return true;
+    }
+    
+    // For code files: consider reusable if the file exports something
+    const ext = extname(filePath).toLowerCase();
+    if (CODE_EXTENSIONS.has(ext)) {
+      const hasExport = /export\s+(default\s+)?(?:async\s+)?(?:function|class|const|let|var)/.test(content);
+      const hasModuleExports = /module\.exports\s*=/.test(content);
+      const hasExports = /exports\.[A-Za-z_]/.test(content);
+      
+      if (hasExport || hasModuleExports || hasExports) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
+  extractTags(content) {
+    const tags = [];
+    if (content.includes('## Decisions')) tags.push('decision');
+    if (content.includes('## Knowledge')) tags.push('knowledge');
+    if (content.includes('Active Milestone')) tags.push('active');
+    if (content.includes('## Requirements')) tags.push('requirements');
+    return tags;
+  }
+
+  calculateImportance(filePath, content) {
+    if (filePath.includes('STATE.md')) return 5;
+    if (filePath.includes('REQUIREMENTS.md')) return 5;
+    if (filePath.includes('DECISIONS.md')) return 4;
+    if (filePath.includes('KNOWLEDGE.md')) return 3;
+    return 2;
+  }
+
+  buildDocText(relPath, content, metadata) {
+    return [`project:${this.projectName}`, `path:${relPath}`, metadata.title ? `title:${metadata.title}` : null, content].filter(Boolean).join('\n');
+  }
+
+  buildCodeText(relPath, content, payload) {
+    // For code embedding, use signatures + comments (semantic summary)
+    const sigText = payload.signatures.join('\n');
+    const exportText = payload.exports ? `exports:${payload.exports.join(', ')}` : null;
+    const importText = payload.imports ? `imports:${payload.imports.join(', ')}` : null;
+    const symbolText = payload.symbolNames ? `symbols:${payload.symbolNames.join(', ')}` : null;
+    const commentText = payload.comments ? `comments:${payload.comments.join(' | ')}` : null;
+    
+    return [
+      `project:${this.projectName}`,
+      `path:${relPath}`,
+      `language:${payload.language}`,
+      `kind:${payload.kindDetail}`,
+      exportText,
+      importText,
+      symbolText,
+      commentText,
+      sigText
+    ].filter(Boolean).join('\n');
+  }
   async embedText(text) { if (this.pipeline) { const output = await this.pipeline(text, { pooling: 'mean', normalize: true }); return Array.from(output.data); } return this.generatePlaceholderEmbedding(text); }
   extractMetadata(filePath, content) { const metadata = { relativePath: this.toProjectRelative(filePath) }; const titleMatch = content.match(/^#\s+(.+)$/m); if (titleMatch) metadata.title = titleMatch[1].trim(); const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/); if (frontmatterMatch) { const dateMatch = frontmatterMatch[1].match(/date:\s+(.+)/); if (dateMatch) metadata.date = dateMatch[1].trim(); } return metadata; }
   extractGsdIds(relPath, content) { const matches = new Set(); for (const source of [relPath, content]) { const found = source.match(/\b(M\d{3}|S\d{2}|T\d{2}|R\d{3}|D\d{3})\b/g) || []; found.forEach((m) => matches.add(m)); } return [...matches]; }
@@ -201,8 +463,17 @@ class GSDKnowledgeSync {
   makePointId(kind, relPath) { return parseInt(crypto.createHash('md5').update(`${kind}:${relPath}`).digest('hex').substring(0, 8), 16); }
   hashContent(content) { return crypto.createHash('md5').update(content).digest('hex'); }
   toProjectRelative(filePath) { return relative(PROJECT_ROOT, filePath).replace(/\\/g, '/'); }
-  async loadSyncState() { try { return JSON.parse(await fs.readFile(STATE_FILE, 'utf8')); } catch (_) { return { lastSync: null, docs: {}, snippets: {} }; } }
-  async saveSyncState(state) { await fs.writeFile(STATE_FILE, JSON.stringify(state, null, 2)); }
+  async loadSyncState() {
+    try {
+      const content = await fs.readFile(STATE_FILE, 'utf8');
+      return JSON.parse(content);
+    } catch (_) {
+      return { lastSync: null, indexed: {} };
+    }
+  }
+  async saveSyncState(state) {
+    await fs.writeFile(STATE_FILE, JSON.stringify(state, null, 2));
+  }
 }
 
 module.exports = { GSDKnowledgeSync };

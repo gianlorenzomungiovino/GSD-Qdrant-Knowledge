@@ -4,9 +4,11 @@
  * Sync knowledge to Qdrant
  * 
  * This script syncs GSD knowledge to Qdrant vector database.
+ * Uses unified collection 'gsd_memory' for all content.
  */
 
-const { GSDKnowledgeSync } = require('../gsd-qdrant/index.js');
+const path = require('path');
+const { GSDKnowledgeSync } = require('./gsd-qdrant-template.js');
 
 async function main() {
   const sync = new GSDKnowledgeSync();
@@ -16,8 +18,11 @@ async function main() {
   if (action === 'watch') {
     sync.startWatcher();
     console.log('🧠 Running in watch mode...');
+  } else if (action === 'setup') {
+    await sync.ensureCollection(sync.collectionName);
+    console.log(`✅ Collection '${sync.collectionName}' is ready`);
   } else {
-    await sync.syncAll();
+    await sync.syncToGsdMemory();
   }
 }
 

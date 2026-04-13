@@ -117,6 +117,114 @@ function run(command, args, options = {}) {
   });
 }
 
+/**
+ * Build context from Knowledge Sync results
+ */
+async function buildContextFromKnowledgeSync(query, project_id, rankedResults, sync) {
+  const context = {
+    query,
+    project_id,
+    results: rankedResults,
+    files: {},
+    typeCounts: {},
+    snippetResults: []
+  };
+
+  // Group results by file type
+  for (const result of rankedResults) {
+    const type = result.type || 'doc';
+    context.typeCounts[type] = (context.typeCounts[type] || 0) + 1;
+    
+    // Store file content by source path
+    if (result.source) {
+      context.files[result.source] = {
+        type,
+        content: result.content || '',
+        summary: result.summary || '',
+        tags: result.tags || [],
+        score: result.score || 0,
+        ...result
+      };
+    }
+  }
+
+  // Separate docs from snippets for proper context building
+  const docs = rankedResults.filter(r => r.type === 'doc');
+  const snippets = rankedResults.filter(r => r.type === 'code');
+
+  // Build structured context
+  context.docs = docs;
+  context.snippets = snippets;
+  context.totalResults = rankedResults.length;
+
+  return context;
+}
+
+/**
+ * Build prompt from Knowledge Sync context
+ */
+function buildPromptFromKnowledgeSync(context, query) {
+  const lines = [];
+
+  // Header
+  lines.push('=== GSD Knowledge Sharing Context ===');
+  lines.push('');
+
+  // Search results summary
+  lines.push('## SEARCH RESULTS SUMMARY');
+  lines.push(`Query: "${query}"`);
+  lines.push(`Total results: ${context.totalResults}`);
+  lines.push(`Docs found: ${context.docs?.length || 0}`);
+  lines.push(`Code snippets found: ${context.snippets?.length || 0}`);
+  lines.push('');
+
+  // Document results
+  if (context.docs && context.docs.length > 0) {
+    lines.push('## DOCUMENTS');
+    for (const doc of context.docs) {
+      lines.push(`### ${doc.summary || doc.source}`);
+      lines.push(`Type: ${doc.subtype || 'documentation'}`);
+      if (doc.tags && doc.tags.length > 0) {
+        lines.push(`Tags: ${doc.tags.join(', ')}`);
+      }
+      lines.push('');
+      lines.push(doc.content || 'No content available');
+      lines.push('');
+      lines.push('---');
+      lines.push('');
+    }
+  }
+
+  // Code snippet results
+  if (context.snippets && context.snippets.length > 0) {
+    lines.push('## CODE SNIPPETS');
+    for (const snippet of context.snippets) {
+      lines.push(`### ${snippet.summary || snippet.source}`);
+      lines.push(`Language: ${snippet.language || 'unknown'}`);
+      if (snippet.kindDetail) {
+        lines.push(`Type: ${snippet.kindDetail}`);
+      }
+      if (snippet.scope) {
+        lines.push(`Scope: ${snippet.scope}`);
+      }
+      lines.push('');
+      lines.push(snippet.content || 'No content available');
+      lines.push('');
+      lines.push('---');
+      lines.push('');
+    }
+  }
+
+  // User query
+  lines.push('---');
+  lines.push('## USER QUERY');
+  lines.push(query);
+  lines.push('');
+  lines.push('Please provide a detailed response based on the context above.');
+
+  return lines.join('\n');
+}
+
 function findPackagePath() {
   if (existsSync(API_PKG)) return API_PKG;
   if (existsSync(ROOT_PKG)) return ROOT_PKG;
@@ -171,12 +279,11 @@ function createGsdQdrantDirectory(projectRoot) {
     console.log(`📂 Created directory: gsd-qdrant/`);
   }
   
-  // Create .qdrant-sync-state.json if it doesn't exist
+  // Create .qdrant-sync-state.json if it doesn't exist (V2.0 structure)
   if (!existsSync(stateFile)) {
     const state = {
       lastSync: null,
-      collections: {},
-      files: {}
+      indexed: {}
     };
     writeFileSync(stateFile, JSON.stringify(state, null, 2), 'utf8');
     console.log(`📝 Created: gsd-qdrant/.qdrant-sync-state.json`);
@@ -283,7 +390,7 @@ async function main() {
           
           const results = await sync.searchWithContext(query, {
             limit: options.limit || 10,
-            withContext: options.withContext || false,
+            type: options.type || undefined,
           });
           
           sorted = results;
@@ -482,6 +589,60 @@ async function main() {
     
     console.log('='.repeat(50));
     console.log('✅ Snippet applied successfully!');
+  } else if (args[0] === 'context') {
+    // Knowledge Sharing - Context Builder using GSDKnowledgeSync
+    const { GSDKnowledgeSync } = require('./gsd-qdrant-template.js');
+    
+    const query = args[1] || '';
+    const project_id = basename(PROJECT_ROOT);
+    
+    if (!query) {
+      console.log('❌ Please provide a query for context building.');
+      console.log('Usage: gsd-qdrant context <query>');
+      console.log('Example: gsd-qdrant context "come implementare il login"');
+      process.exit(1);
+    }
+    
+    // Initialize Knowledge Sync
+    const sync = new GSDKnowledgeSync();
+    await sync.init();
+    
+    // Generate query embedding and search
+    const vector = await sync.embedText(query);
+    const limit = 10;
+    
+    // Search without filter first
+    const hits = await sync.client.search(sync.collectionName, { 
+      vector: { name: sync.vectorName, vector }, 
+      limit,
+      with_payload: true, 
+      with_vector: false
+    });
+    
+    // Filter results by project and relevance
+    let filtered = hits;
+    if (project_id) {
+      filtered = filtered.filter(h => h.payload.project_id === project_id);
+    }
+    
+    // Rank results with recency and importance
+    const ranked = filtered.map(hit => {
+      const recencyScore = Math.min(1, (Date.now() - hit.payload.timestamp) / (30 * 24 * 60 * 60 * 1000));
+      const importanceScore = (hit.payload.importance || 1) / 5;
+      const score = hit.score * 0.7 + (1 - recencyScore) * 0.2 + importanceScore * 0.1;
+      return { ...hit.payload, score };
+    }).sort((a, b) => b.score - a.score);
+    
+    // Build context from ranked results
+    const context = await buildContextFromKnowledgeSync(query, project_id, ranked, sync);
+    
+    // Build final prompt
+    const prompt = buildPromptFromKnowledgeSync(context, query);
+    
+    console.log('\n' + '='.repeat(60));
+    console.log(prompt);
+    console.log('='.repeat(60));
+    
   } else {
     createGsdQdrantDirectory(PROJECT_ROOT);
 

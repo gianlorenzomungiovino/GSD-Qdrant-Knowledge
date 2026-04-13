@@ -36,8 +36,8 @@ gsd-qdrant
 
 Il comando:
 - crea `gsd-qdrant/`
-- crea/valida le collection `<project>-docs` e `<project>-snippets`
-- sincronizza `.gsd/` e il codice del progetto
+- crea/valida la collection unificata `gsd_memory` (single collection per tutti i progetti)
+- sincronizza `.gsd/` e il codice del progetto (tipo "doc" e tipo "code")
 
 ## 4. Verifica rapida
 
@@ -47,28 +47,33 @@ Collection presenti:
 curl -s http://localhost:6333/collections
 ```
 
-Collection popolate:
+Collection unificata `gsd_memory`:
 
 ```bash
-curl -s "http://localhost:6333/collections/<project>-docs/points/scroll" -H "Content-Type: application/json" -d '{"limit": 1}'
-curl -s "http://localhost:6333/collections/<project>-snippets/points/scroll" -H "Content-Type: application/json" -d '{"limit": 1}'
+curl -s "http://localhost:6333/collections/gsd_memory/points/scroll" -H "Content-Type: application/json" -d '{"limit": 2}'
 ```
+
+Verifica i punti indicizzati:
+- Filtra per tipo `doc` → documenti `.gsd`
+- Filtra per tipo `code` → codice progetto
+- Usa il filtro `project_id` per query specifiche per progetto o cross-project
 
 ## 5. Search contestuale
 
 ```bash
-gsd-qdrant snippet search "component button" --context
-gsd-qdrant snippet search "prendi il componente X dal progetto Y" --context
+gsd-qdrant context "query"              # Query contestuale con contesto ibrido
+gsd-qdrant snippet search "component" --context  # Ricerca snippet con contesto
 ```
 
-## Stato del flusso
+## Stato del flusso (V2.0)
 
 - il tool è project-wide
 - non distingue più frontend/backend come flusso principale
-- `docs` contiene contesto `.gsd`
-- `snippets` contiene codice e riferimenti al contesto GSD rilevante
-- il comando base evita reinstallazioni inutili quando le dipendenze minime sono già disponibili
+- **Collection unificata `gsd_memory`**: singolo punto di indicizzazione per tutti i progetti
+- **Type-based classification**: punti classificati come "doc" (documenti `.gsd`) o "code" (codice progetto)
+- Il comando base evita reinstallazioni inutili quando le dipendenze minime sono già disponibili
+- **Cross-project insights**: sfrutta la collection unificata per conoscenze condivise tra progetti
 
 ## Versione
 
-Versione di lavoro allineata: `1.0.7`
+Versione di lavoro allineata: `2.0.0` (V2.0 - Unified Collection Architecture)

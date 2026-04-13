@@ -34,9 +34,12 @@
   },
   "files": [
     "scripts/cli.js",
-    "scripts/sync-knowledge.js",
-    "scripts/setup-from-templates.js",
+    "scripts/context-analyzer.js",
     "scripts/gsd-qdrant-template.js",
+    "scripts/intent-detector.js",
+    "scripts/setup-from-templates.js",
+    "scripts/snippet-ranking.js",
+    "scripts/sync-knowledge.js",
     "README.md",
     "GSD-QDRANT-SETUP.md",
     "CHANGELOG.md"
