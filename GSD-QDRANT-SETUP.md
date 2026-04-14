@@ -65,6 +65,26 @@ gsd-qdrant context "query"              # Query contestuale con contesto ibrido
 gsd-qdrant snippet search "component" --context  # Ricerca snippet con contesto
 ```
 
+### Knowledge Sharing Nativo
+
+Il modulo `scripts/knowledge-sharing.js` fornisce integrazione nativa per il knowledge sharing:
+
+```javascript
+// Includi il modulo nel tuo codice GSD
+const knowledgeSharing = require('./scripts/gsd-knowledge-sharing');
+
+// Inizializza
+await knowledgeSharing.init();
+
+// Usa come hook beforeMessage per retrieving automatico
+api.on('beforeMessage', async (event, ctx) => {
+  await knowledgeSharing.onBeforeMessage(event, ctx);
+});
+
+// Oppure genera prompt standalone
+const prompt = await knowledgeSharing.buildPrompt(query, { limit: 10 });
+```
+
 ## Stato del flusso (V2.0)
 
 - il tool è project-wide
@@ -72,6 +92,8 @@ gsd-qdrant snippet search "component" --context  # Ricerca snippet con contesto
 - **Collection unificata `gsd_memory`**: singolo punto di indicizzazione per tutti i progetti
 - **Type-based classification**: punti classificati come "doc" (documenti `.gsd`) o "code" (codice progetto)
 - Il comando base evita reinstallazioni inutili quando le dipendenze minime sono già disponibili
+- **Knowledge sharing nativo**: modulo `scripts/knowledge-sharing.js` per integrazione con GSD
+- **Compatibilità Windows**: hook post-commit e path separatori supportano sia Windows che Linux
 - **Cross-project insights**: sfrutta la collection unificata per conoscenze condivise tra progetti
 
 ## Versione

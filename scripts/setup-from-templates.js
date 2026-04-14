@@ -18,23 +18,28 @@ async function installPostCommitHook(projectRoot) {
   const hooksDir = join(projectRoot, '.git', 'hooks');
   if (!existsSync(hooksDir)) return;
 
-  const hookPath = join(hooksDir, 'post-commit');
-  const hookContent = `#!/bin/sh
-# Auto-sync GSD knowledge to Qdrant after each local commit.
-
-PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
-[ -z "$PROJECT_ROOT" ] && exit 0
-cd "$PROJECT_ROOT" || exit 0
-node scripts/sync-knowledge.js >/dev/null 2>&1 || echo "[qdrant-sync] sync-knowledge failed" >&2
-`;
+  // Rileva sistema operativo per scegliere l'hook corretto
+  const isWindows = process.platform === 'win32';
+  const hookName = isWindows ? 'post-commit.bat' : 'post-commit.sh';
+  const hookPath = join(hooksDir, hookName);
+  
+  // Leggi il contenuto del file di script
+  const scriptPath = join(__dirname, hookName);
+  let hookContent;
+  try {
+    hookContent = await readFile(scriptPath, 'utf8');
+  } catch (err) {
+    console.warn(`⚠️  Hook script not found: ${scriptPath}`);
+    return;
+  }
 
   try {
     const existing = await readFile(hookPath, 'utf8');
     if (existing === hookContent) return;
   } catch (_err) {}
 
-  await writeFile(hookPath, hookContent, { mode: 0o755 });
-  console.log('📝 Post-commit hook updated');
+  await writeFile(hookPath, hookContent, { mode: isWindows ? undefined : 0o755 });
+  console.log(`📝 Post-commit hook updated (${hookName})`);
 }
 
 async function ensureProjectCollections(client) {

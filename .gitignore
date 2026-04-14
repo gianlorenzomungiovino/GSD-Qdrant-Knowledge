@@ -33,3 +33,5 @@ tmp/
 
 # ── GSD baseline (auto-generated) ──
 .bg-shell/
+
+gsd-qdrant/

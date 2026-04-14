@@ -10,7 +10,8 @@
  */
 
 const { spawnSync } = require('child_process');
-const { existsSync, readFileSync, mkdirSync, writeFileSync, copyFileSync } = require('fs');
+const fs = require('fs');
+const { existsSync, readFileSync, mkdirSync, writeFileSync, copyFileSync } = fs;
 const { join, dirname, extname, basename } = require('path');
 const readline = require('readline');
 
@@ -253,7 +254,8 @@ function installDependencies(pkgPath, targetDir) {
     return 'ok';
   }
   
-  const pkgDir = pkgPath.replace(/\\/g, '/');
+  // Usa path.sep per compatibilità cross-platform
+  const pkgDir = pkgPath.split('/').join(require('path').sep);
   console.log(`📦 Dependencies: installing missing packages...`);
   const result = run('npm', ['install', ...REQUIRED_PACKAGES], { cwd: pkgDir });
   if (result.status !== 0) {
@@ -302,6 +304,37 @@ function createGsdQdrantDirectory(projectRoot) {
   }
 }
 
+/**
+ * Add entry to .gitignore (if .gitignore exists)
+ * @param {string} projectRoot - The project root directory
+ * @param {string} entry - Entry to add (e.g., 'gsd-qdrant/')
+ */
+async function addToGitignore(projectRoot, entry) {
+  const gitignorePath = join(projectRoot, '.gitignore');
+  
+  // If .gitignore doesn't exist, skip
+  if (!existsSync(gitignorePath)) {
+    console.log('ℹ️  .gitignore not found, skipping');
+    return;
+  }
+
+  // Read current content
+  const content = await fs.promises.readFile(gitignorePath, 'utf8');
+  
+  // Check if entry already exists
+  const lines = content.split('\n');
+  const hasEntry = lines.some(line => line.trim() === entry);
+  
+  if (hasEntry) {
+    console.log('ℹ️  Entry already in .gitignore');
+    return;
+  }
+
+  // Add entry to end of file
+  await fs.promises.writeFile(gitignorePath, content + '\n' + entry + '\n', 'utf8');
+  console.log(`📝 Added '${entry}' to .gitignore`);
+}
+
 async function main() {
   const args = process.argv.slice(2);
   
@@ -329,7 +362,11 @@ async function main() {
     console.log(`📁 Project: ${basename(PROJECT_ROOT)}`);
     installDependencies(pkgPath, 'project root');
 
+    // Run setup-from-templates.js
     run('node', [join(SCRIPT_DIR, 'setup-from-templates.js')], { cwd: PROJECT_ROOT });
+
+    // Add gsd-qdrant/ to .gitignore (if it exists)
+    await addToGitignore(PROJECT_ROOT, 'gsd-qdrant/');
 
     const syncScript = join(SCRIPT_DIR, '..', 'scripts', 'sync-knowledge.js');
     const syncResult = spawnSync('node', [syncScript], { 
