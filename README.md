@@ -24,6 +24,7 @@ Lanciando `gsd-qdrant` nella root di un progetto Node.js:
 3. crea `gsd-qdrant/index.js`
 4. crea o valida la collection unificata `gsd_memory` (single collection per tutti i progetti)
 5. indicizza `.gsd/*.md` nella collection `gsd_memory` (tipo "doc")
+   - **Nota:** I file principali del progetto (`STATE.md`, `REQUIREMENTS.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `PROJECT.md`) sono esclusi dall'indicizzazione in Qdrant perché GSD li gestisce già localmente. Qdrant è usato solo per il knowledge sharing cross-project.
 6. indicizza il codice progetto nella collection `gsd_memory` (tipo "code")
 7. collega ogni punto codice ai documenti `.gsd` rilevanti tramite `relatedDocPaths` e `relatedDocIds`
 
@@ -131,6 +132,14 @@ Il retrieving automatico è ora integrato come modulo nativo:
 - **Modulo `scripts/knowledge-sharing.js`**: fornisce integrazione nativa per il knowledge sharing con Qdrant
 - **Hook event-based**: può essere chiamato prima di ogni risposta GSD per arricchire il prompt con contesto
 - **Comandi CLI standalone**: `gsd-qdrant context` e `gsd-qdrant snippet search` usano il nuovo modulo
+
+### Filosofia: GSD = Source of Truth, Qdrant = Enhancer
+
+Per evitare duplicazione di contesto e consumo eccessivo di token, il sistema esclude automaticamente i file principali del progetto corrente dall'indicizzazione in Qdrant:
+
+- `STATE.md`, `REQUIREMENTS.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `PROJECT.md`, `FUTURE-REQUIREMENTS.md`
+
+Questi file sono gestiti localmente da GSD e non vengono indicizzati in Qdrant. Qdrant è usato esclusivamente per il knowledge sharing cross-project, mentre GSD rimane la source of truth per il progetto corrente.
 
 ### Compatibilità Windows
 

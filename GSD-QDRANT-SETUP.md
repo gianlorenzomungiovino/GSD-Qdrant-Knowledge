@@ -96,6 +96,10 @@ const prompt = await knowledgeSharing.buildPrompt(query, { limit: 10 });
 - **Compatibilità Windows**: hook post-commit e path separatori supportano sia Windows che Linux
 - **Cross-project insights**: sfrutta la collection unificata per conoscenze condivise tra progetti
 
+### Filosofia: GSD = Source of Truth, Qdrant = Enhancer
+
+Per evitare duplicazione di contesto e consumo eccessivo di token, i file principali del progetto corrente (`STATE.md`, `REQUIREMENTS.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `PROJECT.md`, `FUTURE-REQUIREMENTS.md`) sono esclusi dall'indicizzazione in Qdrant. Questi file sono gestiti localmente da GSD, mentre Qdrant è usato esclusivamente per il knowledge sharing cross-project.
+
 ## Versione
 
 Versione di lavoro allineata: `2.0.0` (V2.0 - Unified Collection Architecture)
