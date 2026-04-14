@@ -16,7 +16,18 @@ const CODE_EXTENSIONS = new Set([
   '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.py', '.rb', '.php', '.go', '.rs', '.java', '.kt', '.scala', '.cs', '.html', '.css', '.scss', '.sass', '.less', '.sql', '.sh', '.bash', '.zsh', '.ps1', '.json', '.yaml', '.yml', '.toml', '.xml', '.swift', '.dart', '.vue', '.svelte', '.astro'
 ]);
 const EXCLUDED_FILE_EXTENSIONS = new Set([
-  '.md', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico', '.pdf', '.zip', '.gz', '.tar', '.mp3', '.mp4', '.mov', '.woff', '.woff2', '.ttf', '.env', '.lock', '.log'
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico', '.pdf', '.zip', '.gz', '.tar', '.mp3', '.mp4', '.mov', '.woff', '.woff2', '.ttf', '.env', '.lock', '.log'
+]);
+
+// Files managed by GSD locally - exclude from Qdrant to avoid duplicate context
+// GSD is the source of truth for the current project; Qdrant is an enhancer for cross-project sharing
+const GSD_PROJECT_FILES = new Set([
+  'STATE.md',
+  'REQUIREMENTS.md',
+  'DECISIONS.md',
+  'KNOWLEDGE.md',
+  'PROJECT.md',
+  'FUTURE-REQUIREMENTS.md'
 ]);
 
 class GSDKnowledgeSync {
@@ -185,8 +196,46 @@ class GSDKnowledgeSync {
   }
 
   startWatcher() { console.log('👀 Watch mode not implemented yet. Run `gsd-qdrant` or `node scripts/sync-knowledge.js`.'); }
-  async walkGsd(dir) { const files = []; for (const entry of await fs.readdir(dir, { withFileTypes: true })) { const fullPath = join(dir, entry.name); if (entry.isDirectory()) files.push(...await this.walkGsd(fullPath)); else if (entry.isFile() && entry.name.endsWith('.md')) files.push(fullPath); } return files; }
-  async walkProjectCode(dir) { const files = []; for (const entry of await fs.readdir(dir, { withFileTypes: true })) { const fullPath = join(dir, entry.name); if (entry.isDirectory()) { if (EXCLUDED_DIRS.has(entry.name)) continue; files.push(...await this.walkProjectCode(fullPath)); continue; } if (!entry.isFile()) continue; if (entry.name === 'package-lock.json') continue; const ext = extname(entry.name).toLowerCase(); if (EXCLUDED_FILE_EXTENSIONS.has(ext) || !CODE_EXTENSIONS.has(ext)) continue; files.push(fullPath); } return files; }
+  async walkGsd(dir) {
+    const files = [];
+    for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        files.push(...await this.walkGsd(fullPath));
+      } else if (entry.isFile() && entry.name.endsWith('.md')) {
+        // Skip GSD project files - they are managed locally by GSD
+        // GSD is the source of truth for the current project; Qdrant is an enhancer
+        if (GSD_PROJECT_FILES.has(entry.name)) {
+          continue;
+        }
+        files.push(fullPath);
+      }
+    }
+    return files;
+  }
+  async walkProjectCode(dir) {
+    const files = [];
+    for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (EXCLUDED_DIRS.has(entry.name)) continue;
+        files.push(...await this.walkProjectCode(fullPath));
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      if (entry.name === 'package-lock.json') continue;
+      const ext = extname(entry.name).toLowerCase();
+      if (EXCLUDED_FILE_EXTENSIONS.has(ext) || !CODE_EXTENSIONS.has(ext)) continue;
+      
+      // Also skip GSD project files found in project root
+      if (entry.name.endsWith('.md') && !this.shouldIndexGsdFile(entry.name)) {
+        continue;
+      }
+      
+      files.push(fullPath);
+    }
+    return files;
+  }
   async buildDocReferenceIndex(gsdDir) {
     const allDocs = [];
     for (const filePath of await this.walkGsd(gsdDir)) {
@@ -198,6 +247,15 @@ class GSDKnowledgeSync {
       allDocs.push({ path: relPath, title, ids, keywords });
     }
     return allDocs;
+  }
+  
+  /**
+   * Check if a .md file should be indexed in Qdrant
+   * GSD project files are managed locally - Qdrant is for cross-project sharing only
+   */
+  shouldIndexGsdFile(filePath) {
+    const basename = filePath.split(/[/\\]/).pop();
+    return !GSD_PROJECT_FILES.has(basename);
   }
   findRelatedDocsForCode(codeRelPath, codeContent, docIndex) {
     const codeIds = new Set(this.extractGsdIds(codeRelPath, codeContent));

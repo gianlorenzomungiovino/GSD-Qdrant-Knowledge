@@ -1,14 +1,6 @@
 {
-  "lastSync": "2026-04-14T10:58:00.950Z",
+  "lastSync": "2026-04-14T11:27:33.315Z",
   "indexed": {},
-  "indexed_.gsd_DECISIONS.md": {
-    "path": ".gsd/DECISIONS.md",
-    "hash": "16e0f96ff277145ca8791fea5c83cee6"
-  },
-  "indexed_.gsd_FUTURE-REQUIREMENTS.md": {
-    "path": ".gsd/FUTURE-REQUIREMENTS.md",
-    "hash": "e4f48b3c143fc9c91c7301dbe2789510"
-  },
   "indexed_.gsd_knowledge-sharing_ARCHITECTURE.md": {
     "path": ".gsd/knowledge-sharing/ARCHITECTURE.md",
     "hash": "f7725ac87cee2ff294b381191beef0b5"
@@ -16,10 +8,6 @@
   "indexed_.gsd_knowledge-sharing_PLAN.md": {
     "path": ".gsd/knowledge-sharing/PLAN.md",
     "hash": "7215e45e06737c6e1fda09616fbba400"
-  },
-  "indexed_.gsd_KNOWLEDGE.md": {
-    "path": ".gsd/KNOWLEDGE.md",
-    "hash": "e8a6cbc91209e3faf66a5d5478255aca"
   },
   "indexed_.gsd_milestones_M001_M001-CONTEXT.md": {
     "path": ".gsd/milestones/M001/M001-CONTEXT.md",
@@ -509,21 +497,9 @@
     "path": ".gsd/milestones/M006/M006-ROADMAP.md",
     "hash": "31dab87dbe63101f13703ef49a15136c"
   },
-  "indexed_.gsd_PROJECT.md": {
-    "path": ".gsd/PROJECT.md",
-    "hash": "00daf60ed8c9b58cc23176489b7b74b4"
-  },
   "indexed_.gsd_README.md": {
     "path": ".gsd/README.md",
     "hash": "37c125a87c7c8e902ca546dc2f972ef3"
-  },
-  "indexed_.gsd_REQUIREMENTS.md": {
-    "path": ".gsd/REQUIREMENTS.md",
-    "hash": "dc00c82ae35465a861cd7271347d1c7d"
-  },
-  "indexed_.gsd_STATE.md": {
-    "path": ".gsd/STATE.md",
-    "hash": "eec2f87131937e17a53386a82f260619"
   },
   "indexed_package.json": {
     "path": "package.json",
@@ -543,7 +519,7 @@
   },
   "indexed_scripts_gsd-qdrant-template.js": {
     "path": "scripts/gsd-qdrant-template.js",
-    "hash": "c466845802ad7da1ee412e2de8dfa2a6"
+    "hash": "dda095a5b7595b9f92e0621c896c07bb"
   },
   "indexed_scripts_intent-detector.js": {
     "path": "scripts/intent-detector.js",
