@@ -34,7 +34,7 @@ Il setup crea automaticamente un hook Git `post-commit` che esegue l'indicizzazi
 
 ```bash
 # L'hook viene creato automaticamente durante il setup
-# Esegue: node scripts/sync-knowledge.js dopo ogni commit
+# Esegue: node src/sync-knowledge.js dopo ogni commit
 ```
 
 Questo garantisce che il database Qdrant rimanga sincronizzato con le modifiche al codice e alla documentazione `.gsd` senza intervento manuale.
@@ -62,7 +62,7 @@ La collezione unificata usa un unico schema con campi comuni e campi specifici p
 
 - `subtype`: sottotipo (state, requirements, decision, knowledge, activity)
 - `section`: sezione semantica del file (current_state, decisions, knowledge, ecc.)
-- `language": "markdown"
+- `language`: "markdown"
 
 **Campi specifici per tipo "code":**
 
@@ -81,7 +81,7 @@ gsd-qdrant
 
 ### Auto-sync su Git Commit
 
-Il setup crea automaticamente un hook Git `post-commit` che esegue l'indicizzazione in background dopo ogni commit locale. L'hook viene creato nella cartella `.git/hooks/post-commit` e esegue `node scripts/sync-knowledge.js` automaticamente.
+Il setup crea automaticamente un hook Git `post-commit` che esegue l'indicizzazione in background dopo ogni commit locale. L'hook viene creato nella cartella `.git/hooks/post-commit` e esegue `node src/sync-knowledge.js` automaticamente.
 
 **Nota:** L'auto-sync funziona solo per i commit locali, non per i push remoti. Per sync immediato dopo modifiche non-committate, usa `gsd-qdrant` manualmente.
 
@@ -110,10 +110,10 @@ docker run -d --name qdrant -p 6333:6333 -p 6334:6334 qdrant/qdrant
 QDRANT_URL=http://localhost:6333
 VECTOR_NAME=fast-all-minilm-l6-v2
 EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
-EMBEDDING_DIMENSIONS=1024  # V2.0: unified collection uses 1024 dims
+EMBEDDING_DIMENSIONS=1024
 ```
 
-## Stato attuale (V2.0)
+## Stato attuale (V2.0+)
 
 - `gsd-qdrant` è l'entry point unico per bootstrap + sync
 - **Collection unificata `gsd_memory`**: singolo punto di indicizzazione per tutti i progetti
@@ -123,15 +123,39 @@ EMBEDDING_DIMENSIONS=1024  # V2.0: unified collection uses 1024 dims
 - output CLI ripulito sul happy path
 - snippet arricchiti con metadata strutturali, commenti e contesto `.gsd`
 
-## Prossimo focus (V2.0)
+## Funzionalità Aggiornate (V2.0+)
+
+### MCP Server per Auto-Retrieval
+
+Il retrieving automatico è ora integrato come MCP server:
+
+- **Server MCP `gsd-qdrant`**: server che espone gli strumenti `retrieve_context` e `list_projects`
+- **Integrazione GSD**: può essere chiamato prima di ogni risposta GSD per recuperare contesto rilevante dalla memoria unificata Qdrant
+- **Nessuna modifica a GSD**: il server opera esternamente, senza toccare il codice di GSD - è un enhancer che funziona indipendentemente
 
 ### Knowledge Sharing Nativo
 
-Il retrieving automatico è ora integrato come modulo nativo:
+Il modulo nativo per integrazione event-based con GSD:
 
-- **Modulo `scripts/knowledge-sharing.js`**: fornisce integrazione nativa per il knowledge sharing con Qdrant
+- **Modulo `src/knowledge-sharing.js`**: fornisce integrazione nativa per il knowledge sharing con Qdrant
 - **Hook event-based**: può essere chiamato prima di ogni risposta GSD per arricchire il prompt con contesto
 - **Comandi CLI standalone**: `gsd-qdrant context` e `gsd-qdrant snippet search` usano il nuovo modulo
+
+**Uso come hook beforeMessage:**
+```javascript
+const knowledgeSharing = require('./src/knowledge-sharing');
+
+// Inizializza
+await knowledgeSharing.init();
+
+// Usa come hook beforeMessage per retrieving automatico
+api.on('beforeMessage', async (event, ctx) => {
+  await knowledgeSharing.onBeforeMessage(event, ctx);
+});
+
+// Oppure genera prompt standalone
+const prompt = await knowledgeSharing.buildPrompt(query, { limit: 10 });
+```
 
 ### Filosofia: GSD = Source of Truth, Qdrant = Enhancer
 
@@ -149,16 +173,9 @@ Tutti i file sono stati aggiornati per supportare sia Windows che Linux:
 - **Separatori di path**: uniformati all'uso di `path.sep`
 - **Newline handling**: corretto per ogni piattaforma
 
-### Altre miglioramenti
-
-- ranking migliore per componenti/hooks/utils/routes/scripts basato su intent detection
-- controllo compatibilità target prima dell'apply
-- `snippet apply` Qdrant-first invece che database statico-first
-- **Cross-project insights**: sfruttare la collection unificata per conoscenze condivise tra progetti
-
 ## Pubblicazione npm
 
-Versione target corrente del repository: `2.0.0` (V2.0 - Unified Collection)
+Versione target corrente del repository: `2.0.1` (V2.0+ - MCP Server Integration)
 
 Prima di pubblicare:
 

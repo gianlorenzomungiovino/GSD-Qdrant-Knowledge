@@ -67,11 +67,11 @@ gsd-qdrant snippet search "component" --context  # Ricerca snippet con contesto
 
 ### Knowledge Sharing Nativo
 
-Il modulo `scripts/knowledge-sharing.js` fornisce integrazione nativa per il knowledge sharing:
+Il modulo `src/knowledge-sharing.js` fornisce integrazione nativa per il knowledge sharing:
 
 ```javascript
 // Includi il modulo nel tuo codice GSD
-const knowledgeSharing = require('./scripts/gsd-knowledge-sharing');
+const knowledgeSharing = require('./src/knowledge-sharing');
 
 // Inizializza
 await knowledgeSharing.init();
@@ -85,14 +85,19 @@ api.on('beforeMessage', async (event, ctx) => {
 const prompt = await knowledgeSharing.buildPrompt(query, { limit: 10 });
 ```
 
-## Stato del flusso (V2.0)
+## Stato del flusso (V2.0+)
 
+### Core Features
 - il tool è project-wide
 - non distingue più frontend/backend come flusso principale
 - **Collection unificata `gsd_memory`**: singolo punto di indicizzazione per tutti i progetti
 - **Type-based classification**: punti classificati come "doc" (documenti `.gsd`) o "code" (codice progetto)
 - Il comando base evita reinstallazioni inutili quando le dipendenze minime sono già disponibili
-- **Knowledge sharing nativo**: modulo `scripts/knowledge-sharing.js` per integrazione con GSD
+
+### Nuove Funzionalità (V2.0+)
+- **MCP server `gsd-qdrant`**: server MCP per auto-retrieval di contesto da Qdrant
+- **Modulo `src/knowledge-sharing.js`**: integrazione event-based con GSD
+- **Post-commit hook**: auto-sync dopo ogni commit locale (`src/post-commit.sh`, `src/post-commit.bat`, `src/post-commit.ps1`)
 - **Compatibilità Windows**: hook post-commit e path separatori supportano sia Windows che Linux
 - **Cross-project insights**: sfrutta la collection unificata per conoscenze condivise tra progetti
 
@@ -102,4 +107,4 @@ Per evitare duplicazione di contesto e consumo eccessivo di token, i file princi
 
 ## Versione
 
-Versione di lavoro allineata: `2.0.0` (V2.0 - Unified Collection Architecture)
+Versione di lavoro allineata: `2.0.1` (V2.0+ - MCP Server Integration)

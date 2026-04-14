@@ -35,3 +35,4 @@ tmp/
 .bg-shell/
 
 gsd-qdrant/
+src/gsd-qdrant-mcp/
