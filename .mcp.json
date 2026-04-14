@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "gsd-workflow": {
+      "command": "C:\\nvm4w\\nodejs\\node.exe",
+      "args": [
+        "C:\\nvm4w\\nodejs\\node_modules\\gsd-pi\\packages\\mcp-server\\dist\\cli.js"
+      ],
+      "cwd": "D:\\Gianlorenzo\\Documents\\Sviluppo\\_Template\\qdrant-template",
+      "env": {
+        "GSD_CLI_PATH": "C:\\nvm4w\\nodejs\\node_modules\\gsd-pi\\dist\\loader.js",
+        "GSD_WORKFLOW_EXECUTORS_MODULE": "C:\\Users\\Gianlorenzo\\.gsd\\agent\\extensions\\gsd\\tools\\workflow-tool-executors.js",
+        "GSD_WORKFLOW_WRITE_GATE_MODULE": "C:\\Users\\Gianlorenzo\\.gsd\\agent\\extensions\\gsd\\bootstrap\\write-gate.js",
+        "GSD_PERSIST_WRITE_GATE_STATE": "1",
+        "GSD_WORKFLOW_PROJECT_ROOT": "D:\\Gianlorenzo\\Documents\\Sviluppo\\_Template\\qdrant-template"
+      }
+    }
+  }
+}
