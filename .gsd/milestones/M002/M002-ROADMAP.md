@@ -1,11 +1,10 @@
-# M002: Miglioramento MCP Server GSD-Qdrant: da passivo ad attivo
+# M002: Miglioramenti Ricerca e Deployment
 
 ## Vision
-Migliorare il MCP server GSD-Qdrant da passivo (richiede query manuale) ad attivo (retrieval automatico basato sul task dell'utente). Questo abilita l'LLM a ottenere contesto rilevante senza round-trip manuali, riducendo token e migliorando l'esperienza utente.
+Migliorare la precisione della ricerca semantica con embedding ibrido e rendere il tool plug-and-play con Qdrant embedded che include la dashboard browser senza limitazioni rispetto alla versione Docker.
 
 ## Slice Overview
 | ID | Slice | Risk | Depends | Done | After this |
 |----|-------|------|---------|------|------------|
-| S01 | S01 | low | — | ✅ | L'MCP server ha un nuovo strumento `auto_retrieve` che estrae automaticamente parole chiave dal task e fa retrieval su Qdrant |
-| S02 | Testing e validazione | low | S01 | ⬜ | Tutti i test passano e il retrieval automatico funziona correttamente per vari tipi di task |
-| S03 | Documentazione e integrazione | low | S02 | ⬜ | La documentazione è aggiornata e il MCP server è pronto per l'uso |
+| S01 | Implementare Embedding Ibrido (Vettoriale + Testuale) | low | — | ⬜ | La ricerca restituisce risultati più precisi combinando similarità vettoriale e match testuale |
+| S02 | Qdrant Embedded con Dashboard Browser | medium | — | ⬜ | Qdrant parte automaticamente con il CLI e la dashboard è accessibile via browser |
