@@ -1,4 +1,0 @@
-
-> gsd-qdrant-cli@1.0.7 test
-> vitest run --grep "S02-core" passa con coverage
-

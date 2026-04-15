@@ -15,10 +15,23 @@ const { existsSync, readFileSync, mkdirSync, writeFileSync, copyFileSync } = fs;
 const { join, dirname, extname, basename } = require('path');
 const readline = require('readline');
 
-const SCRIPT_DIR = __dirname;
 const PROJECT_ROOT = process.cwd();
 const ROOT_PKG = join(PROJECT_ROOT, 'package.json');
 const API_PKG = join(PROJECT_ROOT, 'apps', 'api', 'package.json');
+
+const CLI_ROOT = __dirname; // Directory dove risiede il file cli.js
+
+/**
+ * Find file in CLI_ROOT or its parent directory
+ * Used to handle both global installation (files in CLI_ROOT) and development (files in parent)
+ */
+function findFileInCliRoot(filename) {
+  const pathInCliRoot = join(CLI_ROOT, filename);
+  if (existsSync(pathInCliRoot)) {
+    return pathInCliRoot;
+  }
+  return join(dirname(CLI_ROOT), filename);
+}
 
 /**
  * Get file extension for a programming language
@@ -106,7 +119,9 @@ function generateFileName(name, extension) {
 // Required packages for setup - these are needed BEFORE running setup
 const REQUIRED_PACKAGES = [
   '@qdrant/js-client-rest',
-  '@xenova/transformers'
+  '@xenova/transformers',
+  '@modelcontextprotocol/sdk',
+  'zod'
 ];
 
 function run(command, args, options = {}) {
@@ -298,7 +313,7 @@ function createGsdQdrantDirectory(projectRoot) {
   
   // Create index.js if it doesn't exist
   if (!existsSync(indexFile)) {
-    const templateIndexFile = join(SCRIPT_DIR, 'gsd-qdrant-template.js');
+    const templateIndexFile = findFileInCliRoot('gsd-qdrant-template.js');
     copyFileSync(templateIndexFile, indexFile);
     console.log(`📝 Created: gsd-qdrant/index.js`);
   }
@@ -340,7 +355,7 @@ async function main() {
   
   // Handle --version flag
   if (args[0] === '--version' || args[0] === '-v') {
-    const pkgPath = join(SCRIPT_DIR, '..', 'package.json');
+    const pkgPath = findFileInCliRoot('package.json');
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
     console.log(`gsd-qdrant-cli v${pkg.version}`);
     process.exit(0);
@@ -351,6 +366,19 @@ async function main() {
 
     // Create gsd-qdrant directory and files
     createGsdQdrantDirectory(PROJECT_ROOT);
+
+    // Install GSD auto-retrieve extension
+    const installExtensionScript = findFileInCliRoot('install-gsd-extension.js');
+    if (existsSync(installExtensionScript)) {
+      const installResult = spawnSync('node', [installExtensionScript], { 
+        cwd: PROJECT_ROOT,
+        stdio: 'inherit',
+        shell: false
+      });
+      if (installResult.status !== 0) {
+        console.error('⚠️  GSD extension installation failed');
+      }
+    }
 
     // Find which package.json to use
     const pkgPath = findPackagePath();
@@ -363,12 +391,12 @@ async function main() {
     installDependencies(pkgPath, 'project root');
 
     // Run setup-from-templates.js
-    run('node', [join(SCRIPT_DIR, 'setup-from-templates.js')], { cwd: PROJECT_ROOT });
+    run('node', [findFileInCliRoot('setup-from-templates.js')], { cwd: PROJECT_ROOT });
 
     // Add gsd-qdrant/ to .gitignore (if it exists)
     await addToGitignore(PROJECT_ROOT, 'gsd-qdrant/');
 
-    const syncScript = join(SCRIPT_DIR, '..', 'scripts', 'sync-knowledge.js');
+    const syncScript = findFileInCliRoot('sync-knowledge.js');
     const syncResult = spawnSync('node', [syncScript], { 
       cwd: PROJECT_ROOT,
       stdio: 'inherit'
@@ -439,7 +467,7 @@ async function main() {
       
       // If Qdrant didn't work, use local database
       if (sorted.length === 0) {
-        const snippetRanking = require('./snippet-ranking');
+        const snippetRanking = require(findFileInCliRoot('snippet-ranking'));
         const snippets = snippetRanking.loadDatabase();
         
         const filtered = snippetRanking.filterAndRankSnippets(snippets, query, options);
@@ -492,9 +520,9 @@ async function main() {
     }
     
     // Load modules
-    const snippetRanking = require('./snippet-ranking');
-    const intentDetector = require('./intent-detector');
-    const contextAnalyzer = require('./context-analyzer');
+    const snippetRanking = require(findFileInCliRoot('snippet-ranking'));
+    const intentDetector = require(findFileInCliRoot('intent-detector'));
+    const contextAnalyzer = require(findFileInCliRoot('context-analyzer'));
     
     // Detect intent from the query
     const intent = intentDetector.detectIntent(query);
@@ -628,7 +656,7 @@ async function main() {
     console.log('✅ Snippet applied successfully!');
   } else if (args[0] === 'context') {
     // Knowledge Sharing - Context Builder using GSDKnowledgeSync
-    const { GSDKnowledgeSync } = require('./gsd-qdrant-template.js');
+    const { GSDKnowledgeSync } = require(findFileInCliRoot('gsd-qdrant-template.js'));
     
     const query = args[1] || '';
     const project_id = basename(PROJECT_ROOT);
@@ -694,9 +722,9 @@ async function main() {
     console.log(`📁 Project: ${basename(PROJECT_ROOT)}`);
     installDependencies(pkgPath, 'project root');
 
-    run('node', [join(SCRIPT_DIR, 'setup-from-templates.js')], { cwd: PROJECT_ROOT });
+    run('node', [findFileInCliRoot('setup-from-templates.js')], { cwd: PROJECT_ROOT });
 
-    const syncScript = join(SCRIPT_DIR, '..', 'scripts', 'sync-knowledge.js');
+    const syncScript = findFileInCliRoot('sync-knowledge.js');
     const syncResult = spawnSync('node', [syncScript], { cwd: PROJECT_ROOT, stdio: 'inherit' });
     if (syncResult.status !== 0) {
       console.error('\n❌ Initial knowledge sync failed. Collections may be empty.');

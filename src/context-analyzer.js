@@ -9,7 +9,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { detectIntent } = require('./intent-detector.js');
+const { detectIntent } = require('./intent-detector');
 
 /**
  * Analyze the project structure and return a map of directory purposes

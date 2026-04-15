@@ -1,16 +1,16 @@
 {
   "name": "gsd-qdrant-cli",
-  "version": "1.0.7",
+  "version": "2.0.0",
   "description": "CLI per setup automatico GSD + Qdrant in qualsiasi progetto Node.js",
-  "main": "scripts/cli.js",
+  "main": "src/cli.js",
   "bin": {
-    "gsd-qdrant": "scripts/cli.js"
+    "gsd-qdrant": "src/cli.js"
   },
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "sync-knowledge": "node scripts/sync-knowledge.js"
+    "sync-knowledge": "node src/sync-knowledge.js"
   },
   "keywords": [
     "gsd",
@@ -26,20 +26,29 @@
     "url": "git+https://github.com/gianlorenzomungiovino/GSD-Qdrant-Knowledge.git"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@qdrant/js-client-rest": "^1.17.0",
-    "@xenova/transformers": "^2.17.2"
+    "@xenova/transformers": "^2.17.2",
+    "zod": "^4.3.6"
   },
   "engines": {
     "node": ">=18"
   },
   "files": [
-    "scripts/cli.js",
-    "scripts/context-analyzer.js",
-    "scripts/gsd-qdrant-template.js",
-    "scripts/intent-detector.js",
-    "scripts/setup-from-templates.js",
-    "scripts/snippet-ranking.js",
-    "scripts/sync-knowledge.js",
+    "src/cli.js",
+    "src/context-analyzer.js",
+    "src/gsd-qdrant-mcp/index.js",
+    "src/gsd-qdrant-template.js",
+    "src/intent-detector.js",
+    "src/knowledge-sharing.js",
+    "src/setup-from-templates.js",
+    "src/snippet-ranking.js",
+    "src/sync-knowledge.js",
+    "src/auto-retrieve-mcp.js",
+    "src/install-gsd-extension.js",
+    "src/post-commit.bat",
+    "src/post-commit.ps1",
+    "src/post-commit.sh",
     "README.md",
     "GSD-QDRANT-SETUP.md",
     "CHANGELOG.md"

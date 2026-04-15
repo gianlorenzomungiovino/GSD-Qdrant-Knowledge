@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.0
+
+### Added
+- **Auto-retrieve MCP Hook**: Estensione GSD che abilita il retrieving automatico del contesto cross-project prima di ogni risposta.
+- **MCP SDK integration**: Il server MCP `gsd-qdrant` ora utilizza `@modelcontextprotocol/sdk` per una comunicazione più robusta con GSD.
+- **Installazione automatica dell'estensione GSD**: Quando il CLI viene eseguito per la prima volta, installa automaticamente l'estensione GSD che abilita il retrieving automatico.
+
+### Changed
+- Aggiunte dipendenze al package.json: `@modelcontextprotocol/sdk` e `zod`.
+- Aggiunti file alla distribuzione npm: `auto-retrieve-mcp.js` e `install-gsd-extension.js`. (già presenti nella sezione `files`)
+
 ## 1.0.7
 
 ### Changed
