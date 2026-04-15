@@ -7,5 +7,5 @@ Migliorare il MCP server GSD-Qdrant da passivo (richiede query manuale) ad attiv
 | ID | Slice | Risk | Depends | Done | After this |
 |----|-------|------|---------|------|------------|
 | S01 | S01 | low | — | ✅ | L'MCP server ha un nuovo strumento `auto_retrieve` |
-| S02 | S02 | low | — | ⬜ | Tutti i test passano |
-| S03 | Documentazione e integrazione | low | S02 | ⬜ | Documentazione aggiornata |
+| S02 | S02 | low | — | ✅ | Tutti i test passano |
+| S03 | S03 | low | — | ⬜ | Documentazione aggiornata |

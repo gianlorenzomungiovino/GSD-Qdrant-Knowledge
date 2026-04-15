@@ -152,6 +152,132 @@ Il retrieving automatico è ora integrato come MCP server:
 - **Integrazione GSD**: può essere chiamato prima di ogni risposta GSD per recuperare contesto rilevante dalla memoria unificata Qdrant
 - **Nessuna modifica a GSD**: il server opera esternamente, senza toccare il codice di GSD - è un enhancer che funziona indipendentemente
 
+## Auto-Retrieve
+
+Il sistema di auto-retrieve permette il recupero automatico di contesto rilevante dalla memoria unificata Qdrant prima di ogni risposta GSD. Questo garantisce che l'LLM abbia accesso a informazioni cross-project senza duplicazione manuale.
+
+### Come Funziona
+
+1. **Inizializzazione**: Il server MCP `gsd-qdrant` viene avviato e connesso al client MCP
+2. **Pre-message hook**: Prima di ogni risposta GSD, il sistema esegue una query semantica alla collection `gsd_memory`
+3. **Ranking e filtraggio**: I risultati sono ordinati per rilevanza e filtrati per progetto se necessario
+4. **Contesto arricchito**: Il contesto recuperato viene inserito nel prompt dell'LLM prima della generazione della risposta
+
+### Strumenti Disponibili
+
+#### `retrieve_context`
+Recupera contesto rilevante dalla memoria unificata GSD-Qdrant.
+
+**Parametri:**
+- `query` (required): La query dell'utente da cercare
+- `limit` (optional, default: 5): Numero massimo di risultati da recuperare
+- `projectId` (optional): Project ID per filtrare risultati specifici a un progetto
+- `includeContent` (optional, default: true): Includere il contenuto completo nel risultato
+
+**Risposta formattata:**
+```json
+{
+  "query": "implementazione login",
+  "results": [
+    {
+      "id": "abc123",
+      "score": 0.85,
+      "type": "doc",
+      "subtype": "decision",
+      "project_id": "my-project",
+      "source": ".gsd/DECISIONS.md",
+      "summary": "Decisione sul sistema di autenticazione",
+      "content": "...",
+      "tags": ["decision", "auth"],
+      "language": "markdown",
+      "reusable": true,
+      "importance": 4
+    }
+  ],
+  "totalFound": 1,
+  "filteredByProject": false
+}
+```
+
+#### `list_projects`
+Restituisce la lista dei progetti unici indicizzati nella memoria.
+
+**Risposta formattata:**
+```json
+{
+  "projects": ["my-project", "another-project"],
+  "totalProjects": 2
+}
+```
+
+### Integrazione con GSD
+
+Il server MCP può essere integrato nel flusso GSD come hook `beforeMessage` per retrieving automatico:
+
+```javascript
+const knowledgeSharing = require('./src/knowledge-sharing');
+
+// Inizializza il sistema di knowledge sharing
+await knowledgeSharing.init();
+
+// Usa come hook beforeMessage per retrieving automatico
+api.on('beforeMessage', async (event, ctx) => {
+  await knowledgeSharing.onBeforeMessage(event, ctx);
+});
+
+// Oppure genera prompt standalone con query personalizzate
+const prompt = await knowledgeSharing.buildPrompt(query, { limit: 10 });
+```
+
+### Configurazione
+
+Le seguenti variabili ambiente controllano il comportamento dell'auto-retrieve:
+
+```bash
+# Configurazione Base
+QDRANT_URL=http://localhost:6333
+COLLECTION_NAME=gsd_memory
+VECTOR_NAME=fast-all-minilm-l6-v2
+EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+EMBEDDING_DIMENSIONS=384
+
+# Configurazione Qdrant Embedded (Opzionale)
+QDRANT_EMBEDDED=true
+QDRANT_EMBEDDED_PATH=./qdrant_storage
+```
+
+### Filosofia: GSD = Source of Truth, Qdrant = Enhancer
+
+Per evitare duplicazione di contesto e consumo eccessivo di token, il sistema esclude automaticamente i file principali del progetto corrente dall'indicizzazione in Qdrant:
+
+- `STATE.md`, `REQUIREMENTS.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `PROJECT.md`, `FUTURE-REQUIREMENTS.md`
+
+Questi file sono gestiti localmente da GSD e non vengono indicizzati in Qdrant. Qdrant è usato esclusivamente per il knowledge sharing cross-project, mentre GSD rimane la source of truth per il progetto corrente.
+
+### Esempi d'Uso
+
+#### Query Contestuale
+```bash
+# Query con contesto ibrido da documenti e codice
+gsd-qdrant context "come viene gestita l'autenticazione?"
+
+# Ricerca snippet con contesto
+gsd-qdrant snippet search "component" --context
+```
+
+#### Integrazione Programmatica
+```javascript
+// Recupera contesto per una query specifica
+const results = await knowledgeSharing.retrieveContext({
+  query: "implementazione API REST",
+  limit: 5,
+  projectId: "my-project"
+});
+
+// Ottieni lista dei progetti indicizzati
+const projects = await knowledgeSharing.listProjects();
+```
+
 ### Knowledge Sharing Nativo
 
 Il modulo nativo per integrazione event-based con GSD:
