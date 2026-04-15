@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.3
+
+### Fixed
+- **MCP server path**: Updated `.mcp.json` to use relative paths (`./node_modules/gsd-qdrant-knowledge/src/gsd-qdrant-mcp/index.js`) instead of absolute local paths. Added `bin` entry for `gsd-qdrant-mcp` in package.json so the MCP server is accessible after npm installation.
+
 ## 2.0.2
 
 ### Fixed
