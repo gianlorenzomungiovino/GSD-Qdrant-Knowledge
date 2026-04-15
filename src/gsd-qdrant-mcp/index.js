@@ -192,23 +192,77 @@ function createServer() {
         
         // Esegui retrieval per ogni query
         const allResults = [];
+        let vectorScoreSum = 0;
+        let textScoreSum = 0;
+        let vectorCount = 0;
+        let textCount = 0;
+        
         for (const query of queries) {
+          // === VECTOR MATCHING ===
           const embedding = await generatePlaceholderEmbedding(query);
           
-          const hits = await client.search(COLLECTION_NAME, {
+          const vectorHits = await client.search(COLLECTION_NAME, {
             vector: { name: VECTOR_NAME, vector: embedding },
             limit: parseInt(limit, 10),
             with_payload: true,
             with_vector: false
           });
           
-          const results = hits.map(hit => ({
-            querySource: query,
-            ...hit.payload
+          const vectorResults = vectorHits.map(hit => ({
+            ...hit.payload,
+            matchType: 'vector',
+            originalScore: hit.score
           }));
           
-          allResults.push(...results);
+          vectorScoreSum += vectorHits.reduce((sum, h) => sum + h.score, 0);
+          vectorCount += vectorHits.length;
+          allResults.push(...vectorResults);
+          
+          // === TEXT MATCHING (full-text search on source field) ===
+          // Use Qdrant's full-text search via the 'text' vector name
+          // This searches the indexed text fields in the collection
+          let textHits = [];
+          try {
+            textHits = await client.search(COLLECTION_NAME, {
+              vector: 'text', // Full-text search vector name
+              limit: parseInt(limit, 10),
+              with_payload: true,
+              with_vector: false,
+              query: query // Full-text search query
+            });
+          } catch (textErr) {
+            // If text search fails (field not indexed), fall back to empty results
+            console.error(`[GSD-Qdrant MCP] Text search failed (field may not be indexed): ${textErr.message}`);
+            textHits = [];
+          }
+          
+          const textResults = textHits.map(hit => ({
+            ...hit.payload,
+            matchType: 'text',
+            originalScore: hit.score
+          }));
+          
+          textScoreSum += textHits.reduce((sum, h) => sum + h.score, 0);
+          textCount += textHits.length;
+          allResults.push(...textResults);
         }
+        
+        // Log del confronto tra vector e text matching
+        const totalScore = vectorScoreSum + textScoreSum;
+        const vectorPercentage = totalScore > 0 ? (vectorScoreSum / totalScore * 100) : 0;
+        const textPercentage = totalScore > 0 ? (textScoreSum / totalScore * 100) : 0;
+        
+        let dominantMatchType = 'balanced';
+        if (vectorPercentage > textPercentage + 20) {
+          dominantMatchType = 'vector';
+        } else if (textPercentage > vectorPercentage + 20) {
+          dominantMatchType = 'text';
+        }
+        
+        console.error(`[GSD-Qdrant MCP] Matching Analysis:`);
+        console.error(`  - Vector matches: ${vectorCount}, avg score: ${vectorCount > 0 ? (vectorScoreSum / vectorCount).toFixed(3) : 'N/A'}`);
+        console.error(`  - Text matches: ${textCount}, avg score: ${textCount > 0 ? (textScoreSum / textCount).toFixed(3) : 'N/A'}`);
+        console.error(`  - Dominant match type: ${dominantMatchType} (${vectorPercentage.toFixed(1)}% vector, ${textPercentage.toFixed(1)}% text)`);
         
         // Rimuovi duplicati basati su ID
         const uniqueResults = [...new Map(allResults.map(item => [item.id, item])).values()];
@@ -226,6 +280,7 @@ function createServer() {
             source: result.source,
             summary: result.summary,
             relevance_score: result.score,
+            match_type: result.matchType,
             type: result.type,
             subtype: result.subtype,
           };
@@ -248,6 +303,13 @@ function createServer() {
               results: formattedResults,
               totalFound: formattedResults.length,
               retrievalStrategy: 'auto-retrieve (limited context)',
+              matchingAnalysis: {
+                dominantType: dominantMatchType,
+                vectorPercentage: vectorPercentage.toFixed(1),
+                textPercentage: textPercentage.toFixed(1),
+                vectorMatches: vectorCount,
+                textMatches: textCount
+              },
               note: 'Only metadata and summary included. Set includeContent=true to get full content.'
             }, null, 2)
           }]
