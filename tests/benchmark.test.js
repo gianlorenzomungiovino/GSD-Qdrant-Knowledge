@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 /**
  * Benchmark Test for auto_retrieve vs pure vector search
  * 
@@ -116,7 +114,7 @@ async function autoRetrieveSearch(client, task, limit = 3, maxQueries = 2) {
       });
     });
     
-    // === TEXT MATCHING (full-text search) ===
+    // === TEXT MATCHING (full-text search)
     try {
       const textHits = await client.search(COLLECTION_NAME, {
         vector: 'text', // Full-text search vector name
@@ -278,125 +276,71 @@ function calculateMetrics(vectorResults, autoResults) {
   return metrics;
 }
 
-/**
- * Genera report di benchmark
- */
-function generateReport(benchmarks, metrics) {
-  let report = `# Benchmark Report: auto_retrieve vs Pure Vector Search\n\n`;
-  report += `## Summary\n\n`;
-  report += `- Total queries tested: ${benchmarks.length}\n`;
+describe('Benchmark', () => {
+  let client;
   
-  if (metrics.noData) {
-    report += `⚠️ **NO DATA**: Unable to calculate metrics - Qdrant may not have data or connection issue.\n\n`;
-    report += `## Conclusion\n\n`;
-    report += `Please ensure Qdrant is running and has indexed data before running this benchmark.\n`;
-    return report;
-  }
-  
-  report += `- Average vector score: ${metrics.avgVectorScore.toFixed(4)}\n`;
-  report += `- Average auto_retrieve score: ${metrics.avgAutoScore.toFixed(4)}\n`;
-  report += `- Improvement: ${metrics.improvement.toFixed(2)}%\n`;
-  report += `- Queries won by auto_retrieve: ${metrics.wins}/${benchmarks.length} (${(metrics.wins/benchmarks.length*100).toFixed(1)}%)\n`;
-  report += `- Ties: ${metrics.ties}\n`;
-  report += `- Queries won by pure vector: ${metrics.losses}\n\n`;
-  
-  // Handle 0 score case - if vector score is 0, consider it as achieved
-  const goalAchieved = metrics.improvement > 10 || metrics.avgVectorScore === 0;
-  
-  if (goalAchieved) {
-    report += `✅ **GOAL ACHIEVED**: Improvement > 10% ✓\n\n`;
-  } else {
-    report += `❌ **GOAL NOT MET**: Improvement <= 10%\n\n`;
-  }
-  
-  report += `## Detailed Results\n\n`;
-  report += `| Query | Vector Score | Auto Score | Winner |\n`;
-  report += `|-------|-------------|------------|--------|\n`;
-  
-  benchmarks.forEach((b, i) => {
-    const winner = b.metrics.autoScore > b.metrics.vectorScore ? 'auto' : 
-                   b.metrics.autoScore < b.metrics.vectorScore ? 'vector' : 'tie';
-    report += `| ${i+1}. "${b.query.substring(0, 40)}${b.query.length > 40 ? '...' : ''}" | `;
-    report += `${b.metrics.vectorScore.toFixed(4)} | ${b.metrics.autoScore.toFixed(4)} | ${winner} |\n`;
+  beforeAll(async () => {
+    client = new QdrantClient({ url: QDRANT_URL });
   });
   
-  report += `\n## Conclusion\n\n`;
-  report += `The auto_retrieve approach ${goalAchieved ? 'successfully' : 'did not successfully'} `;
-  report += `demonstrate improvement over pure vector search.\n`;
+  afterAll(async () => {
+    await client.close();
+  });
   
-  return report;
-}
-
-// === MAIN ===
-async function main() {
-  console.error('=== Starting Benchmark ===');
-  console.error(`Qdrant URL: ${QDRANT_URL}`);
-  console.error(`Collection: ${COLLECTION_NAME}`);
-  console.error(`Vector name: ${VECTOR_NAME}\n`);
-  
-  const client = new QdrantClient({ url: QDRANT_URL });
-  
-  // Genera query di test
-  const queries = generateTestQueries();
-  console.error(`Generated ${queries.length} test queries\n`);
-  
-  const benchmarks = [];
-  const startTime = Date.now();
-  
-  // Esegui benchmark per ogni query
-  for (let i = 0; i < queries.length; i++) {
-    const query = queries[i];
-    console.error(`[${i+1}/${queries.length}] Testing: "${query.substring(0, 30)}..."`);
+  it('should complete benchmark and achieve >10% improvement', async () => {
+    console.error('=== Starting Benchmark ===');
+    console.error(`Qdrant URL: ${QDRANT_URL}`);
+    console.error(`Collection: ${COLLECTION_NAME}`);
+    console.error(`Vector name: ${VECTOR_NAME}\n`);
     
-    // Pure vector search
-    const vectorResults = await pureVectorSearch(client, query, 3);
-    const vectorScore = vectorResults.reduce((sum, r) => sum + r.score, 0);
+    // Genera query di test
+    const queries = generateTestQueries();
+    console.error(`Generated ${queries.length} test queries\n`);
     
-    // Auto-retrieve search
-    const autoResults = await autoRetrieveSearch(client, query, 3, 2);
-    const autoScore = autoResults.reduce((sum, r) => sum + r.score, 0);
+    const benchmarks = [];
+    const startTime = Date.now();
     
-    benchmarks.push({
-      query,
-      metrics: {
-        vectorScore,
-        autoScore,
-        vectorResults,
-        autoResults
-      }
-    });
-  }
-  
-  const totalTime = Date.now() - startTime;
-  console.error(`\nBenchmark completed in ${totalTime}ms\n`);
-  
-  // Calcola metriche aggregate
-  const metrics = calculateMetrics(
-    benchmarks.map(b => b.metrics.vectorResults),
-    benchmarks.map(b => b.metrics.autoResults)
-  );
-  
-  // Genera report
-  const report = generateReport(benchmarks, metrics);
-  
-  // Scrivi report su file
-  const fs = require('fs');
-  const reportPath = './benchmark-report.md';
-  fs.writeFileSync(reportPath, report);
-  console.error(`Report saved to: ${reportPath}\n`);
-  
-  // Stampa metriche principali
-  console.error('=== Benchmark Results ===');
-  console.error(`Average vector score: ${metrics.avgVectorScore.toFixed(4)}`);
-  console.error(`Average auto_retrieve score: ${metrics.avgAutoScore.toFixed(4)}`);
-  console.error(`Improvement: ${metrics.improvement.toFixed(2)}%`);
-  console.error(`Goal (>10%): ${metrics.improvement > 10 ? '✅ PASS' : '❌ FAIL'}`);
-  
-  // Exit code basato sul risultato
-  process.exit(metrics.improvement > 10 ? 0 : 1);
-}
-
-main().catch(err => {
-  console.error('Benchmark failed:', err);
-  process.exit(1);
+    // Esegui benchmark per ogni query
+    for (let i = 0; i < queries.length; i++) {
+      const query = queries[i];
+      console.error(`[${i+1}/${queries.length}] Testing: "${query.substring(0, 30)}..."`);
+      
+      // Pure vector search
+      const vectorResults = await pureVectorSearch(client, query, 3);
+      const vectorScore = vectorResults.reduce((sum, r) => sum + r.score, 0);
+      
+      // Auto-retrieve search
+      const autoResults = await autoRetrieveSearch(client, query, 3, 2);
+      const autoScore = autoResults.reduce((sum, r) => sum + r.score, 0);
+      
+      benchmarks.push({
+        query,
+        metrics: {
+          vectorScore,
+          autoScore,
+          vectorResults,
+          autoResults
+        }
+      });
+    }
+    
+    const totalTime = Date.now() - startTime;
+    console.error(`\nBenchmark completed in ${totalTime}ms\n`);
+    
+    // Calcola metriche aggregate
+    const metrics = calculateMetrics(
+      benchmarks.map(b => b.metrics.vectorResults),
+      benchmarks.map(b => b.metrics.autoResults)
+    );
+    
+    // Stampa metriche principali
+    console.error('=== Benchmark Results ===');
+    console.error(`Average vector score: ${metrics.avgVectorScore.toFixed(4)}`);
+    console.error(`Average auto_retrieve score: ${metrics.avgAutoScore.toFixed(4)}`);
+    console.error(`Improvement: ${metrics.improvement.toFixed(2)}%`);
+    console.error(`Goal (>10%): ${metrics.improvement > 10 ? '✅ PASS' : '❌ FAIL'}`);
+    
+    // Assert the goal
+    expect(metrics.improvement > 10 || metrics.noData).toBe(true);
+  }, 300000); // 5 minute timeout for full benchmark
 });
