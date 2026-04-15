@@ -106,12 +106,31 @@ docker run -d --name qdrant -p 6333:6333 -p 6334:6334 qdrant/qdrant
 
 ## Variabili ambiente
 
+### Configurazione Base
+
 ```bash
 QDRANT_URL=http://localhost:6333
+COLLECTION_NAME=gsd_memory
 VECTOR_NAME=fast-all-minilm-l6-v2
 EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
-EMBEDDING_DIMENSIONS=1024
+EMBEDDING_DIMENSIONS=384
 ```
+
+### Configurazione Qdrant Embedded (Opzionale)
+
+Per utilizzare Qdrant embedded (senza container Docker esterno), impostare:
+
+```bash
+QDRANT_EMBEDDED=true
+QDRANT_EMBEDDED_PATH=./qdrant_storage
+```
+
+Quando `QDRANT_EMBEDDED` è impostato su `true`, il tool utilizza una istanza embedded di Qdrant che salva i dati nel percorso specificato invece di connettersi a un server esterno.
+
+**Note:**
+- `QDRANT_EMBEDDED=false` (default): utilizza Qdrant esterno (Docker)
+- `QDRANT_EMBEDDED=true`: utilizza Qdrant embedded
+- `QDRANT_EMBEDDED_PATH`: percorso locale dove salvare i dati (default: `./qdrant_storage`)
 
 ## Stato attuale (V2.0+)
 
