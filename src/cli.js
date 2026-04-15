@@ -3,8 +3,8 @@
 /**
  * GSD + Qdrant CLI - Main entry point
  * 
- * Installabile globalmente con: npm install -g ./qdrant-template
- * Usabile in qualsiasi progetto Node.js con: gsd-qdrant
+ * Installabile globalmente con: npm install -g .
+ * Usabile in qualsiasi progetto Node.js con: gsd-qdrant-knowledge
  * 
  * Risolve il problema originale: installa le dipendenze PRIMA di eseguire qualsiasi cosa
  */
@@ -127,7 +127,7 @@ const REQUIRED_PACKAGES = [
 function run(command, args, options = {}) {
   return spawnSync(command, args, {
     stdio: 'inherit',
-    shell: false,
+    shell: true,  // Required on Windows for CMD executables
     env: process.env,
     ...options,
   });
@@ -247,14 +247,44 @@ function findPackagePath() {
   return null;
 }
 
+function getGlobalNodeModulesPath() {
+  try {
+    const result = spawnSync('npm', ['root', '-g']);
+    if (result.status === 0) {
+      return result.stdout.toString().trim();
+    }
+  } catch (e) {
+    // npm might not be available
+  }
+  return null;
+}
+
 function areRequiredPackagesInstalled(projectRoot, pkgPath) {
   try {
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
     const declaredDeps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
 
     for (const dep of REQUIRED_PACKAGES) {
-      if (!declaredDeps[dep]) return false;
-      require.resolve(dep, { paths: [projectRoot] });
+      // Skip if not declared in package.json (allowing global-only deps)
+      if (!declaredDeps[dep]) continue;
+      
+      // Try to resolve locally first (for local installations)
+      try {
+        require.resolve(dep, { paths: [projectRoot] });
+        continue; // Found locally, move to next dep
+      } catch (e) {
+        // Not found locally, try globally (for global installations)
+        const globalPath = getGlobalNodeModulesPath();
+        if (globalPath) {
+          try {
+            require.resolve(dep, { paths: [globalPath] });
+            continue; // Found globally, move to next dep
+          } catch (e2) {
+            // Not found globally either
+          }
+        }
+        return false; // Not found in either location
+      }
     }
 
     return true;
@@ -269,10 +299,9 @@ function installDependencies(pkgPath, targetDir) {
     return 'ok';
   }
   
-  // Usa path.sep per compatibilità cross-platform
-  const pkgDir = pkgPath.split('/').join(require('path').sep);
+  // Install packages in the project root directory
   console.log(`📦 Dependencies: installing missing packages...`);
-  const result = run('npm', ['install', ...REQUIRED_PACKAGES], { cwd: pkgDir });
+  const result = run('npm', ['install', ...REQUIRED_PACKAGES], { cwd: PROJECT_ROOT });
   if (result.status !== 0) {
     console.error('❌ Dependency installation failed.');
     process.exit(result.status || 1);
@@ -285,15 +314,15 @@ function installDependencies(pkgPath, targetDir) {
  * @param {string} projectRoot - The project root directory
  */
 function createGsdQdrantDirectory(projectRoot) {
-  const gsdQdrantDir = join(projectRoot, 'gsd-qdrant');
+  const gsdQdrantDir = join(projectRoot, 'gsd-qdrant-knowledge');
   const stateFile = join(gsdQdrantDir, '.qdrant-sync-state.json');
   const packageFile = join(gsdQdrantDir, 'package.json');
   const indexFile = join(gsdQdrantDir, 'index.js');
   
-  // Create gsd-qdrant directory
+  // Create gsd-qdrant-knowledge directory
   if (!existsSync(gsdQdrantDir)) {
     mkdirSync(gsdQdrantDir, { recursive: true });
-    console.log(`📂 Created directory: gsd-qdrant/`);
+    console.log(`📂 Created directory: gsd-qdrant-knowledge/`);
   }
   
   // Create .qdrant-sync-state.json if it doesn't exist (V2.0 structure)
@@ -303,26 +332,26 @@ function createGsdQdrantDirectory(projectRoot) {
       indexed: {}
     };
     writeFileSync(stateFile, JSON.stringify(state, null, 2), 'utf8');
-    console.log(`📝 Created: gsd-qdrant/.qdrant-sync-state.json`);
+    console.log(`📝 Created: gsd-qdrant-knowledge/.qdrant-sync-state.json`);
   }
 
   if (!existsSync(packageFile)) {
     writeFileSync(packageFile, JSON.stringify({ type: 'commonjs' }, null, 2) + '\n', 'utf8');
-    console.log(`📝 Created: gsd-qdrant/package.json`);
+    console.log(`📝 Created: gsd-qdrant-knowledge/package.json`);
   }
   
   // Create index.js if it doesn't exist
   if (!existsSync(indexFile)) {
     const templateIndexFile = findFileInCliRoot('gsd-qdrant-template.js');
     copyFileSync(templateIndexFile, indexFile);
-    console.log(`📝 Created: gsd-qdrant/index.js`);
+    console.log(`📝 Created: gsd-qdrant-knowledge/index.js`);
   }
 }
 
 /**
  * Add entry to .gitignore (if .gitignore exists)
  * @param {string} projectRoot - The project root directory
- * @param {string} entry - Entry to add (e.g., 'gsd-qdrant/')
+ * @param {string} entry - Entry to add (e.g., 'gsd-qdrant-knowledge/')
  */
 async function addToGitignore(projectRoot, entry) {
   const gitignorePath = join(projectRoot, '.gitignore');
@@ -357,7 +386,7 @@ async function main() {
   if (args[0] === '--version' || args[0] === '-v') {
     const pkgPath = findFileInCliRoot('package.json');
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-    console.log(`gsd-qdrant-cli v${pkg.version}`);
+    console.log(`gsd-qdrant-knowledge v${pkg.version}`);
     process.exit(0);
   }
   
@@ -393,8 +422,8 @@ async function main() {
     // Run setup-from-templates.js
     run('node', [findFileInCliRoot('setup-from-templates.js')], { cwd: PROJECT_ROOT });
 
-    // Add gsd-qdrant/ to .gitignore (if it exists)
-    await addToGitignore(PROJECT_ROOT, 'gsd-qdrant/');
+    // Add gsd-qdrant-knowledge/ to .gitignore (if it exists)
+    await addToGitignore(PROJECT_ROOT, 'gsd-qdrant-knowledge/');
 
     const syncScript = findFileInCliRoot('sync-knowledge.js');
     const syncResult = spawnSync('node', [syncScript], { 
@@ -428,7 +457,7 @@ async function main() {
     
     if (!query) {
       console.log('❌ Please provide a search query.');
-      console.log('Usage: gsd-qdrant snippet search <query> [--tags <tag1,tag2>] [--language <lang>] [--type <type>] [--context] [--limit <n>]');
+      console.log('Usage: gsd-qdrant-knowledge snippet search <query> [--tags <tag1,tag2>] [--language <lang>] [--type <type>] [--context] [--limit <n>]');
       console.log('');
       console.log('Options:');
       console.log('  --tags      Filter by tags (comma-separated)');
@@ -440,7 +469,7 @@ async function main() {
     }
     
     // Check if we should use Qdrant or local database
-    const runtimeSyncPath = join(PROJECT_ROOT, 'gsd-qdrant', 'index.js');
+    const runtimeSyncPath = join(PROJECT_ROOT, 'gsd-qdrant-knowledge', 'index.js');
     const useQdrant = existsSync(runtimeSyncPath);
     
     // Run search (async)
@@ -514,8 +543,8 @@ async function main() {
     
     if (!query) {
       console.log('❌ Please provide a query for the snippet to apply.');
-      console.log('Usage: gsd-qdrant snippet apply <query>');
-      console.log('Example: gsd-qdrant snippet apply "script per docker"');
+      console.log('Usage: gsd-qdrant-knowledge snippet apply <query>');
+      console.log('Example: gsd-qdrant-knowledge snippet apply "script per docker"');
       process.exit(1);
     }
     
@@ -663,8 +692,8 @@ async function main() {
     
     if (!query) {
       console.log('❌ Please provide a query for context building.');
-      console.log('Usage: gsd-qdrant context <query>');
-      console.log('Example: gsd-qdrant context "come implementare il login"');
+      console.log('Usage: gsd-qdrant-knowledge context <query>');
+      console.log('Example: gsd-qdrant-knowledge context "come implementare il login"');
       process.exit(1);
     }
     

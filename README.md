@@ -1,6 +1,12 @@
-# gsd-qdrant-cli
+# gsd-qdrant-knowledge
 
 CLI Node.js per creare e sincronizzare una knowledge base semantica di progetto su Qdrant.
+
+## Installazione
+
+```bash
+npm install gsd-qdrant-knowledge
+```
 
 ## Obiettivo
 
@@ -14,27 +20,27 @@ Rendere naturale una richiesta come: "prendi il componente X dal progetto Y e ap
 ## Setup
 
 ```bash
-gsd-qdrant
+gsd-qdrant-knowledge
 ```
 
 Crea automaticamente:
-- `gsd-qdrant/` - directory del tool
-- `gsd-qdrant/.qdrant-sync-state.json` - stato di sincronizzazione
-- `gsd-qdrant/index.js` - entry point del tool
+- `gsd-qdrant-knowledge/` - directory del tool
+- `gsd-qdrant-knowledge/.qdrant-sync-state.json` - stato di sincronizzazione
+- `gsd-qdrant-knowledge/index.js` - entry point del tool
 - `.git/hooks/post-commit` - hook per auto-sync (se non esiste già)
 
 ## Auto-sync su Git Commit
 
 L'hook `post-commit` esegue `node src/sync-knowledge.js` automaticamente dopo ogni commit locale.
 
-**Nota:** Funziona solo per i commit locali. Per sync immediato dopo modifiche non-committate, usa `gsd-qdrant` manualmente.
+**Nota:** Funziona solo per i commit locali. Per sync immediato dopo modifiche non-committate, usa `gsd-qdrant-knowledge` manualmente.
 
 ## Comandi
 
 ```bash
-gsd-qdrant                    # Bootstrap e sync completo
-gsd-qdrant context "query"    # Query contestuale con contesto ibrido
-gsd-qdrant snippet search "component" --context  # Ricerca snippet con contesto
+gsd-qdrant-knowledge                    # Bootstrap e sync completo
+gsd-qdrant-knowledge context "query"    # Query contestuale con contesto ibrido
+gsd-qdrant-knowledge snippet search "component" --context  # Ricerca snippet con contesto
 ```
 
 ## Variabili Ambiente
@@ -103,7 +109,7 @@ Restituisce la lista dei progetti unici indicizzati.
 ### Integrazione con GSD
 
 ```javascript
-const knowledgeSharing = require('./src/knowledge-sharing');
+const knowledgeSharing = require('gsd-qdrant-knowledge');
 
 // Inizializza
 await knowledgeSharing.init();

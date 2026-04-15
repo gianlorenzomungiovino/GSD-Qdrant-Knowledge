@@ -1,7 +1,7 @@
 /**
  * Auto-Retrieve MCP Hook
  * 
- * Automatically calls the gsd-qdrant MCP server's auto_retrieve tool
+ * Automatically calls the gsd-qdrant-knowledge MCP server's auto_retrieve tool
  * before each GSD response to inject relevant context.
  * 
  * This extension integrates seamlessly with the existing MCP client
@@ -43,20 +43,20 @@ function readMcpConfig() {
 }
 
 /**
- * Connects to the gsd-qdrant MCP server
+ * Connects to the gsd-qdrant-knowledge MCP server
  */
 async function connectToMcpServer() {
   if (connected) return client;
   
   const config = readMcpConfig();
-  if (!config || !config['gsd-qdrant']) {
-    console.log('[Auto-Retrieve MCP] No gsd-qdrant server configured');
+  if (!config || !config['gsd-qdrant-knowledge']) {
+    console.log('[Auto-Retrieve MCP] No gsd-qdrant-knowledge server configured');
     return null;
   }
   
-  const serverConfig = config['gsd-qdrant'];
+  const serverConfig = config['gsd-qdrant-knowledge'];
   if (!serverConfig.command) {
-    console.log('[Auto-Retrieve MCP] gsd-qdrant has no command configured');
+    console.log('[Auto-Retrieve MCP] gsd-qdrant-knowledge has no command configured');
     return null;
   }
   
@@ -73,7 +73,7 @@ async function connectToMcpServer() {
     
     client = mcpClient;
     connected = true;
-    console.log('[Auto-Retrieve MCP] Connected to gsd-qdrant server');
+    console.log('[Auto-Retrieve MCP] Connected to gsd-qdrant-knowledge server');
     
     return client;
   } catch (err) {
@@ -83,7 +83,7 @@ async function connectToMcpServer() {
 }
 
 /**
- * Calls the auto_retrieve tool on the gsd-qdrant server
+ * Calls the auto_retrieve tool on the gsd-qdrant-knowledge server
  */
 async function callAutoRetrieve(task, options = {}) {
   if (!client) {

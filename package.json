@@ -1,10 +1,13 @@
 {
-  "name": "gsd-qdrant-cli",
-  "version": "2.0.0",
+  "name": "gsd-qdrant-knowledge",
+  "version": "2.0.1",
   "description": "CLI per setup automatico GSD + Qdrant in qualsiasi progetto Node.js",
   "main": "src/cli.js",
   "bin": {
-    "gsd-qdrant": "src/cli.js"
+    "gsd-qdrant-knowledge": "src/cli.js"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "test": "vitest run",

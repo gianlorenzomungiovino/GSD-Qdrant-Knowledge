@@ -89,7 +89,7 @@ function generatePlaceholderEmbedding(text) {
  */
 function createServer() {
   const server = new McpServer({
-    name: 'gsd-qdrant',
+    name: 'gsd-qdrant-knowledge',
     version: '2.0.0'
   });
 

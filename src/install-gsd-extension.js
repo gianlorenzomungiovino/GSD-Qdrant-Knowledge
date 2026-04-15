@@ -50,8 +50,11 @@ function installExtension() {
   
   // Copy extension file
   if (existsSync(extensionSource)) {
+    const needsCopy = !existsSync(extensionDest);
     copyFileSync(extensionSource, extensionDest);
-    console.log('📝 Created: .gsd/agent/extensions/gsd/auto-retrieve-mcp.js');
+    if (needsCopy) {
+      console.log('📝 Created: .gsd/agent/extensions/gsd/auto-retrieve-mcp.js');
+    }
   } else {
     console.log('⚠️  Extension source not found:', extensionSource);
     return false;

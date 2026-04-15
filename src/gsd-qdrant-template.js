@@ -7,10 +7,10 @@ const crypto = require('crypto');
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
 const PROJECT_ROOT = process.cwd();
-const STATE_FILE = join(PROJECT_ROOT, 'gsd-qdrant', '.qdrant-sync-state.json');
+const STATE_FILE = join(PROJECT_ROOT, 'gsd-qdrant-knowledge', '.qdrant-sync-state.json');
 
 const EXCLUDED_DIRS = new Set([
-  '.git', 'node_modules', 'vendor', 'bower_components', '.next', 'dist', 'build', 'coverage', '.turbo', '.vercel', '.idea', '.vscode', '.bg-shell', 'gsd-qdrant',
+  '.git', 'node_modules', 'vendor', 'bower_components', '.next', 'dist', 'build', 'coverage', '.turbo', '.vercel', '.idea', '.vscode', '.bg-shell', 'gsd-qdrant-knowledge',
 ]);
 const CODE_EXTENSIONS = new Set([
   '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.py', '.rb', '.php', '.go', '.rs', '.java', '.kt', '.scala', '.cs', '.html', '.css', '.scss', '.sass', '.less', '.sql', '.sh', '.bash', '.zsh', '.ps1', '.json', '.yaml', '.yml', '.toml', '.xml', '.swift', '.dart', '.vue', '.svelte', '.astro'
@@ -195,7 +195,7 @@ class GSDKnowledgeSync {
     syncState[this.indexedFileKey(relPath)] = { path: relPath, hash };
   }
 
-  startWatcher() { console.log('👀 Watch mode not implemented yet. Run `gsd-qdrant` or `node src/sync-knowledge.js`.'); }
+  startWatcher() { console.log('👀 Watch mode not implemented yet. Run `gsd-qdrant-knowledge` or `node src/sync-knowledge.js`.'); }
   async walkGsd(dir) {
     const files = [];
     for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
