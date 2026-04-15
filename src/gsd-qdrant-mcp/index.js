@@ -41,9 +41,14 @@ function extractKeywordsFromTask(task) {
   for (const pattern of patterns) {
     const match = lowerTask.match(pattern);
     if (match) {
-      // Estrai la parola chiave originale (mantenendo il caso originale)
+      // Trova la posizione del match nel task originale
       const matchIndex = lowerTask.indexOf(match[0]);
-      const originalWord = task.substring(matchIndex, matchIndex + match[0].length);
+      // Trova il word completo (fino al prossimo spazio o fine stringa)
+      let endPos = matchIndex + match[0].length;
+      while (endPos < task.length && !/\s/.test(task[endPos])) {
+        endPos++;
+      }
+      const originalWord = task.substring(matchIndex, endPos);
       keywords.push(originalWord);
     }
   }
@@ -56,7 +61,7 @@ function extractKeywordsFromTask(task) {
  * Limita a max 2 query per evitare sovraccarico del database
  */
 function generateSearchQueries(keywords) {
-  if (keywords.length === 0) return [task]; // Fallback: usa il task intero
+  if (keywords.length === 0) return ['']; // Fallback: empty array
   if (keywords.length === 1) return [keywords[0]];
   return [keywords[0], `${keywords[0]} ${keywords[1]}`]; // Max 2 query
 }

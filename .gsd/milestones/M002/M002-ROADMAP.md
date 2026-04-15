@@ -6,5 +6,6 @@ Migliorare la precisione della ricerca semantica con embedding ibrido e rendere 
 ## Slice Overview
 | ID | Slice | Risk | Depends | Done | After this |
 |----|-------|------|---------|------|------------|
-| S01 | Implementare Embedding Ibrido (Vettoriale + Testuale) | low | — | ⬜ | La ricerca restituisce risultati più precisi combinando similarità vettoriale e match testuale |
+| S01 | Implementare Embedding Ibrido (Vettoriale + Testuale) | low | — | ✅ | La ricerca restituisce risultati più precisi combinando similarità vettoriale e match testuale |
 | S02 | Qdrant Embedded con Dashboard Browser | medium | — | ⬜ | Qdrant parte automaticamente con il CLI e la dashboard è accessibile via browser |
+| S03 | Documentazione e integrazione | low | S02 | ⬜ | La documentazione è aggiornata e il MCP server è pronto per l'uso |
