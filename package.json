@@ -4,7 +4,8 @@
   "description": "CLI per setup automatico GSD + Qdrant in qualsiasi progetto Node.js",
   "main": "src/cli.js",
   "bin": {
-    "gsd-qdrant-knowledge": "src/cli.js"
+    "gsd-qdrant-knowledge": "src/cli.js",
+    "gsd-qdrant-mcp": "src/gsd-qdrant-mcp/index.js"
   },
   "publishConfig": {
     "access": "public"

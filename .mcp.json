@@ -15,11 +15,11 @@
       }
     },
     "gsd-qdrant": {
-      "command": "C:\\nvm4w\\nodejs\\node.exe",
+      "command": "node",
       "args": [
-        "D:\\Gianlorenzo\\Documents\\Sviluppo\\_Template\\qdrant-template\\src\\gsd-qdrant-mcp\\index.js"
+        "./node_modules/gsd-qdrant-knowledge/src/gsd-qdrant-mcp/index.js"
       ],
-      "cwd": "D:\\Gianlorenzo\\Documents\\Sviluppo\\_Template\\qdrant-template",
+      "cwd": ".",
       "env": {
         "QDRANT_URL": "http://localhost:6333",
         "COLLECTION_NAME": "gsd_memory",
