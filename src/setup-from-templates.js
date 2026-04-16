@@ -3,7 +3,7 @@
 const { QdrantClient } = require('@qdrant/js-client-rest');
 const fs = require('fs');
 const { readFile, writeFile } = require('fs/promises');
-const { join, basename } = require('path');
+const { join, basename, dirname } = require('path');
 
 const existsSync = fs.existsSync;
 
@@ -23,13 +23,29 @@ async function installPostCommitHook(projectRoot) {
   const hookName = isWindows ? 'post-commit.bat' : 'post-commit.sh';
   const hookPath = join(hooksDir, hookName);
   
-  // Leggi il contenuto del file di script
-  const scriptPath = join(__dirname, hookName);
+  // Trova il percorso del modulo setup-from-templates per localizzare gli hook script
+  const modulePath = require.resolve('./setup-from-templates.js');
+  const moduleRoot = dirname(modulePath);
+  
+  // Cerca il file di script in ordine di priorità
+  const searchPaths = [
+    join(moduleRoot, 'hooks', hookName),              // src/hooks/ (npm install)
+    join(moduleRoot, '..', hookName),                  // root del package (npm install)
+    join(moduleRoot, hookName),                        // src/ (sviluppo)
+  ];
+  
   let hookContent;
-  try {
-    hookContent = await readFile(scriptPath, 'utf8');
-  } catch (err) {
-    console.warn(`⚠️  Hook script not found: ${scriptPath}`);
+  for (const path of searchPaths) {
+    try {
+      hookContent = await readFile(path, 'utf8');
+      break;
+    } catch (err) {
+      continue;
+    }
+  }
+  
+  if (!hookContent) {
+    console.warn(`⚠️  Hook script not found in any expected location`);
     return;
   }
 

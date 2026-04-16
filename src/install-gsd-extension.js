@@ -13,8 +13,8 @@ const { existsSync, mkdirSync, copyFileSync, readFileSync, writeFileSync } = req
 const { join, dirname } = require('path');
 
 const PROJECT_ROOT = process.cwd();
-const GSD_DIR = join(PROJECT_ROOT, '.gsd');
-const EXTENSIONS_DIR = join(GSD_DIR, 'agent', 'extensions', 'gsd');
+const GSD_QDRANT_DIR = join(PROJECT_ROOT, 'gsd-qdrant-knowledge');
+const EXTENSIONS_DIR = join(GSD_QDRANT_DIR, 'agent', 'extensions', 'gsd');
 const INDEX_FILE = join(EXTENSIONS_DIR, 'index.js');
 
 /**
@@ -40,12 +40,18 @@ function isAutoRetrieveInstalled(indexContent) {
  */
 function installExtension() {
   const extensionSource = join(__dirname, 'auto-retrieve-mcp.js');
-  const extensionDest = join(EXTENSIONS_DIR, 'auto-retrieve-mcp.js');
+  const extensionDest = join(GSD_QDRANT_DIR, 'auto-retrieve-mcp.js');
   
-  // Create directories if they don't exist
+  // Create gsd-qdrant-knowledge directory if it doesn't exist
+  if (!existsSync(GSD_QDRANT_DIR)) {
+    mkdirSync(GSD_QDRANT_DIR, { recursive: true });
+    console.log('📂 Created directory: gsd-qdrant-knowledge/');
+  }
+  
+  // Create extensions directory structure
   if (!existsSync(EXTENSIONS_DIR)) {
     mkdirSync(EXTENSIONS_DIR, { recursive: true });
-    console.log('📂 Created directory: .gsd/agent/extensions/gsd/');
+    console.log('📂 Created directory: gsd-qdrant-knowledge/agent/extensions/gsd/');
   }
   
   // Copy extension file
@@ -53,7 +59,7 @@ function installExtension() {
     const needsCopy = !existsSync(extensionDest);
     copyFileSync(extensionSource, extensionDest);
     if (needsCopy) {
-      console.log('📝 Created: .gsd/agent/extensions/gsd/auto-retrieve-mcp.js');
+      console.log('📝 Created: gsd-qdrant-knowledge/auto-retrieve-mcp.js');
     }
   } else {
     console.log('⚠️  Extension source not found:', extensionSource);
@@ -83,9 +89,9 @@ function installExtension() {
     );
     
     writeFileSync(INDEX_FILE, newContent, 'utf8');
-    console.log('📝 Updated: .gsd/agent/extensions/gsd/index.js');
+    console.log('📝 Updated: gsd-qdrant-knowledge/agent/extensions/gsd/index.js');
   } else {
-    console.log('ℹ️  index.js not found - extension will be loaded manually');
+    console.log('ℹ️  index.js not found in gsd-qdrant-knowledge/agent/extensions/gsd/ - extension will be loaded manually');
   }
   
   return true;
