@@ -24,7 +24,8 @@ const PROJECT_ROOT = process.cwd();
 // Load the GSDKnowledgeSync module from the parent directory
 let GSDKnowledgeSync;
 try {
-  // Find the gsd-qdrant-knowledge package root (parent of src/gsd-qdrant-mcp)
+  // Find the gsd-qdrant-knowledge package root
+  // When installed via npm: src/gsd-qdrant-mcp/index.js -> ../../index.js
   const packageRoot = path.resolve(__dirname, '..', '..');
   const indexFile = path.join(packageRoot, 'index.js');
   
