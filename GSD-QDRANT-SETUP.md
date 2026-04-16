@@ -7,19 +7,19 @@ Guida rapida al setup locale della CLI e di Qdrant.
 Da npm:
 
 ```bash
-npm install -g gsd-qdrant-cli
+npm install -g gsd-qdrant-knowledge
 ```
 
-Oppure in locale dal repository:
+Oppure nel progetto:
 
 ```bash
-npm install -g .
+npm install gsd-qdrant-knowledge
 ```
 
 Verifica:
 
 ```bash
-gsd-qdrant --version
+gsd-qdrant-knowledge --version
 ```
 
 ## 2. Avvia Qdrant
@@ -31,13 +31,15 @@ docker run -d --name qdrant -p 6333:6333 -p 6334:6334 qdrant/qdrant
 ## 3. Esegui il bootstrap nella root del progetto
 
 ```bash
-gsd-qdrant
+gsd-qdrant-knowledge
 ```
 
 Il comando:
-- crea `gsd-qdrant/`
-- crea/valida la collection unificata `gsd_memory` (single collection per tutti i progetti)
-- sincronizza `.gsd/` e il codice del progetto (tipo "doc" e tipo "code")
+- crea `gsd-qdrant-knowledge/`
+- crea o aggiorna `gsd-qdrant-knowledge/mcp.json`
+- registra il server MCP `gsd-qdrant` in `.mcp.json` nella root del progetto
+- crea/valida la collection unificata `gsd_memory`
+- sincronizza `.gsd/` e il codice del progetto
 
 ## 4. Verifica rapida
 
@@ -53,58 +55,47 @@ Collection unificata `gsd_memory`:
 curl -s "http://localhost:6333/collections/gsd_memory/points/scroll" -H "Content-Type: application/json" -d '{"limit": 2}'
 ```
 
-Verifica i punti indicizzati:
-- Filtra per tipo `doc` → documenti `.gsd`
-- Filtra per tipo `code` → codice progetto
-- Usa il filtro `project_id` per query specifiche per progetto o cross-project
-
-## 5. Search contestuale
+Verifica MCP lato progetto:
 
 ```bash
-gsd-qdrant context "query"              # Query contestuale con contesto ibrido
-gsd-qdrant snippet search "component" --context  # Ricerca snippet con contesto
+cat .mcp.json
 ```
 
-### Knowledge Sharing Nativo
+La root `.mcp.json` è usata solo come punto standard di discovery per GSD. Gli asset del tool restano dentro `gsd-qdrant-knowledge/`.
 
-Il modulo `src/knowledge-sharing.js` fornisce integrazione nativa per il knowledge sharing:
+## 5. Retrieval contestuale
 
-```javascript
-// Includi il modulo nel tuo codice GSD
-const knowledgeSharing = require('./src/knowledge-sharing');
-
-// Inizializza
-await knowledgeSharing.init();
-
-// Usa come hook beforeMessage per retrieving automatico
-api.on('beforeMessage', async (event, ctx) => {
-  await knowledgeSharing.onBeforeMessage(event, ctx);
-});
-
-// Oppure genera prompt standalone
-const prompt = await knowledgeSharing.buildPrompt(query, { limit: 10 });
+```bash
+gsd-qdrant-knowledge context "query"
 ```
 
-## Stato del flusso (V2.0+)
+Il retrieval automatico via MCP:
+- favorisce contenuti cross-project
+- premia contenuti `reusable`
+- non esclude il progetto corrente
 
-### Core Features
-- il tool è project-wide
-- non distingue più frontend/backend come flusso principale
-- **Collection unificata `gsd_memory`**: singolo punto di indicizzazione per tutti i progetti
-- **Type-based classification**: punti classificati come "doc" (documenti `.gsd`) o "code" (codice progetto)
-- Il comando base evita reinstallazioni inutili quando le dipendenze minime sono già disponibili
+## 6. Uninstall
 
-### Nuove Funzionalità (V2.0+)
-- **MCP server `gsd-qdrant`**: server MCP per auto-retrieval di contesto da Qdrant
-- **Modulo `src/knowledge-sharing.js`**: integrazione event-based con GSD
-- **Post-commit hook**: auto-sync dopo ogni commit locale (`src/post-commit.sh`, `src/post-commit.bat`, `src/post-commit.ps1`)
-- **Compatibilità Windows**: hook post-commit e path separatori supportano sia Windows che Linux
-- **Cross-project insights**: sfrutta la collection unificata per conoscenze condivise tra progetti
+```bash
+gsd-qdrant-knowledge uninstall
+```
 
-### Filosofia: GSD = Source of Truth, Qdrant = Enhancer
+Rimuove gli artifact del tool dal progetto senza toccare `.gsd/`.
 
-Per evitare duplicazione di contesto e consumo eccessivo di token, i file principali del progetto corrente (`STATE.md`, `REQUIREMENTS.md`, `DECISIONS.md`, `KNOWLEDGE.md`, `PROJECT.md`, `FUTURE-REQUIREMENTS.md`) sono esclusi dall'indicizzazione in Qdrant. Questi file sono gestiti localmente da GSD, mentre Qdrant è usato esclusivamente per il knowledge sharing cross-project.
+## Stato del flusso (V2.0.7)
+
+### Core features
+- tool project-wide
+- collection unificata `gsd_memory`
+- classificazione `doc` / `code`
+- GSD resta il source of truth per il progetto corrente
+- Qdrant resta un enhancer per la memoria condivisa
+
+### Integrazione MCP
+- server MCP `gsd-qdrant`
+- registrazione automatica in `.mcp.json`
+- nessuna scrittura dentro `.gsd/`
 
 ## Versione
 
-Versione di lavoro allineata: `2.0.1` (V2.0+ - MCP Server Integration)
+Versione target: `2.0.7`

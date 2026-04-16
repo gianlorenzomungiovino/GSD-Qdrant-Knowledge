@@ -1,37 +1,3 @@
-node_modules/
-.env
-.env.*
-*.log
-.DS_Store
-Thumbs.db
-__pycache__/
-*.pyc
-
-# ── GSD baseline (auto-generated) ──
-.gsd
-.gsd-id
-*.swp
-*.swo
-*~
-.idea/
-.vscode/
-*.code-workspace
-!.env.example
-.next/
-dist/
-build/
-.venv/
-venv/
-target/
-vendor/
-coverage/
-.cache/
-tmp/
-
-# npm authentication
-.npmrc
-
-# ── GSD baseline (auto-generated) ──
-.bg-shell/
+node_modules
 
 gsd-qdrant-knowledge/

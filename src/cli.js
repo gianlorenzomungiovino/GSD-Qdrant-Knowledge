@@ -2,244 +2,61 @@
 
 /**
  * GSD + Qdrant CLI - Main entry point
- * 
- * Installabile globalmente con: npm install -g .
- * Usabile in qualsiasi progetto Node.js con: gsd-qdrant-knowledge
- * 
- * Risolve il problema originale: installa le dipendenze PRIMA di eseguire qualsiasi cosa
  */
 
 const { spawnSync } = require('child_process');
 const fs = require('fs');
-const { existsSync, readFileSync, mkdirSync, writeFileSync, copyFileSync } = fs;
+const { existsSync, readFileSync, mkdirSync, writeFileSync, copyFileSync, rmSync, unlinkSync } = fs;
 const { join, dirname, extname, basename } = require('path');
 const readline = require('readline');
 
 const PROJECT_ROOT = process.cwd();
 const ROOT_PKG = join(PROJECT_ROOT, 'package.json');
 const API_PKG = join(PROJECT_ROOT, 'apps', 'api', 'package.json');
+const CLI_ROOT = __dirname;
+const TOOL_DIR_NAME = 'gsd-qdrant-knowledge';
+const TOOL_DIR = join(PROJECT_ROOT, TOOL_DIR_NAME);
+const TOOL_MCP_FILE = join(TOOL_DIR, 'mcp.json');
+const ROOT_MCP_FILE = join(PROJECT_ROOT, '.mcp.json');
+const TOOL_MARKER = 'managedBy';
+const TOOL_MARKER_VALUE = 'gsd-qdrant-knowledge';
+const MCP_SERVER_NAME = 'gsd-qdrant';
 
-const CLI_ROOT = __dirname; // Directory dove risiede il file cli.js
-
-/**
- * Find file in CLI_ROOT or its parent directory
- * Used to handle both global installation (files in CLI_ROOT) and development (files in parent)
- */
 function findFileInCliRoot(filename) {
   const pathInCliRoot = join(CLI_ROOT, filename);
-  if (existsSync(pathInCliRoot)) {
-    return pathInCliRoot;
-  }
+  if (existsSync(pathInCliRoot)) return pathInCliRoot;
   return join(dirname(CLI_ROOT), filename);
 }
 
-/**
- * Get file extension for a programming language
- * @param {string} language - Programming language name
- * @returns {string} File extension (e.g., '.js', '.ts')
- */
 function getExtensionForLanguage(language) {
-  if (!language) return '.js'; // Default to JavaScript
-  
+  if (!language) return '.js';
   const lang = language.toLowerCase();
-  
   const extensions = {
-    'javascript': '.js',
-    'js': '.js',
-    'typescript': '.ts',
-    'ts': '.ts',
-    'python': '.py',
-    'py': '.py',
-    'go': '.go',
-    'rust': '.rs',
-    'java': '.java',
-    'c': '.c',
-    'cpp': '.cpp',
-    'c++': '.cpp',
-    'c#': '.cs',
-    'ruby': '.rb',
-    'php': '.php',
-    'swift': '.swift',
-    'kt': '.kt',
-    'kotlin': '.kt',
-    'scala': '.scala',
-    'html': '.html',
-    'css': '.css',
-    'scss': '.scss',
-    'less': '.less',
-    'json': '.json',
-    'yaml': '.yaml',
-    'yml': '.yml',
-    'markdown': '.md',
-    'md': '.md',
-    'sql': '.sql',
-    'sh': '.sh',
-    'bash': '.sh',
-    'zsh': '.zsh',
-    'powershell': '.ps1',
-    'r': '.r',
-    'rscript': '.r'
+    javascript: '.js', js: '.js', typescript: '.ts', ts: '.ts', python: '.py', py: '.py',
+    go: '.go', rust: '.rs', java: '.java', c: '.c', cpp: '.cpp', 'c++': '.cpp', 'c#': '.cs',
+    ruby: '.rb', php: '.php', swift: '.swift', kt: '.kt', kotlin: '.kt', scala: '.scala',
+    html: '.html', css: '.css', scss: '.scss', less: '.less', json: '.json', yaml: '.yaml',
+    yml: '.yml', markdown: '.md', md: '.md', sql: '.sql', sh: '.sh', bash: '.sh', zsh: '.zsh',
+    powershell: '.ps1', r: '.r', rscript: '.r'
   };
-  
   return extensions[lang] || '.js';
 }
 
-/**
- * Generate a filename from a snippet name
- * @param {string} name - Snippet name
- * @param {string} extension - File extension
- * @returns {string} Generated filename
- */
-function generateFileName(name, extension) {
-  // Convert to kebab-case
-  let filename = name
-    .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9\-]/g, '');
-  
-  // Remove duplicate hyphens
-  filename = filename.replace(/-+/g, '-');
-  
-  // Remove leading/trailing hyphens
-  filename = filename.replace(/^-+|-+$/g, '');
-  
-  // Ensure it doesn't start with a number or special character
-  if (/^[0-9]/.test(filename)) {
-    filename = `_${filename}`;
-  }
-  
-  // If the name contains "script", ensure it ends with "-script" not "-script-script"
-  if (filename.endsWith('-script') && extension === '.js') {
-    // Keep as is
-  }
-  
-  return `${filename}${extension}`;
+function run(command, args, options = {}) {
+  return spawnSync(command, args, {
+    stdio: 'inherit',
+    shell: true,
+    env: process.env,
+    ...options,
+  });
 }
 
-// Required packages for setup - these are needed BEFORE running setup
 const REQUIRED_PACKAGES = [
   '@qdrant/js-client-rest',
   '@xenova/transformers',
   '@modelcontextprotocol/sdk',
   'zod'
 ];
-
-function run(command, args, options = {}) {
-  return spawnSync(command, args, {
-    stdio: 'inherit',
-    shell: true,  // Required on Windows for CMD executables
-    env: process.env,
-    ...options,
-  });
-}
-
-/**
- * Build context from Knowledge Sync results
- */
-async function buildContextFromKnowledgeSync(query, project_id, rankedResults, sync) {
-  const context = {
-    query,
-    project_id,
-    results: rankedResults,
-    files: {},
-    typeCounts: {},
-    snippetResults: []
-  };
-
-  // Group results by file type
-  for (const result of rankedResults) {
-    const type = result.type || 'doc';
-    context.typeCounts[type] = (context.typeCounts[type] || 0) + 1;
-    
-    // Store file content by source path
-    if (result.source) {
-      context.files[result.source] = {
-        type,
-        content: result.content || '',
-        summary: result.summary || '',
-        tags: result.tags || [],
-        score: result.score || 0,
-        ...result
-      };
-    }
-  }
-
-  // Separate docs from snippets for proper context building
-  const docs = rankedResults.filter(r => r.type === 'doc');
-  const snippets = rankedResults.filter(r => r.type === 'code');
-
-  // Build structured context
-  context.docs = docs;
-  context.snippets = snippets;
-  context.totalResults = rankedResults.length;
-
-  return context;
-}
-
-/**
- * Build prompt from Knowledge Sync context
- */
-function buildPromptFromKnowledgeSync(context, query) {
-  const lines = [];
-
-  // Header
-  lines.push('=== GSD Knowledge Sharing Context ===');
-  lines.push('');
-
-  // Search results summary
-  lines.push('## SEARCH RESULTS SUMMARY');
-  lines.push(`Query: "${query}"`);
-  lines.push(`Total results: ${context.totalResults}`);
-  lines.push(`Docs found: ${context.docs?.length || 0}`);
-  lines.push(`Code snippets found: ${context.snippets?.length || 0}`);
-  lines.push('');
-
-  // Document results
-  if (context.docs && context.docs.length > 0) {
-    lines.push('## DOCUMENTS');
-    for (const doc of context.docs) {
-      lines.push(`### ${doc.summary || doc.source}`);
-      lines.push(`Type: ${doc.subtype || 'documentation'}`);
-      if (doc.tags && doc.tags.length > 0) {
-        lines.push(`Tags: ${doc.tags.join(', ')}`);
-      }
-      lines.push('');
-      lines.push(doc.content || 'No content available');
-      lines.push('');
-      lines.push('---');
-      lines.push('');
-    }
-  }
-
-  // Code snippet results
-  if (context.snippets && context.snippets.length > 0) {
-    lines.push('## CODE SNIPPETS');
-    for (const snippet of context.snippets) {
-      lines.push(`### ${snippet.summary || snippet.source}`);
-      lines.push(`Language: ${snippet.language || 'unknown'}`);
-      if (snippet.kindDetail) {
-        lines.push(`Type: ${snippet.kindDetail}`);
-      }
-      if (snippet.scope) {
-        lines.push(`Scope: ${snippet.scope}`);
-      }
-      lines.push('');
-      lines.push(snippet.content || 'No content available');
-      lines.push('');
-      lines.push('---');
-      lines.push('');
-    }
-  }
-
-  // User query
-  lines.push('---');
-  lines.push('## USER QUERY');
-  lines.push(query);
-  lines.push('');
-  lines.push('Please provide a detailed response based on the context above.');
-
-  return lines.join('\n');
-}
 
 function findPackagePath() {
   if (existsSync(API_PKG)) return API_PKG;
@@ -250,12 +67,8 @@ function findPackagePath() {
 function getGlobalNodeModulesPath() {
   try {
     const result = spawnSync('npm', ['root', '-g']);
-    if (result.status === 0) {
-      return result.stdout.toString().trim();
-    }
-  } catch (e) {
-    // npm might not be available
-  }
+    if (result.status === 0) return result.stdout.toString().trim();
+  } catch (_) {}
   return null;
 }
 
@@ -265,42 +78,35 @@ function areRequiredPackagesInstalled(projectRoot, pkgPath) {
     const declaredDeps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
 
     for (const dep of REQUIRED_PACKAGES) {
-      // Skip if not declared in package.json (allowing global-only deps)
       if (!declaredDeps[dep]) continue;
-      
-      // Try to resolve locally first (for local installations)
       try {
         require.resolve(dep, { paths: [projectRoot] });
-        continue; // Found locally, move to next dep
-      } catch (e) {
-        // Not found locally, try globally (for global installations)
+        continue;
+      } catch (_) {
         const globalPath = getGlobalNodeModulesPath();
         if (globalPath) {
           try {
             require.resolve(dep, { paths: [globalPath] });
-            continue; // Found globally, move to next dep
-          } catch (e2) {
-            // Not found globally either
-          }
+            continue;
+          } catch (_) {}
         }
-        return false; // Not found in either location
+        return false;
       }
     }
 
     return true;
-  } catch (_err) {
+  } catch (_) {
     return false;
   }
 }
 
-function installDependencies(pkgPath, targetDir) {
+function installDependencies(pkgPath) {
   if (areRequiredPackagesInstalled(PROJECT_ROOT, pkgPath)) {
-    console.log(`📦 Dependencies: ok`);
+    console.log('📦 Dependencies: ok');
     return 'ok';
   }
-  
-  // Install packages in the project root directory
-  console.log(`📦 Dependencies: installing missing packages...`);
+
+  console.log('📦 Dependencies: installing missing packages...');
   const result = run('npm', ['install', ...REQUIRED_PACKAGES], { cwd: PROJECT_ROOT });
   if (result.status !== 0) {
     console.error('❌ Dependency installation failed.');
@@ -309,274 +115,321 @@ function installDependencies(pkgPath, targetDir) {
   return 'installed';
 }
 
-/**
- * Create gsd-qdrant directory and required files
- * @param {string} projectRoot - The project root directory
- */
-function createGsdQdrantDirectory(projectRoot) {
-  const gsdQdrantDir = join(projectRoot, 'gsd-qdrant-knowledge');
-  const stateFile = join(gsdQdrantDir, '.qdrant-sync-state.json');
-  const packageFile = join(gsdQdrantDir, 'package.json');
-  const indexFile = join(gsdQdrantDir, 'index.js');
-  const extensionIndexFile = join(gsdQdrantDir, 'agent', 'extensions', 'gsd', 'index.js');
-  
-  // Create gsd-qdrant-knowledge directory
-  if (!existsSync(gsdQdrantDir)) {
-    mkdirSync(gsdQdrantDir, { recursive: true });
-    console.log(`📂 Created directory: gsd-qdrant-knowledge/`);
+function readJsonFile(path, fallback) {
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'));
+  } catch (_) {
+    return fallback;
   }
-  
-  // Create .qdrant-sync-state.json if it doesn't exist (V2.0 structure)
+}
+
+function writeJsonFile(path, value) {
+  writeFileSync(path, JSON.stringify(value, null, 2) + '\n', 'utf8');
+}
+
+function createGsdQdrantDirectory(projectRoot) {
+  const stateFile = join(TOOL_DIR, '.qdrant-sync-state.json');
+  const packageFile = join(TOOL_DIR, 'package.json');
+  const indexFile = join(TOOL_DIR, 'index.js');
+
+  if (!existsSync(TOOL_DIR)) {
+    mkdirSync(TOOL_DIR, { recursive: true });
+    console.log(`📂 Created directory: ${TOOL_DIR_NAME}/`);
+  }
+
   if (!existsSync(stateFile)) {
-    const state = {
-      lastSync: null,
-      indexed: {}
-    };
-    writeFileSync(stateFile, JSON.stringify(state, null, 2), 'utf8');
-    console.log(`📝 Created: gsd-qdrant-knowledge/.qdrant-sync-state.json`);
+    writeJsonFile(stateFile, { lastSync: null, indexed: {} });
+    console.log(`📝 Created: ${TOOL_DIR_NAME}/.qdrant-sync-state.json`);
   }
 
   if (!existsSync(packageFile)) {
     writeFileSync(packageFile, JSON.stringify({ type: 'commonjs' }, null, 2) + '\n', 'utf8');
-    console.log(`📝 Created: gsd-qdrant-knowledge/package.json`);
+    console.log(`📝 Created: ${TOOL_DIR_NAME}/package.json`);
   }
-  
-  // Create index.js if it doesn't exist
+
   if (!existsSync(indexFile)) {
     const templateIndexFile = findFileInCliRoot('gsd-qdrant-template.js');
     copyFileSync(templateIndexFile, indexFile);
-    console.log(`📝 Created: gsd-qdrant-knowledge/index.js`);
-  }
-
-  // Create extension index.js if it doesn't exist
-  if (!existsSync(extensionIndexFile)) {
-    const extensionDir = dirname(extensionIndexFile);
-    mkdirSync(extensionDir, { recursive: true });
-    const templateExtensionIndex = `/**
- * GSD Extension Index
- * 
- * This file is auto-generated by the gsd-qdrant-knowledge CLI.
- * It registers all available hooks and tools for the GSD framework.
- */
-
-export default async function registerExtension(pi) {
-    // Register hooks and tools here
-}
-`;
-    writeFileSync(extensionIndexFile, templateExtensionIndex, 'utf8');
-    console.log(`📝 Created: gsd-qdrant-knowledge/agent/extensions/gsd/index.js`);
+    console.log(`📝 Created: ${TOOL_DIR_NAME}/index.js`);
   }
 }
 
-/**
- * Add entry to .gitignore (if .gitignore exists)
- * @param {string} projectRoot - The project root directory
- * @param {string} entry - Entry to add (e.g., 'gsd-qdrant-knowledge/')
- */
+function ensureToolMcpConfig() {
+  const config = {
+    [TOOL_MARKER]: TOOL_MARKER_VALUE,
+    serverName: MCP_SERVER_NAME,
+    mcpServers: {
+      [MCP_SERVER_NAME]: {
+        command: 'node',
+        args: ['./node_modules/gsd-qdrant-knowledge/src/gsd-qdrant-mcp/index.js'],
+        cwd: '.',
+        env: {
+          QDRANT_URL: process.env.QDRANT_URL || 'http://localhost:6333',
+          COLLECTION_NAME: process.env.COLLECTION_NAME || 'gsd_memory',
+          VECTOR_NAME: process.env.VECTOR_NAME || 'fast-all-minilm-l6-v2'
+        }
+      }
+    }
+  };
+  const existed = existsSync(TOOL_MCP_FILE);
+  writeJsonFile(TOOL_MCP_FILE, config);
+  console.log(`${existed ? '📝 Updated' : '📝 Created'}: ${TOOL_DIR_NAME}/mcp.json`);
+}
+
+function ensureRootMcpRegistration() {
+  const current = readJsonFile(ROOT_MCP_FILE, { mcpServers: {} });
+  const mcpServers = current.mcpServers && typeof current.mcpServers === 'object' ? current.mcpServers : {};
+  const desired = {
+    command: 'node',
+    args: ['./node_modules/gsd-qdrant-knowledge/src/gsd-qdrant-mcp/index.js'],
+    cwd: '.',
+    env: {
+      QDRANT_URL: process.env.QDRANT_URL || 'http://localhost:6333',
+      COLLECTION_NAME: process.env.COLLECTION_NAME || 'gsd_memory',
+      VECTOR_NAME: process.env.VECTOR_NAME || 'fast-all-minilm-l6-v2'
+    }
+  };
+
+  const previous = JSON.stringify(mcpServers[MCP_SERVER_NAME] || null);
+  const next = JSON.stringify(desired);
+  if (previous === next) {
+    console.log('ℹ️  MCP server already registered in .mcp.json');
+    return;
+  }
+
+  mcpServers[MCP_SERVER_NAME] = desired;
+  current.mcpServers = mcpServers;
+  writeJsonFile(ROOT_MCP_FILE, current);
+  console.log('📝 Updated: .mcp.json');
+}
+
+function removeRootMcpRegistration() {
+  if (!existsSync(ROOT_MCP_FILE)) return;
+  const current = readJsonFile(ROOT_MCP_FILE, null);
+  if (!current || !current.mcpServers || !current.mcpServers[MCP_SERVER_NAME]) return;
+  delete current.mcpServers[MCP_SERVER_NAME];
+  if (Object.keys(current.mcpServers).length === 0) {
+    unlinkSync(ROOT_MCP_FILE);
+    console.log('🧹 Removed: .mcp.json');
+    return;
+  }
+  writeJsonFile(ROOT_MCP_FILE, current);
+  console.log('🧹 Updated: .mcp.json');
+}
+
 async function addToGitignore(projectRoot, entry) {
   const gitignorePath = join(projectRoot, '.gitignore');
-  
-  // If .gitignore doesn't exist, skip
   if (!existsSync(gitignorePath)) {
     console.log('ℹ️  .gitignore not found, skipping');
     return;
   }
-
-  // Read current content
   const content = await fs.promises.readFile(gitignorePath, 'utf8');
-  
-  // Check if entry already exists
   const lines = content.split('\n');
-  const hasEntry = lines.some(line => line.trim() === entry);
-  
-  if (hasEntry) {
+  if (lines.some(line => line.trim() === entry)) {
     console.log('ℹ️  Entry already in .gitignore');
     return;
   }
-
-  // Add entry to end of file
   await fs.promises.writeFile(gitignorePath, content + '\n' + entry + '\n', 'utf8');
   console.log(`📝 Added '${entry}' to .gitignore`);
 }
 
+async function removeFromGitignore(projectRoot, entry) {
+  const gitignorePath = join(projectRoot, '.gitignore');
+  if (!existsSync(gitignorePath)) return;
+  const content = await fs.promises.readFile(gitignorePath, 'utf8');
+  const next = content
+    .split('\n')
+    .filter(line => line.trim() !== entry)
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n');
+  if (next !== content) {
+    await fs.promises.writeFile(gitignorePath, next, 'utf8');
+    console.log(`🧹 Removed '${entry}' from .gitignore`);
+  }
+}
+
+function uninstallProjectArtifacts() {
+  removeRootMcpRegistration();
+  if (existsSync(TOOL_DIR)) {
+    rmSync(TOOL_DIR, { recursive: true, force: true });
+    console.log(`🧹 Removed: ${TOOL_DIR_NAME}/`);
+  }
+}
+
+async function bootstrapProject() {
+  console.log('🚀 GSD + Qdrant CLI\n');
+  createGsdQdrantDirectory(PROJECT_ROOT);
+
+  const installExtensionScript = findFileInCliRoot('install-gsd-extension.js');
+  if (existsSync(installExtensionScript)) {
+    const installResult = spawnSync('node', [installExtensionScript], {
+      cwd: PROJECT_ROOT,
+      stdio: 'inherit',
+      shell: false
+    });
+    if (installResult.status !== 0) {
+      console.error('⚠️  GSD extension installation failed');
+    }
+  }
+
+  ensureToolMcpConfig();
+  ensureRootMcpRegistration();
+
+  const pkgPath = findPackagePath();
+  if (!pkgPath) {
+    console.error('❌ No package.json found. Are you in a Node.js project?');
+    process.exit(1);
+  }
+
+  console.log(`📁 Project: ${basename(PROJECT_ROOT)}`);
+  installDependencies(pkgPath);
+  run('node', [findFileInCliRoot('setup-from-templates.js')], { cwd: PROJECT_ROOT });
+  await addToGitignore(PROJECT_ROOT, `${TOOL_DIR_NAME}/`);
+
+  const syncScript = findFileInCliRoot('sync-knowledge.js');
+  const syncResult = spawnSync('node', [syncScript], { cwd: PROJECT_ROOT, stdio: 'inherit' });
+  if (syncResult.status !== 0) {
+    console.error('\n❌ Initial knowledge sync failed. Collections may be empty.');
+    process.exit(syncResult.status || 1);
+  }
+
+  console.log('\n✅ Ready');
+}
+
 async function main() {
   const args = process.argv.slice(2);
-  
-  // Handle --version flag
+
   if (args[0] === '--version' || args[0] === '-v') {
     const pkgPath = findFileInCliRoot('package.json');
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
     console.log(`gsd-qdrant-knowledge v${pkg.version}`);
     process.exit(0);
   }
-  
+
+  if (args[0] === 'uninstall') {
+    uninstallProjectArtifacts();
+    await removeFromGitignore(PROJECT_ROOT, `${TOOL_DIR_NAME}/`);
+    console.log('\n✅ Uninstall complete');
+    return;
+  }
+
   if (args.length === 0) {
-    console.log('🚀 GSD + Qdrant CLI\n');
+    await bootstrapProject();
+    return;
+  }
 
-    // Create gsd-qdrant directory and files
-    createGsdQdrantDirectory(PROJECT_ROOT);
+  if (args[0] === 'context') {
+    const { GSDKnowledgeSync } = require(findFileInCliRoot('gsd-qdrant-template.js'));
+    const query = args[1] || '';
+    const project_id = basename(PROJECT_ROOT);
 
-    // Install GSD auto-retrieve extension
-    const installExtensionScript = findFileInCliRoot('install-gsd-extension.js');
-    if (existsSync(installExtensionScript)) {
-      const installResult = spawnSync('node', [installExtensionScript], { 
-        cwd: PROJECT_ROOT,
-        stdio: 'inherit',
-        shell: false
-      });
-      if (installResult.status !== 0) {
-        console.error('⚠️  GSD extension installation failed');
-      }
-    }
-
-    // Find which package.json to use
-    const pkgPath = findPackagePath();
-    if (!pkgPath) {
-      console.error('❌ No package.json found. Are you in a Node.js project?');
+    if (!query) {
+      console.log('❌ Please provide a query for context building.');
+      console.log('Usage: gsd-qdrant-knowledge context <query>');
       process.exit(1);
     }
 
-    console.log(`📁 Project: ${basename(PROJECT_ROOT)}`);
-    installDependencies(pkgPath, 'project root');
-
-    // Run setup-from-templates.js
-    run('node', [findFileInCliRoot('setup-from-templates.js')], { cwd: PROJECT_ROOT });
-
-    // Add gsd-qdrant-knowledge/ to .gitignore (if it exists)
-    await addToGitignore(PROJECT_ROOT, 'gsd-qdrant-knowledge/');
-
-    const syncScript = findFileInCliRoot('sync-knowledge.js');
-    const syncResult = spawnSync('node', [syncScript], { 
-      cwd: PROJECT_ROOT,
-      stdio: 'inherit'
+    const sync = new GSDKnowledgeSync();
+    await sync.init();
+    const vector = await sync.embedText(query);
+    const hits = await sync.client.search(sync.collectionName, {
+      vector: { name: sync.vectorName, vector },
+      limit: 10,
+      with_payload: true,
+      with_vector: false
     });
 
-    if (syncResult.status !== 0) {
-      console.error('\n❌ Initial knowledge sync failed. Collections may be empty.');
-      process.exit(syncResult.status || 1);
-    }
+    const ranked = hits.map(hit => ({ ...hit.payload, score: hit.score }));
+    console.log(JSON.stringify({ query, project_id, results: ranked }, null, 2));
+    return;
+  }
 
-    console.log('\n✅ Ready');
-  } else if (args[0] === 'snippet' && args[1] === 'search') {
-    // Snippet search command
+  if (args[0] === 'snippet' && args[1] === 'search') {
     const query = args[2] || '';
     const options = {};
-    
-    // Parse flags
+
     for (let i = 3; i < args.length; i++) {
       if (args[i].startsWith('--')) {
         const key = args[i].slice(2);
         const value = args[i + 1];
-        if (key === 'tags') options.tags = value.split(',');
-        if (key === 'language') options.language = value;
-        if (key === 'type') options.type = value;
+        if (key === 'tags' && value) options.tags = value.split(',');
+        if (key === 'language' && value) options.language = value;
+        if (key === 'type' && value) options.type = value;
         if (key === 'context') options.withContext = true;
-        if (key === 'limit') options.limit = parseInt(value, 10);
+        if (key === 'limit' && value) options.limit = parseInt(value, 10);
       }
     }
-    
+
     if (!query) {
       console.log('❌ Please provide a search query.');
       console.log('Usage: gsd-qdrant-knowledge snippet search <query> [--tags <tag1,tag2>] [--language <lang>] [--type <type>] [--context] [--limit <n>]');
-      console.log('');
-      console.log('Options:');
-      console.log('  --tags      Filter by tags (comma-separated)');
-      console.log('  --language  Filter by programming language');
-      console.log('  --type      Filter by snippet type');
-      console.log('  --context   Include context from .md files in results');
-      console.log('  --limit     Maximum number of results (default: 10)');
       process.exit(1);
     }
-    
-    // Check if we should use Qdrant or local database
-    const runtimeSyncPath = join(PROJECT_ROOT, 'gsd-qdrant-knowledge', 'index.js');
+
+    const runtimeSyncPath = join(PROJECT_ROOT, TOOL_DIR_NAME, 'index.js');
     const useQdrant = existsSync(runtimeSyncPath);
-    
-    // Run search (async)
-    const runSearch = async () => {
-      let sorted = [];
-      if (useQdrant) {
-        // Use Qdrant-based search
-        try {
-          const { GSDKnowledgeSync } = require(runtimeSyncPath);
-          const sync = new GSDKnowledgeSync();
-          await sync.init();
-          
-          const results = await sync.searchWithContext(query, {
-            limit: options.limit || 10,
-            type: options.type || undefined,
-          });
-          
-          sorted = results;
-        } catch (err) {
-          console.log('⚠️  Qdrant search failed, falling back to local database:', err.message);
-          // Fall through to local database
-        }
+    let sorted = [];
+
+    if (useQdrant) {
+      try {
+        const { GSDKnowledgeSync } = require(runtimeSyncPath);
+        const sync = new GSDKnowledgeSync();
+        await sync.init();
+        sorted = await sync.searchWithContext(query, {
+          limit: options.limit || 10,
+          type: options.type || undefined,
+        });
+      } catch (err) {
+        console.log('⚠️  Qdrant search failed, falling back to local database:', err.message);
       }
-      
-      // If Qdrant didn't work, use local database
-      if (sorted.length === 0) {
-        const snippetRanking = require(findFileInCliRoot('snippet-ranking'));
-        const snippets = snippetRanking.loadDatabase();
-        
-        const filtered = snippetRanking.filterAndRankSnippets(snippets, query, options);
-        sorted = snippetRanking.sortSnippetsByRelevance(filtered);
+    }
+
+    if (sorted.length === 0) {
+      const snippetRanking = require(findFileInCliRoot('snippet-ranking'));
+      const snippets = snippetRanking.loadDatabase();
+      const filtered = snippetRanking.filterAndRankSnippets(snippets, query, options);
+      sorted = snippetRanking.sortSnippetsByRelevance(filtered);
+    }
+
+    console.log('🔍 Snippet Search');
+    console.log('='.repeat(50));
+    console.log(`Query: "${query}"`);
+    if (options.withContext) console.log('With Context: Yes');
+    console.log(`Found ${sorted.length} results:`);
+
+    sorted.forEach((result, i) => {
+      console.log(`  ${i + 1}. ${result.path || result.name} (score: ${result.score || result.relevanceScore})`);
+      console.log(`     Type: ${result.type}, Scope: ${result.scope}`);
+      if (result.milestone || result.slice || result.task) {
+        console.log(`     GSD: ${result.milestone || ''} ${result.slice || ''} ${result.task || ''}`.trim());
       }
-      
-      console.log('🔍 Snippet Search');
-      console.log('='.repeat(50));
-      console.log(`Query: "${query}"`);
-      if (options.withContext) {
-        console.log(`With Context: Yes`);
+      console.log(`     ${result.content?.slice(0, 200) || 'No content'}`);
+      if (result.context && result.context.length > 0) {
+        console.log(`     Context: ${result.context.length} related documents`);
+        result.context.forEach(ctx => {
+          console.log(`       - ${ctx.source} (${ctx.ids.length} IDs: ${ctx.ids.slice(0, 3).join(', ')})`);
+        });
       }
-      console.log(`Found ${sorted.length} results:`);
-      
-      sorted.forEach((result, i) => {
-        console.log(`  ${i + 1}. ${result.path || result.name} (score: ${result.score || result.relevanceScore})`);
-        console.log(`     Type: ${result.type}, Scope: ${result.scope}`);
-        if (result.milestone || result.slice || result.task) {
-          console.log(`     GSD: ${result.milestone || ''} ${result.slice || ''} ${result.task || ''}`.trim());
-        }
-        console.log(`     ${result.content?.slice(0, 200) || 'No content'}`);
-        
-        // Show context if available
-        if (result.context && result.context.length > 0) {
-          console.log(`     Context: ${result.context.length} related documents`);
-          result.context.forEach(ctx => {
-            console.log(`       - ${ctx.source} (${ctx.ids.length} IDs: ${ctx.ids.slice(0, 3).join(', ')})`);
-          });
-        }
-      });
-      
-      console.log('='.repeat(50));
-      console.log('✅ Search complete!');
-    };
-    
-    runSearch().catch(err => {
-      console.error('Error during search:', err.message);
-      process.exit(1);
     });
-    return; // Exit main function early
-  } else if (args[0] === 'snippet' && args[1] === 'apply') {
-    // Snippet apply command
+
+    console.log('='.repeat(50));
+    console.log('✅ Search complete!');
+    return;
+  }
+
+  if (args[0] === 'snippet' && args[1] === 'apply') {
     const query = args[2] || '';
-    
+
     if (!query) {
       console.log('❌ Please provide a query for the snippet to apply.');
       console.log('Usage: gsd-qdrant-knowledge snippet apply <query>');
-      console.log('Example: gsd-qdrant-knowledge snippet apply "script per docker"');
       process.exit(1);
     }
-    
-    // Load modules
+
     const snippetRanking = require(findFileInCliRoot('snippet-ranking'));
     const intentDetector = require(findFileInCliRoot('intent-detector'));
     const contextAnalyzer = require(findFileInCliRoot('context-analyzer'));
-    
-    // Detect intent from the query
     const intent = intentDetector.detectIntent(query);
-    
-    // Load and search snippets
     const snippets = snippetRanking.loadDatabase();
     const filtered = snippetRanking.filterAndRankSnippets(snippets, intent.query, {
       tags: intent.filters.tags || [],
@@ -584,87 +437,36 @@ async function main() {
       type: intent.filters.type || '',
       crossProject: intent.filters.crossProject || true
     });
-    
-    // Sort by relevance
     const sorted = snippetRanking.sortSnippetsByRelevance(filtered);
-    
+
     console.log('📝 Snippet Apply');
     console.log('='.repeat(50));
     console.log(`Query: "${query}"`);
-    console.log('\n🔍 Intent Analysis:');
-    console.log(`   Type: ${intent.type}`);
-    console.log(`   Search terms: ${intent.query || '(none)'}`);
-    console.log(`   Filters: ${JSON.stringify(intent.filters) || '(none)'}`);
-    console.log(`   Preferences: ${JSON.stringify(intent.preferences) || '(none)'}`);
-    
+
     if (sorted.length === 0) {
       console.log('\n⚠️  No matching snippets found.');
       console.log('='.repeat(50));
       console.log('✅ Search complete (no results)');
       process.exit(0);
     }
-    
-    // Display top match with full metadata
+
     const topMatch = sorted[0];
-    console.log('\n🎯 Top Match:');
-    console.log('─'.repeat(50));
-    console.log(`   Name: ${topMatch.name}`);
-    console.log(`   Type: ${topMatch.type}`);
-    console.log(`   Language: ${topMatch.language}`);
-    console.log(`   Source: ${topMatch.sourceFile}:${topMatch.sourceLine}`);
-    console.log(`   Description: ${topMatch.description}`);
-    if (topMatch.tags && topMatch.tags.length > 0) {
-      console.log(`   Tags: ${topMatch.tags.join(', ')}`);
-    }
-    console.log(`   Relevance Score: ${topMatch.relevanceScore}`);
-    console.log('─'.repeat(50));
-    console.log('\n📦 Code Content:');
-    console.log('─'.repeat(50));
-    console.log(topMatch.content);
-    console.log('─'.repeat(50));
-    
-    // Analyze project context for placement recommendation
-    console.log('\n🔍 Analyzing project structure...');
     const projectContext = contextAnalyzer.analyzeProjectContext();
-    
-    // Recommend code placement based on intent and project context
     const placement = contextAnalyzer.recommendCodePlacement(topMatch.description || query, projectContext);
-    
-    console.log('\n💡 Placement Recommendation:');
-    console.log('─'.repeat(50));
-    console.log(`   Path: ${placement.path}`);
-    console.log(`   Reason: ${placement.reason}`);
-    console.log(`   Intent Type: ${placement.intent}`);
-    console.log(`   Confidence: ${(placement.confidence * 100).toFixed(0)}%`);
-    console.log('─'.repeat(50));
-    
-    // Determine file path and extension
     const fileExtension = getExtensionForLanguage(topMatch.language);
-    // Use the snippet's source file name for consistency
     const baseFileName = topMatch.sourceFile ? basename(topMatch.sourceFile).replace(extname(topMatch.sourceFile), '') : 'snippet';
     const fileName = `${baseFileName}${fileExtension}`;
     const filePath = join(PROJECT_ROOT, placement.path, fileName);
-    
-    console.log(`\n📁 Target File: ${filePath}`);
-    
-    // Handle file existence
+
     let willOverwrite = false;
     if (existsSync(filePath)) {
-      console.log(`\n⚠️  File already exists: ${filePath}`);
-      
-      // Create readline interface for user input
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-      });
-      
-      // Add timeout for non-interactive mode
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
       const timeout = setTimeout(() => {
         console.log('\n⚠️  No user input received, defaulting to overwrite.');
         willOverwrite = true;
         rl.close();
       }, 1000);
-      
+
       await new Promise((resolve) => {
         rl.question('Would you like to overwrite it? (y/N): ', (answer) => {
           clearTimeout(timeout);
@@ -674,114 +476,23 @@ async function main() {
           resolve();
         });
       });
-      
+
       if (!willOverwrite) {
         console.log('❌ File not created (user declined to overwrite).');
         console.log('✅ Operation cancelled.');
         process.exit(0);
       }
     } else {
-      // Create directory if it doesn't exist
       const dirPath = dirname(filePath);
-      if (!existsSync(dirPath)) {
-        console.log(`\n📂 Creating directory: ${dirPath}`);
-        mkdirSync(dirPath, { recursive: true });
-      }
-    }
-    
-    // Write the file
-    try {
-      writeFileSync(filePath, topMatch.content, 'utf8');
-      console.log(`\n✅ File created successfully: ${filePath}`);
-      console.log(`   Language: ${topMatch.language || 'JavaScript'}`);
-      console.log(`   Extension: ${fileExtension}`);
-      console.log(`   Size: ${Buffer.from(topMatch.content, 'utf8').length} bytes`);
-    } catch (err) {
-      console.error(`\n❌ Error writing file: ${err.message}`);
-      process.exit(1);
-    }
-    
-    console.log('='.repeat(50));
-    console.log('✅ Snippet applied successfully!');
-  } else if (args[0] === 'context') {
-    // Knowledge Sharing - Context Builder using GSDKnowledgeSync
-    const { GSDKnowledgeSync } = require(findFileInCliRoot('gsd-qdrant-template.js'));
-    
-    const query = args[1] || '';
-    const project_id = basename(PROJECT_ROOT);
-    
-    if (!query) {
-      console.log('❌ Please provide a query for context building.');
-      console.log('Usage: gsd-qdrant-knowledge context <query>');
-      console.log('Example: gsd-qdrant-knowledge context "come implementare il login"');
-      process.exit(1);
-    }
-    
-    // Initialize Knowledge Sync
-    const sync = new GSDKnowledgeSync();
-    await sync.init();
-    
-    // Generate query embedding and search
-    const vector = await sync.embedText(query);
-    const limit = 10;
-    
-    // Search without filter first
-    const hits = await sync.client.search(sync.collectionName, { 
-      vector: { name: sync.vectorName, vector }, 
-      limit,
-      with_payload: true, 
-      with_vector: false
-    });
-    
-    // Filter results by project and relevance
-    let filtered = hits;
-    if (project_id) {
-      filtered = filtered.filter(h => h.payload.project_id === project_id);
-    }
-    
-    // Rank results with recency and importance
-    const ranked = filtered.map(hit => {
-      const recencyScore = Math.min(1, (Date.now() - hit.payload.timestamp) / (30 * 24 * 60 * 60 * 1000));
-      const importanceScore = (hit.payload.importance || 1) / 5;
-      const score = hit.score * 0.7 + (1 - recencyScore) * 0.2 + importanceScore * 0.1;
-      return { ...hit.payload, score };
-    }).sort((a, b) => b.score - a.score);
-    
-    // Build context from ranked results
-    const context = await buildContextFromKnowledgeSync(query, project_id, ranked, sync);
-    
-    // Build final prompt
-    const prompt = buildPromptFromKnowledgeSync(context, query);
-    
-    console.log('\n' + '='.repeat(60));
-    console.log(prompt);
-    console.log('='.repeat(60));
-    
-  } else {
-    createGsdQdrantDirectory(PROJECT_ROOT);
-
-    console.log('🚀 GSD + Qdrant CLI\n');
-
-    const pkgPath = findPackagePath();
-    if (!pkgPath) {
-      console.error('❌ No package.json found. Are you in a Node.js project?');
-      process.exit(1);
+      if (!existsSync(dirPath)) mkdirSync(dirPath, { recursive: true });
     }
 
-    console.log(`📁 Project: ${basename(PROJECT_ROOT)}`);
-    installDependencies(pkgPath, 'project root');
-
-    run('node', [findFileInCliRoot('setup-from-templates.js')], { cwd: PROJECT_ROOT });
-
-    const syncScript = findFileInCliRoot('sync-knowledge.js');
-    const syncResult = spawnSync('node', [syncScript], { cwd: PROJECT_ROOT, stdio: 'inherit' });
-    if (syncResult.status !== 0) {
-      console.error('\n❌ Initial knowledge sync failed. Collections may be empty.');
-      process.exit(syncResult.status || 1);
-    }
-
-    console.log('\n✅ Ready');
+    writeFileSync(filePath, topMatch.content, 'utf8');
+    console.log(`✅ File created successfully: ${filePath}`);
+    return;
   }
+
+  await bootstrapProject();
 }
 
 main();

@@ -85,20 +85,20 @@ class GSDKnowledgeSync {
   async syncToGsdMemory() {
     console.log('📦 Syncing to unified gsd_memory collection...');
     const gsdDir = join(PROJECT_ROOT, '.gsd');
-    
-    if (!existsSync(gsdDir)) {
-      console.log('  ℹ️  .gsd directory not found');
-      return { total: 0, updated: 0, deleted: 0 };
+    const hasGsdDir = existsSync(gsdDir);
+
+    if (!hasGsdDir) {
+      console.log('  ℹ️  .gsd directory not found - indexing code only');
     }
 
-    const mdFiles = await this.walkGsd(gsdDir);
+    const mdFiles = hasGsdDir ? await this.walkGsd(gsdDir) : [];
     const codeFiles = await this.walkProjectCode(PROJECT_ROOT);
     
     console.log(`📄 Found ${mdFiles.length} documentation files to index`);
     console.log(`💻 Found ${codeFiles.length} code files to index`);
     
     // First, build the document reference index (for finding related docs)
-    const docIndex = await this.buildDocReferenceIndex(gsdDir);
+    const docIndex = hasGsdDir ? await this.buildDocReferenceIndex(gsdDir) : [];
     
     const seenIds = new Set();
     let updated = 0;
