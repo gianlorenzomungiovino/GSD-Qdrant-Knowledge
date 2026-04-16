@@ -1,6 +1,6 @@
 {
   "name": "gsd-qdrant-mcp",
-  "version": "2.0.0",
+  "version": "2.0.4",
   "description": "MCP server for GSD-Qdrant auto-retrieval",
   "main": "index.js",
   "dependencies": {
