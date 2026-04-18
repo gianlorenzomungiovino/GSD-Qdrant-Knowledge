@@ -57,7 +57,7 @@ try {
 function createMcpServer() {
   const server = new McpServer({
     name: 'gsd-qdrant-knowledge',
-    version: '2.0.8',
+    version: '2.0.9',
   });
 
   // Tool: auto_retrieve - Automatically retrieve relevant context for a task

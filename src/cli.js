@@ -22,6 +22,41 @@ const TOOL_MARKER = 'managedBy';
 const TOOL_MARKER_VALUE = 'gsd-qdrant-knowledge';
 const MCP_SERVER_NAME = 'gsd-qdrant';
 
+/**
+ * Resolve the actual path to gsd-qdrant-mcp/index.js.
+ * Tries: local node_modules → global npm root → relative (dev symlink).
+ * Returns null if nothing is found.
+ */
+function getMcpServerPath() {
+  // 1. Local resolution
+  try {
+    const resolved = require.resolve('gsd-qdrant-knowledge');
+    const mcpPath = join(dirname(resolved), 'src', 'gsd-qdrant-mcp', 'index.js');
+    if (existsSync(mcpPath)) return mcpPath;
+  } catch (_) {}
+
+  // 2. Global npm root resolution
+  try {
+    const globalModules = getGlobalNodeModulesPath();
+    if (globalModules) {
+      const mcpPath = join(globalModules, 'gsd-qdrant-knowledge', 'src', 'gsd-qdrant-mcp', 'index.js');
+      if (existsSync(mcpPath)) return mcpPath;
+    }
+  } catch (_) {}
+
+  // 3. Relative path from CLI root (development / symlink)
+  const cliRoot = __dirname;
+  const candidates = [
+    join(cliRoot, 'gsd-qdrant-mcp', 'index.js'),
+    join(dirname(cliRoot), 'src', 'gsd-qdrant-mcp', 'index.js'),
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+
+  return null;
+}
+
 function findFileInCliRoot(filename) {
   const pathInCliRoot = join(CLI_ROOT, filename);
   if (existsSync(pathInCliRoot)) return pathInCliRoot;
@@ -66,7 +101,7 @@ function findPackagePath() {
 
 function getGlobalNodeModulesPath() {
   try {
-    const result = spawnSync('npm', ['root', '-g']);
+    const result = spawnSync('npm', ['root', '-g'], { shell: true });
     if (result.status === 0) return result.stdout.toString().trim();
   } catch (_) {}
   return null;
@@ -155,13 +190,19 @@ function createGsdQdrantDirectory(projectRoot) {
 }
 
 function ensureToolMcpConfig() {
+  const mcpPath = getMcpServerPath();
+  if (!mcpPath) {
+    console.warn('⚠️  Cannot resolve gsd-qdrant-mcp path. Please reinstall the package.');
+    return;
+  }
+
   const config = {
     [TOOL_MARKER]: TOOL_MARKER_VALUE,
     serverName: MCP_SERVER_NAME,
     mcpServers: {
       [MCP_SERVER_NAME]: {
         command: 'node',
-        args: ['./node_modules/gsd-qdrant-knowledge/src/gsd-qdrant-mcp/index.js'],
+        args: [mcpPath],
         cwd: '.',
         env: {
           QDRANT_URL: process.env.QDRANT_URL || 'http://localhost:6333',
@@ -177,11 +218,17 @@ function ensureToolMcpConfig() {
 }
 
 function ensureRootMcpRegistration() {
+  const mcpPath = getMcpServerPath();
+  if (!mcpPath) {
+    console.warn('⚠️  Cannot resolve gsd-qdrant-mcp path. Please reinstall the package.');
+    return;
+  }
+
   const current = readJsonFile(ROOT_MCP_FILE, { mcpServers: {} });
   const mcpServers = current.mcpServers && typeof current.mcpServers === 'object' ? current.mcpServers : {};
   const desired = {
     command: 'node',
-    args: ['./node_modules/gsd-qdrant-knowledge/src/gsd-qdrant-mcp/index.js'],
+    args: [mcpPath],
     cwd: '.',
     env: {
       QDRANT_URL: process.env.QDRANT_URL || 'http://localhost:6333',

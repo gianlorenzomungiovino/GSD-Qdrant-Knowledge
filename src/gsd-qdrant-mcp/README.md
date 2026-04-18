@@ -9,15 +9,18 @@ Questo server fornisce strumenti per recuperare contesto rilevante dalla collect
 ## Strumenti Disponibili
 
 ### `auto_retrieve`
+
 Ricerca automatica di contesto cross-project rilevante per un task usando la ricerca semantica su Qdrant.
 
 **Parametri:**
+
 - `task` (required): Il task o query per cui cercare contesto rilevante
 - `limit` (optional, default: 3): Numero massimo di risultati da restituire
 - `maxQueries` (optional, default: 2): Numero massimo di query da tentare
 - `includeContent` (optional, default: false): Includere il contenuto completo nei risultati
 
 **Esempio di risposta:**
+
 ```json
 {
   "task": "implementazione login",
@@ -43,9 +46,11 @@ Ricerca automatica di contesto cross-project rilevante per un task usando la ric
 ```
 
 ### `list_projects`
+
 Restituisce la lista dei progetti unici indicizzati nella memoria.
 
 **Esempio di risposta:**
+
 ```json
 {
   "projects": ["my-project", "another-project"],
@@ -67,6 +72,7 @@ Il MCP server richiede `gsd-qdrant-knowledge` come peer dependency.
 ## Configurazione
 
 Variabili ambiente disponibili:
+
 - `QDRANT_URL`: URL del server Qdrant (default: `http://localhost:6333`)
 - `COLLECTION_NAME`: Nome della collection (default: `gsd_memory`)
 - `VECTOR_NAME`: Nome del vettore per embedding (default: `fast-all-minilm-l6-v2`)
@@ -74,13 +80,11 @@ Variabili ambiente disponibili:
 ## Dipendenze
 
 **Runtime:**
+
 - `@modelcontextprotocol/sdk` (^1.29.0)
 - `@qdrant/js-client-rest` (^1.17.0)
 - `zod` (^4.3.6)
 
 **Peer dependency:**
+
 - `gsd-qdrant-knowledge` (>=2.0.0) — pacchetto principale con `GSDKnowledgeSync`
-
-## Versione
-
-2.0.5
