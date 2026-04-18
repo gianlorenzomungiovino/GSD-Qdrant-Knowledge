@@ -297,10 +297,62 @@ async function removeFromGitignore(projectRoot, entry) {
 
 function uninstallProjectArtifacts() {
   removeRootMcpRegistration();
+
+  const hooksDir = join(PROJECT_ROOT, '.git', 'hooks');
+  if (existsSync(hooksDir)) {
+    for (const hook of ['post-commit.sh', 'post-commit.bat']) {
+      const hookPath = join(hooksDir, hook);
+      if (existsSync(hookPath)) {
+        // Verifica che sia il nostro hook prima di rimuovere
+        try {
+          const content = readFileSync(hookPath, 'utf8');
+          if (content.includes('gsd-qdrant-knowledge')) {
+            unlinkSync(hookPath);
+            console.log(`🧹 Removed: .git/hooks/${hook}`);
+          }
+        } catch (_) {}
+      }
+    }
+  }
+
   if (existsSync(TOOL_DIR)) {
     rmSync(TOOL_DIR, { recursive: true, force: true });
     console.log(`🧹 Removed: ${TOOL_DIR_NAME}/`);
   }
+}
+
+function installPostCommitHook() {
+  const hooksDir = join(PROJECT_ROOT, '.git', 'hooks');
+  if (!existsSync(hooksDir)) return;
+
+  const isWindows = process.platform === 'win32';
+  const hookName = isWindows ? 'post-commit.bat' : 'post-commit.sh';
+  const hookPath = join(hooksDir, hookName);
+
+  // Cerca il template in ordine: src/hooks/ → root/hooks/
+  const templates = [
+    join(CLI_ROOT, 'hooks', hookName),
+    join(dirname(CLI_ROOT), 'src', 'hooks', hookName),
+    join(PROJECT_ROOT, 'src', 'hooks', hookName),
+  ];
+
+  let hookContent = null;
+  for (const t of templates) {
+    if (existsSync(t)) {
+      hookContent = readFileSync(t, 'utf8');
+      break;
+    }
+  }
+
+  if (!hookContent) return;
+
+  try {
+    const existing = readFileSync(hookPath, 'utf8');
+    if (existing === hookContent) return;
+  } catch (_) {}
+
+  writeFileSync(hookPath, hookContent, { mode: isWindows ? undefined : 0o755 });
+  console.log(`📝 Post-commit hook installed (${hookName})`);
 }
 
 async function bootstrapProject() {
@@ -342,6 +394,10 @@ async function bootstrapProject() {
   console.log(`📁 Project: ${basename(PROJECT_ROOT)}`);
   installDependencies(pkgPath);
   run('node', [findFileInCliRoot('setup-from-templates.js')], { cwd: PROJECT_ROOT });
+
+  // Install post-commit hook for automatic knowledge sync
+  installPostCommitHook();
+
   await addToGitignore(PROJECT_ROOT, `${TOOL_DIR_NAME}/`);
 
   const syncScript = findFileInCliRoot('sync-knowledge.js');
