@@ -21,22 +21,34 @@ const COLLECTION_NAME = process.env.COLLECTION_NAME || 'gsd_memory';
 const VECTOR_NAME = process.env.VECTOR_NAME || 'fast-all-minilm-l6-v2';
 const PROJECT_ROOT = process.cwd();
 
-// Load the GSDKnowledgeSync module from the parent directory
+// Load the GSDKnowledgeSync module
+// Strategy: try npm module resolution first (works for global/local npm installs),
+// then fall back to relative paths (works for local development/symlink).
 let GSDKnowledgeSync;
+
 try {
-  // Find the gsd-qdrant-knowledge package root
-  // When installed via npm: src/gsd-qdrant-mcp/index.js -> ../../index.js
-  const packageRoot = path.resolve(__dirname, '..', '..');
-  const indexFile = path.join(packageRoot, 'index.js');
-  
-  if (!fs.existsSync(indexFile)) {
-    throw new Error(`index.js not found at ${indexFile}`);
+  // 1. Try npm module resolution — works when gsd-qdrant-knowledge is installed as a dependency/peer dep
+  const resolved = require.resolve('gsd-qdrant-knowledge');
+  GSDKnowledgeSync = require(resolved).GSDKnowledgeSync;
+} catch (npmErr) {
+  try {
+    // 2. Fallback: relative path from source directory
+    // When running from source: src/gsd-qdrant-mcp/index.js -> ../../index.js (project root)
+    const fallbackPath = path.resolve(__dirname, '..', '..');
+    const indexFile = path.join(fallbackPath, 'index.js');
+    if (fs.existsSync(indexFile)) {
+      GSDKnowledgeSync = require(indexFile).GSDKnowledgeSync;
+    } else {
+      throw new Error('gsd-qdrant-knowledge not found via npm resolution or relative path');
+    }
+  } catch (fallbackErr) {
+    console.error(
+      'Failed to load GSDKnowledgeSync.\n' +
+      'Install the main package: npm install -g gsd-qdrant-knowledge\n' +
+      'Error:', fallbackErr.message
+    );
+    process.exit(1);
   }
-  
-  GSDKnowledgeSync = require(indexFile).GSDKnowledgeSync;
-} catch (err) {
-  console.error('Failed to load GSDKnowledgeSync:', err.message);
-  process.exit(1);
 }
 
 /**
@@ -45,7 +57,7 @@ try {
 function createMcpServer() {
   const server = new McpServer({
     name: 'gsd-qdrant-knowledge',
-    version: '2.0.4',
+    version: '2.0.8',
   });
 
   // Tool: auto_retrieve - Automatically retrieve relevant context for a task
@@ -150,11 +162,11 @@ function createMcpServer() {
           with_payload: ['project_id'],
         });
 
-        // Extract unique project IDs
+        // Extract unique project IDs (scroll returns 'points', not 'hits')
         const projects = new Set();
-        for (const hit of scrollResult.hits) {
-          if (hit.payload.project_id) {
-            projects.add(hit.payload.project_id);
+        for (const point of scrollResult.points) {
+          if (point.payload && point.payload.project_id) {
+            projects.add(point.payload.project_id);
           }
         }
 

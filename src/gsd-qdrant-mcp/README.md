@@ -8,37 +8,37 @@ Questo server fornisce strumenti per recuperare contesto rilevante dalla collect
 
 ## Strumenti Disponibili
 
-### `retrieve_context`
-Ricerca contesto rilevante dalla memoria unificata GSD-Qdrant.
+### `auto_retrieve`
+Ricerca automatica di contesto cross-project rilevante per un task usando la ricerca semantica su Qdrant.
 
 **Parametri:**
-- `query` (required): La query dell'utente da cercare
-- `limit` (optional, default: 5): Numero massimo di risultati
-- `projectId` (optional): Project ID per filtrare risultati specifici
-- `includeContent` (optional, default: true): Includere il contenuto completo
+- `task` (required): Il task o query per cui cercare contesto rilevante
+- `limit` (optional, default: 3): Numero massimo di risultati da restituire
+- `maxQueries` (optional, default: 2): Numero massimo di query da tentare
+- `includeContent` (optional, default: false): Includere il contenuto completo nei risultati
 
 **Esempio di risposta:**
 ```json
 {
-  "query": "implementazione login",
+  "task": "implementazione login",
   "results": [
     {
-      "id": "abc123",
-      "score": 0.85,
       "type": "doc",
       "subtype": "decision",
       "project_id": "my-project",
       "source": ".gsd/DECISIONS.md",
       "summary": "Decisione sul sistema di autenticazione",
-      "content": "...",
+      "content": null,
       "tags": ["decision", "auth"],
       "language": "markdown",
       "reusable": true,
-      "importance": 4
+      "importance": 4,
+      "relevance_score": 0.85,
+      "match_type": "semantic"
     }
   ],
-  "totalFound": 1,
-  "filteredByProject": false
+  "totalResults": 1,
+  "projectId": "my-project"
 }
 ```
 
@@ -53,18 +53,16 @@ Restituisce la lista dei progetti unici indicizzati nella memoria.
 }
 ```
 
-## Uso con GSD
+## Installazione
 
-Questo MCP server può essere chiamato prima di ogni risposta GSD per recuperare contesto rilevante:
+Prima installa il pacchetto principale, poi il MCP server:
 
-```javascript
-// Esempio di integrazione come hook beforeMessage
-const knowledgeSharing = require('./scripts/knowledge-sharing');
-
-api.on('beforeMessage', async (event, ctx) => {
-  await knowledgeSharing.onBeforeMessage(event, ctx);
-});
+```bash
+npm install -g gsd-qdrant-knowledge
+npm install -g gsd-qdrant-mcp
 ```
+
+Il MCP server richiede `gsd-qdrant-knowledge` come peer dependency.
 
 ## Configurazione
 
@@ -75,10 +73,14 @@ Variabili ambiente disponibili:
 
 ## Dipendenze
 
-- `@modelcontextprotocol/sdk`
-- `@qdrant/js-client-rest`
-- `zod`
+**Runtime:**
+- `@modelcontextprotocol/sdk` (^1.29.0)
+- `@qdrant/js-client-rest` (^1.17.0)
+- `zod` (^4.3.6)
+
+**Peer dependency:**
+- `gsd-qdrant-knowledge` (>=2.0.0) — pacchetto principale con `GSDKnowledgeSync`
 
 ## Versione
 
-2.0.0 - Allineato con l'architettura V2.0 di GSD-Qdrant
+2.0.5
