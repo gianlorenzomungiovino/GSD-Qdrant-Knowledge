@@ -15,6 +15,16 @@ const { QdrantClient } = require('@qdrant/js-client-rest');
 const path = require('path');
 const fs = require('fs');
 
+// Read version from this package's package.json (single source of truth)
+const MCP_PKG_PATH = path.join(__dirname, 'package.json');
+const SERVER_VERSION = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(MCP_PKG_PATH, 'utf8')).version || '0.0.0';
+  } catch (_) {
+    return '0.0.0';
+  }
+})();
+
 // Read environment variables
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
 const COLLECTION_NAME = process.env.COLLECTION_NAME || 'gsd_memory';
@@ -57,7 +67,7 @@ try {
 function createMcpServer() {
   const server = new McpServer({
     name: 'gsd-qdrant-knowledge',
-    version: '2.0.9',
+    version: SERVER_VERSION,
   });
 
   // Tool: auto_retrieve - Automatically retrieve relevant context for a task
