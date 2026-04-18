@@ -2,7 +2,7 @@
 
 const { QdrantClient } = require('@qdrant/js-client-rest');
 const { promises: fs, existsSync } = require('fs');
-const { join, basename, extname, relative } = require('path');
+const { join, basename, extname, relative, dirname } = require('path');
 const crypto = require('crypto');
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
@@ -530,6 +530,8 @@ class GSDKnowledgeSync {
     }
   }
   async saveSyncState(state) {
+    const dir = dirname(STATE_FILE);
+    await fs.mkdir(dir, { recursive: true });
     await fs.writeFile(STATE_FILE, JSON.stringify(state, null, 2));
   }
 }
