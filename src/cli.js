@@ -307,6 +307,17 @@ async function bootstrapProject() {
   console.log('🚀 GSD + Qdrant CLI\n');
   createGsdQdrantDirectory(PROJECT_ROOT);
 
+  // Ensure auto-retrieve instructions are in KNOWLEDGE.md (safe to run multiple times)
+  const instructionsScript = findFileInCliRoot('auto-retrieve-instructions.js');
+  if (existsSync(instructionsScript)) {
+    try {
+      const { ensureAutoRetrieveInstructions } = require(instructionsScript);
+      ensureAutoRetrieveInstructions();
+    } catch (err) {
+      console.warn('⚠️  Auto-retrieve instructions setup failed:', err.message);
+    }
+  }
+
   const installExtensionScript = findFileInCliRoot('install-gsd-extension.js');
   if (existsSync(installExtensionScript)) {
     const installResult = spawnSync('node', [installExtensionScript], {

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.0
+
+### Added
+- **Tarball integration test**: Pre-publish checklist includes sandbox installation, CLI version check, bootstrap verification, MCP server startup, `auto_retrieve` tool execution with cross-project results, and uninstall cleanup — all verified passing.
+
 ## 2.0.9
 
 ### Fixed
