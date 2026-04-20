@@ -20,10 +20,16 @@ ${SECTION_MARKER}
 
 This project has GSD-Qdrant installed. The agent can query cross-project knowledge from the unified Qdrant vector database via MCP.
 
-### When to use
-- Working on implementation that could benefit from patterns in other GSD projects
-- Need context about GSD workflows, decisions, or knowledge from other projects
-- Building features that might be reusable across projects
+### When to call auto_retrieve
+
+**Always call \`auto_retrieve\` before or alongside local searches for:**
+- Questions about libraries, frameworks, components, or technologies ("che componenti frontend posso usare?", "come si usa X?", "quali librerie per Y?")
+- API usage questions (method signatures, configuration options)
+- Design patterns or architectural approaches
+
+**Always call \`auto_retrieve\` as a fallback when:**
+- Local search in the codebase returns no relevant results for your query
+- You're asking about something that might exist in other GSD projects but not in the current one
 
 ### How to use
 Call the \`auto_retrieve\` tool (available via the \`gsd-qdrant\` MCP server) with your task description:
@@ -40,7 +46,7 @@ The tool returns relevant context from other GSD projects indexed in Qdrant. Use
 
 ### Notes
 - Results are ranked by semantic relevance + cross-project boost
-- Only call when genuinely useful — don't pollute the prompt with irrelevant context
+- Prefer \`includeContent: true\` when you need the actual source content, not just summaries
 - The MCP server must be running (configured in .mcp.json as \`gsd-qdrant\`)
 `;
 
