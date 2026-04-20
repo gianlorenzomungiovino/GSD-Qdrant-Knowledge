@@ -102,9 +102,14 @@ function ensureAutoRetrieveInstructions(options = {}) {
   }
 
   if (hasMarker && installedVersion !== packageVersion) {
-    // Replace only the section between markers — preserve everything else
+    // Strip ALL version marker lines first, then replace the section.
+    // This avoids stale markers from old versions.
+    const cleaned = existingContent.replace(
+      /# GSD-QDRANT-TEMPLATE-VERSION: \d+\.\d+\.\d+\n?/g,
+      ''
+    );
     const newContent = replaceBetweenMarkers(
-      existingContent,
+      cleaned,
       SECTION_MARKER,
       VERSION_PREFIX + packageVersion + '\n' + SECTION_CONTENT + '\n'
     );
@@ -130,10 +135,10 @@ function extractVersion(content) {
 }
 
 /**
- * Replace the content between two markers (exclusive of the start marker, inclusive of end marker).
+ * Replace the content starting from startMarker up to (but not including) the next ## section heading.
  * Preserves all other content in the file.
  *
- * @param {string} content - The full file content
+ * @param {string} content - The full file content (should already have version markers stripped)
  * @param {string} startMarker - The opening marker
  * @param {string} replacement - The new content to insert (including the opening marker)
  * @returns {string} The updated content
@@ -144,16 +149,16 @@ function replaceBetweenMarkers(content, startMarker, replacement) {
 
   // Find the next section heading or end of file
   // A section heading is a line starting with ## at the beginning
-  const afterStart = content.substring(startIndex);
+  const afterStart = content.substring(startIndex + startMarker.length);
   const nextHeadingMatch = afterStart.match(/\n##\s+\S/);
 
   let endIndex;
   if (nextHeadingMatch) {
-    endIndex = startIndex + nextHeadingMatch.index;
+    // Replace everything from startMarker up to (but not including) the next ## heading
+    endIndex = startIndex + startMarker.length + nextHeadingMatch.index;
   } else {
-    // No more sections — replace everything until end of file (plus trailing whitespace)
-    const trimmedEnd = afterStart.trimEnd();
-    endIndex = startIndex + trimmedEnd.length;
+    // No more sections — replace everything from startMarker to end of file
+    endIndex = content.length;
   }
 
   return content.substring(0, startIndex) + replacement + content.substring(endIndex);
