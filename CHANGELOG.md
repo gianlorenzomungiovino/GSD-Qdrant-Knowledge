@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.1
+
+### Changed
+- **Explicit auto_retrieve call rules**: Replaced passive "when to use" instructions in AGENTS.md with explicit "always call" rules for library/framework/component/technology questions, and a fallback rule when local search returns no relevant results.
+
 ## 2.1.0
 
 ### Added
