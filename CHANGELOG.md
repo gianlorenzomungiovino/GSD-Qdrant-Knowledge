@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.2
+
+### Fixed
+- **Windows HOME env var missing**: Added `process.env.USERPROFILE` fallback when `HOME` is not set on Windows (which happens in some configurations). Without this, the GSD home directory path resolved as `.gsd` (relative) instead of `C:\Users\<user>\.gsd`, breaking AGENTS.md creation during bootstrap.
+
 ## 2.1.1
 
 ### Changed
