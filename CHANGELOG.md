@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.4
+
+### Changed
+- **AGENTS.md path corrected**: Moved from `.gsd/agent/AGENTS.md` to project root `AGENTS.md`. The GSD (pi) CLI loads `AGENTS.md` from the project root (Codex convention at `<projectRoot>/AGENTS.md`), not from `.gsd/agent/`. Bootstrap now auto-migrates existing files from the old path to the new one. Uninstall cleans up both paths.
+
 ## 2.1.3
 
 ### Changed

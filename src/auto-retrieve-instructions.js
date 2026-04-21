@@ -4,8 +4,8 @@
  * Auto-Retrieve Instructions Installer
  *
  * Writes auto-retrieve instructions for the GSD agent into project-level
- * AGENTS.md. This file is loaded automatically by GSD (pi) via ancestor walk
- * when the agent starts in a project that contains it.
+ * AGENTS.md. This file is loaded automatically by GSD (pi) from the project
+ * root when the agent starts in a project that contains it.
  *
  * Installation is safe-to-run-multiple-times: uses marker-based dedup with
  * version-aware patching to avoid duplication and update only the Qdrant
@@ -13,7 +13,7 @@
  * is preserved.
  *
  * Target file:
- *   - <cwd>/.gsd/agent/AGENTS.md   (GSD / pi)
+ *   - <cwd>/AGENTS.md   (project root — loaded by GSD/pi)
  *
  * FUTURE: CLAUDE.md support for Claude Code compatibility.
  * When Claude Code integration is ready, uncomment the CLAUDE.md writing
@@ -65,7 +65,7 @@ The tool returns relevant context from other GSD projects indexed in Qdrant. Use
  * Resolve target file paths for agent instructions.
  *
  * Current target:
- *   - <cwd>/.gsd/agent/AGENTS.md   (loaded by GSD/pi via ancestor walk)
+ *   - <cwd>/AGENTS.md   (project root — loaded by GSD/pi)
  *
  * FUTURE CLAUDE.md: When Claude Code integration is ready, uncomment the
  * CLAUDE.md path below. Claude Code loads CLAUDE.md from the project root
@@ -76,7 +76,7 @@ The tool returns relevant context from other GSD projects indexed in Qdrant. Use
  */
 function resolveAgentPaths(cwd) {
   return {
-    agentsPath: join(cwd, '.gsd', 'agent', 'AGENTS.md'),
+    agentsPath: join(cwd, 'AGENTS.md'),
     // CLAUDE.md — FUTURE: Uncomment when Claude Code integration is ready
     // claudePath: join(cwd, 'CLAUDE.md'),
     claudePath: null,
@@ -291,5 +291,5 @@ function removeAutoRetrieveInstructions(options = {}) {
   };
 }
 
-module.exports = { ensureAutoRetrieveInstructions, removeAutoRetrieveInstructions };
+module.exports = { ensureAutoRetrieveInstructions, removeAutoRetrieveInstructions, removeInstructionsFromFile };
 module.exports.default = ensureAutoRetrieveInstructions;

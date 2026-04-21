@@ -320,8 +320,7 @@ function uninstallProjectArtifacts() {
     console.log(`🧹 Removed: ${TOOL_DIR_NAME}/`);
   }
 
-  // Remove auto-retrieve instructions from project-level AGENTS.md
-  // CLAUDE.md — FUTURE: When Claude Code integration is ready, uncomment the CLAUDE.md removal code below
+ // Remove auto-retrieve instructions from project-level AGENTS.md (root)
   const instructionsScript = findFileInCliRoot('auto-retrieve-instructions.js');
   if (existsSync(instructionsScript)) {
     try {
@@ -334,6 +333,18 @@ function uninstallProjectArtifacts() {
     } catch (err) {
       console.warn('⚠️  Auto-retrieve instructions cleanup failed:', err.message);
     }
+  }
+
+  // Also clean up old path (.gsd/agent/AGENTS.md) if it still exists
+  const oldAgentsPath = join(PROJECT_ROOT, '.gsd', 'agent', 'AGENTS.md');
+  if (existsSync(oldAgentsPath)) {
+    try {
+      const content = readFileSync(oldAgentsPath, 'utf-8');
+      if (content.includes('Cross-Project Knowledge Retrieval (Qdrant)')) {
+        const { removeInstructionsFromFile } = require(instructionsScript);
+        removeInstructionsFromFile(oldAgentsPath, '.gsd/agent/AGENTS.md');
+      }
+    } catch (_) {}
   }
 }
 
@@ -375,7 +386,19 @@ async function bootstrapProject() {
   console.log('🚀 GSD + Qdrant CLI\n');
   createGsdQdrantDirectory(PROJECT_ROOT);
 
-  // Ensure auto-retrieve instructions are in KNOWLEDGE.md (safe to run multiple times)
+  // Migrate old AGENTS.md path (.gsd/agent/AGENTS.md → root AGENTS.md)
+  const oldAgentsPath = join(PROJECT_ROOT, '.gsd', 'agent', 'AGENTS.md');
+  const newAgentsPath = join(PROJECT_ROOT, 'AGENTS.md');
+  if (existsSync(oldAgentsPath) && !existsSync(newAgentsPath)) {
+    try {
+      const content = readFileSync(oldAgentsPath, 'utf-8');
+      writeFileSync(newAgentsPath, content, 'utf-8');
+      unlinkSync(oldAgentsPath);
+      console.log('🔄 Migrated: .gsd/agent/AGENTS.md → AGENTS.md (root)');
+    } catch (_) {}
+  }
+
+  // Ensure auto-retrieve instructions are in project-level AGENTS.md (safe to run multiple times)
   const instructionsScript = findFileInCliRoot('auto-retrieve-instructions.js');
   if (existsSync(instructionsScript)) {
     try {
