@@ -91,6 +91,19 @@ class GSDKnowledgeSync {
       console.log('  ℹ️  .gsd directory not found - indexing code only');
     }
 
+    // Check if collection exists and has points. If empty, force full re-index.
+    let collectionEmpty = false;
+    try {
+      const countResult = await this.client.count(this.collectionName);
+      if (countResult.total === 0) {
+        console.log('  ⚠️  Collection is empty — forcing full re-index');
+        collectionEmpty = true;
+      }
+    } catch (_) {
+      // Collection doesn't exist yet — will be created in init()
+      collectionEmpty = true;
+    }
+
     const mdFiles = hasGsdDir ? await this.walkGsd(gsdDir) : [];
     const codeFiles = await this.walkProjectCode(PROJECT_ROOT);
     
@@ -102,7 +115,9 @@ class GSDKnowledgeSync {
     
     const seenIds = new Set();
     let updated = 0;
-    const syncState = await this.loadSyncState();
+    
+    // If collection is empty, reset sync state to force re-indexing all files
+    const syncState = collectionEmpty ? {} : await this.loadSyncState();
     
     // Index documentation files (.md)
     for (const filePath of mdFiles) {
