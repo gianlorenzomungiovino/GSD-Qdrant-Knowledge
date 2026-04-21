@@ -67,7 +67,7 @@ The tool returns relevant context from other GSD projects indexed in Qdrant. Use
  * @returns {{ created: boolean, updated: boolean }} Status of the operation
  */
 function ensureAutoRetrieveInstructions(options = {}) {
-  const gsdHome = process.env.GSD_HOME || join(process.env.HOME || '', '.gsd');
+  const gsdHome = process.env.GSD_HOME || join(process.env.HOME || process.env.USERPROFILE || '', '.gsd');
   const agentsPath = join(gsdHome, 'agent', 'AGENTS.md');
 
   // Read current package version from package.json (source of truth)
