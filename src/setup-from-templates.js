@@ -83,6 +83,21 @@ async function ensureProjectCollections(client) {
   }
 }
 
+async function ensureKnowledgeInstructions() {
+  const instructionsPath = join(__dirname, 'knowledge-instructions.js');
+  if (!existsSync(instructionsPath)) {
+    console.warn('⚠️  knowledge-instructions.js not found, skipping KNOWLEDGE.md setup');
+    return;
+  }
+
+  try {
+    const { ensureKnowledgeInstructions: createInstructions } = require(instructionsPath);
+    createInstructions();
+  } catch (err) {
+    console.warn(`⚠️  KNOWLEDGE.md setup failed: ${err.message}`);
+  }
+}
+
 async function setup() {
   const client = new QdrantClient({ url: QDRANT_URL });
 
@@ -90,6 +105,7 @@ async function setup() {
 
   await ensureProjectCollections(client);
   await installPostCommitHook(PROJECT_ROOT);
+  await ensureKnowledgeInstructions();
 
   console.log('\n✅ Setup ready.');
   console.log(`   Collection '${COLLECTION_NAME}' is ready for unified indexing.`);

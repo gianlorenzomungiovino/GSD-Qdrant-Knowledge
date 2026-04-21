@@ -12,7 +12,8 @@ npm install gsd-qdrant-knowledge
 
 Rendere naturale una richiesta come: "prendi il componente X dal progetto Y e applicalo qui".
 
-**Architettura V2.0.7:**
+**Architettura V2:**
+
 - **Single collection `gsd_memory`**: tutti i progetti condividono la stessa collection Qdrant
 - **Type-based classification**: punti classificati come `doc` (`.gsd`) o `code`
 - **Cross-project priority**: il retrieval favorisce contenuti cross-project e `reusable`, senza escludere il progetto corrente
@@ -26,6 +27,7 @@ gsd-qdrant-knowledge
 ```
 
 Il comando crea o aggiorna automaticamente:
+
 - `gsd-qdrant-knowledge/`
 - `gsd-qdrant-knowledge/.qdrant-sync-state.json`
 - `gsd-qdrant-knowledge/index.js`
@@ -43,6 +45,7 @@ gsd-qdrant-knowledge uninstall
 ```
 
 Rimuove:
+
 - `gsd-qdrant-knowledge/`
 - la registrazione `gsd-qdrant` da `.mcp.json`
 - l'entry `gsd-qdrant-knowledge/` da `.gitignore`
