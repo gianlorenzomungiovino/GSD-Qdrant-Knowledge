@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.6
+
+### Fixed
+- **Empty collection re-index**: When the Qdrant collection was deleted and recreated, the sync state file still had hashes from the previous indexing, causing "Updated 0" even though the collection was empty. Now checks if the collection has 0 points before syncing and resets the sync state to force a full re-index of all files.
+
 ## 2.1.5
 
 ### Changed
