@@ -1,6 +1,6 @@
 {
   "name": "gsd-qdrant-knowledge",
-  "version": "2.1.6",
+  "version": "2.1.7",
   "description": "CLI per setup automatico GSD + Qdrant in qualsiasi progetto Node.js",
   "main": "index.js",
   "bin": {
@@ -33,7 +33,6 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@qdrant/js-client-rest": "^1.17.0",
     "@xenova/transformers": "^2.17.2",
-    "gsd-qdrant-knowledge": "file:gsd-qdrant-knowledge-2.1.5.tgz",
     "zod": "^4.3.6"
   },
   "engines": {

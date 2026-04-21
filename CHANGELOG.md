@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.7
+
+### Fixed
+- **Self-referencing dependency**: Removed `gsd-qdrant-knowledge: "file:gsd-qdrant-knowledge-2.1.5.tgz"` from dependencies. This circular reference was accidentally added when running `npm install` inside the project root, making global installation fail with "tarball seems to be corrupted".
+
 ## 2.1.6
 
 ### Fixed
