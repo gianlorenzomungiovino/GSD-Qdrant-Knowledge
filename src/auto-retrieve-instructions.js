@@ -3,18 +3,25 @@
 /**
  * Auto-Retrieve Instructions Installer
  *
- * Scrive istruzioni per l'agent GSD su come usare il tool auto_retrieve
- * nel file ~/.gsd/agent/AGENTS.md. Questo file viene iniettato automaticamente
- * nel system prompt di GSD ad ogni sessione (vedi system-context.js).
+ * Writes auto-retrieve instructions for the GSD agent into project-level
+ * AGENTS.md. This file is loaded automatically by GSD (pi) via ancestor walk
+ * when the agent starts in a project that contains it.
  *
- * L'installazione è safe-to-run-multiple-times: usa un marker-based dedup
- * con version-aware patching per evitare duplicazioni e aggiornare solo
- * la sezione del template quando la versione di package.json cambia.
- * Il resto del file AGENTS.md (altri template, note utente) viene preservato.
+ * Installation is safe-to-run-multiple-times: uses marker-based dedup with
+ * version-aware patching to avoid duplication and update only the Qdrant
+ * section when the package.json version changes. Other content in the file
+ * is preserved.
+ *
+ * Target file:
+ *   - <cwd>/.gsd/agent/AGENTS.md   (GSD / pi)
+ *
+ * FUTURE: CLAUDE.md support for Claude Code compatibility.
+ * When Claude Code integration is ready, uncomment the CLAUDE.md writing
+ * code below. See comments marked "CLAUDE.md — FUTURE" for details.
  */
 
-const { existsSync, readFileSync, writeFileSync, mkdirSync } = require('fs');
-const { join } = require('path');
+const { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } = require('fs');
+const { join, dirname } = require('path');
 
 const SECTION_MARKER = '## Cross-Project Knowledge Retrieval (Qdrant)';
 const VERSION_PREFIX = '# GSD-QDRANT-TEMPLATE-VERSION: ';
@@ -22,7 +29,7 @@ const VERSION_PREFIX = '# GSD-QDRANT-TEMPLATE-VERSION: ';
 const SECTION_CONTENT = `
 ${SECTION_MARKER}
 
-This project has GSD-Qdrant installed. The agent can query cross-project knowledge from the unified Qdrant vector database via MCP.
+GSD-Qdrant is installed in this project. When working on this project, use auto_retrieve to query cross-project knowledge from the unified Qdrant vector database via MCP.
 
 ### When to call auto_retrieve
 
@@ -55,78 +62,29 @@ The tool returns relevant context from other GSD projects indexed in Qdrant. Use
 `;
 
 /**
- * Ensure auto-retrieve instructions are present in ~/.gsd/agent/AGENTS.md.
- * AGENTS.md is the standard Pi/GSD file for global instructions — loaded automatically
- * at startup, not touched by GSD updates.
+ * Resolve target file paths for agent instructions.
  *
- * Uses marker-based dedup with version-aware patching: only replaces the content
- * between markers when the installed version (from package.json) differs from what's
- * recorded in the file. Other content in AGENTS.md is preserved.
+ * Current target:
+ *   - <cwd>/.gsd/agent/AGENTS.md   (loaded by GSD/pi via ancestor walk)
  *
- * @param {{ force?: boolean }} [options] - If force is true, always update even if versions match.
- * @returns {{ created: boolean, updated: boolean }} Status of the operation
+ * FUTURE CLAUDE.md: When Claude Code integration is ready, uncomment the
+ * CLAUDE.md path below. Claude Code loads CLAUDE.md from the project root
+ * (not from .gsd/), so the path would be <cwd>/CLAUDE.md.
+ *
+ * @param {string} cwd - Current working directory (project root)
+ * @returns {{ agentsPath: string, claudePath: string }}
  */
-function ensureAutoRetrieveInstructions(options = {}) {
-  const gsdHome = process.env.GSD_HOME || join(process.env.HOME || process.env.USERPROFILE || '', '.gsd');
-  const agentsPath = join(gsdHome, 'agent', 'AGENTS.md');
-
-  // Read current package version from package.json (source of truth)
-  let packageVersion;
-  try {
-    const pkgPath = join(__dirname, '..', 'package.json');
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-    packageVersion = pkg.version;
-  } catch (_) {
-    packageVersion = null;
-  }
-
-  // Ensure ~/.gsd/agent/ directory exists
-  const agentDir = join(gsdHome, 'agent');
-  if (!existsSync(agentDir)) {
-    mkdirSync(agentDir, { recursive: true });
-    console.log('📂 Created: ~/.gsd/agent/');
-  }
-
-  let existingContent = '';
-  if (existsSync(agentsPath)) {
-    existingContent = readFileSync(agentsPath, 'utf-8');
-  }
-
-  const hasMarker = existingContent.includes(SECTION_MARKER);
-  const installedVersion = extractVersion(existingContent);
-  const needsUpdate = !hasMarker || installedVersion !== packageVersion || options.force;
-
-  if (!needsUpdate) {
-    console.log('ℹ️  Auto-retrieve instructions already in AGENTS.md');
-    return { created: false, updated: false };
-  }
-
-  if (hasMarker && installedVersion !== packageVersion) {
-    // Strip ALL version marker lines first, then replace the section.
-    // This avoids stale markers from old versions.
-    const cleaned = existingContent.replace(
-      /# GSD-QDRANT-TEMPLATE-VERSION: \d+\.\d+\.\d+\n?/g,
-      ''
-    );
-    const newContent = replaceBetweenMarkers(
-      cleaned,
-      SECTION_MARKER,
-      VERSION_PREFIX + packageVersion + '\n' + SECTION_CONTENT + '\n'
-    );
-    writeFileSync(agentsPath, newContent, 'utf-8');
-    console.log(`📝 Updated: ~/.gsd/agent/AGENTS.md (Qdrant section v${installedVersion} → v${packageVersion})`);
-    return { created: false, updated: true };
-  }
-
-  // Append instructions to existing content or create new file
-  const newContent = existingContent + VERSION_PREFIX + packageVersion + '\n' + SECTION_CONTENT + '\n';
-  writeFileSync(agentsPath, newContent, 'utf-8');
-  console.log('📝 Created: ~/.gsd/agent/AGENTS.md (auto-retrieve instructions)');
-  return { created: true, updated: false };
+function resolveAgentPaths(cwd) {
+  return {
+    agentsPath: join(cwd, '.gsd', 'agent', 'AGENTS.md'),
+    // CLAUDE.md — FUTURE: Uncomment when Claude Code integration is ready
+    // claudePath: join(cwd, 'CLAUDE.md'),
+    claudePath: null,
+  };
 }
 
 /**
- * Extract the template version from AGENTS.md content.
+ * Extract the template version from file content.
  * Returns null if no version marker is found.
  */
 function extractVersion(content) {
@@ -135,8 +93,8 @@ function extractVersion(content) {
 }
 
 /**
- * Replace the content starting from startMarker up to (but not including) the next ## section heading.
- * Preserves all other content in the file.
+ * Replace the content starting from startMarker up to (but not including)
+ * the next ## section heading. Preserves all other content in the file.
  *
  * @param {string} content - The full file content (should already have version markers stripped)
  * @param {string} startMarker - The opening marker
@@ -164,5 +122,174 @@ function replaceBetweenMarkers(content, startMarker, replacement) {
   return content.substring(0, startIndex) + replacement + content.substring(endIndex);
 }
 
-module.exports = { ensureAutoRetrieveInstructions };
+/**
+ * Write instructions to a single file using marker-based dedup.
+ *
+ * @param {string} filePath - Path to the target file
+ * @param {string} packageVersion - Current package version
+ * @param {string} label - Display label for the file (e.g. "AGENTS.md")
+ * @param {{ force?: boolean }} [options]
+ * @returns {{ created: boolean, updated: boolean }}
+ */
+function writeInstructionsToFile(filePath, packageVersion, label, options = {}) {
+  // Ensure directory exists
+  const dir = dirname(filePath);
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+
+  let existingContent = '';
+  if (existsSync(filePath)) {
+    existingContent = readFileSync(filePath, 'utf-8');
+  }
+
+  const hasMarker = existingContent.includes(SECTION_MARKER);
+  const installedVersion = extractVersion(existingContent);
+  const needsUpdate = !hasMarker || installedVersion !== packageVersion || options.force;
+
+  if (!needsUpdate) {
+    console.log(`ℹ️  Auto-retrieve instructions already in ${label}`);
+    return { created: false, updated: false };
+  }
+
+  if (hasMarker && installedVersion !== packageVersion) {
+    // Strip ALL version marker lines first, then replace the section.
+    // This avoids stale markers from old versions.
+    const cleaned = existingContent.replace(
+      /# GSD-QDRANT-TEMPLATE-VERSION: \d+\.\d+\.\d+\n?/g,
+      ''
+    );
+    const newContent = replaceBetweenMarkers(
+      cleaned,
+      SECTION_MARKER,
+      VERSION_PREFIX + packageVersion + '\n' + SECTION_CONTENT + '\n'
+    );
+    writeFileSync(filePath, newContent, 'utf-8');
+    console.log(`📝 Updated: ${label} (Qdrant section v${installedVersion} → v${packageVersion})`);
+    return { created: false, updated: true };
+  }
+
+  // Append instructions to existing content or create new file
+  const newContent = existingContent + VERSION_PREFIX + packageVersion + '\n' + SECTION_CONTENT + '\n';
+  writeFileSync(filePath, newContent, 'utf-8');
+  console.log(`📝 Created: ${label} (auto-retrieve instructions)`);
+  return { created: true, updated: false };
+}
+
+/**
+ * Ensure auto-retrieve instructions are present in project-level AGENTS.md.
+ *
+ * CLAUDE.md — FUTURE: When Claude Code integration is ready, uncomment the
+ * CLAUDE.md writing code below and update the return object.
+ *
+ * @param {{ cwd?: string, force?: boolean }} [options]
+ * @param {{ cwd?: string }} [options.cwd] - Project root directory (defaults to process.cwd())
+ * @param {{ force?: boolean }} [options.force] - If true, always update even if versions match
+ * @returns {{ agentsCreated: boolean, agentsUpdated: boolean }}
+ */
+function ensureAutoRetrieveInstructions(options = {}) {
+  const cwd = options.cwd || process.cwd();
+
+  // Read current package version from package.json (source of truth)
+  let packageVersion;
+  try {
+    const pkgPath = join(__dirname, '..', 'package.json');
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+    packageVersion = pkg.version;
+  } catch (_) {
+    packageVersion = null;
+  }
+
+  const { agentsPath, claudePath } = resolveAgentPaths(cwd);
+
+  const agentsResult = writeInstructionsToFile(agentsPath, packageVersion, 'AGENTS.md', options);
+
+  // CLAUDE.md — FUTURE: Uncomment when Claude Code integration is ready
+  // const claudeResult = writeInstructionsToFile(claudePath, packageVersion, 'CLAUDE.md', options);
+  // return {
+  //   agentsCreated: agentsResult.created,
+  //   agentsUpdated: agentsResult.updated,
+  //   claudeCreated: claudeResult.created,
+  //   claudeUpdated: claudeResult.updated,
+  // };
+  return {
+    agentsCreated: agentsResult.created,
+    agentsUpdated: agentsResult.updated,
+  };
+}
+
+/**
+ * Remove auto-retrieve instructions from a single file.
+ * Only removes the Qdrant section (between markers), preserving all other content.
+ *
+ * @param {string} filePath - Path to the target file
+ * @param {string} label - Display label for the file
+ * @returns {{ removed: boolean, fileDeleted: boolean }}
+ */
+function removeInstructionsFromFile(filePath, label) {
+  if (!existsSync(filePath)) {
+    return { removed: false, fileDeleted: false };
+  }
+
+  let content = readFileSync(filePath, 'utf-8');
+  const hasMarker = content.includes(SECTION_MARKER);
+
+  if (!hasMarker) {
+    return { removed: false, fileDeleted: false };
+  }
+
+  // Strip ALL version marker lines first
+  const cleaned = content.replace(
+    /# GSD-QDRANT-TEMPLATE-VERSION: \d+\.\d+\.\d+\n?/g,
+    ''
+  );
+
+  // Remove the entire section
+  const newContent = replaceBetweenMarkers(cleaned, SECTION_MARKER, '');
+
+  // Clean up: remove leading/trailing blank lines if section was at the end
+  const trimmed = newContent.replace(/^\n+/, '').replace(/\n+$/, '');
+
+  if (trimmed) {
+    // Section removed but file has other content — write back
+    writeFileSync(filePath, trimmed + '\n', 'utf-8');
+    console.log(`🧹 Removed Qdrant section from ${label}`);
+    return { removed: true, fileDeleted: false };
+  } else {
+    // File is now empty — delete it
+    unlinkSync(filePath);
+    console.log(`🧹 Removed Qdrant section from ${label} (file deleted)`);
+    return { removed: true, fileDeleted: true };
+  }
+}
+
+/**
+ * Remove auto-retrieve instructions from project-level AGENTS.md.
+ * Only removes the Qdrant section, preserving other content in the file.
+ *
+ * CLAUDE.md — FUTURE: When Claude Code integration is ready, uncomment the
+ * CLAUDE.md removal code below.
+ *
+ * @param {{ cwd?: string }} [options]
+ * @param {{ cwd?: string }} [options.cwd] - Project root directory (defaults to process.cwd())
+ * @returns {{ agentsRemoved: boolean }}
+ */
+function removeAutoRetrieveInstructions(options = {}) {
+  const cwd = options.cwd || process.cwd();
+  const { agentsPath, claudePath } = resolveAgentPaths(cwd);
+
+  const agentsResult = removeInstructionsFromFile(agentsPath, 'AGENTS.md');
+
+  // CLAUDE.md — FUTURE: Uncomment when Claude Code integration is ready
+  // const claudeResult = removeInstructionsFromFile(claudePath, 'CLAUDE.md');
+  // return {
+  //   agentsRemoved: agentsResult.removed,
+  //   claudeRemoved: claudeResult.removed,
+  // };
+  return {
+    agentsRemoved: agentsResult.removed,
+  };
+}
+
+module.exports = { ensureAutoRetrieveInstructions, removeAutoRetrieveInstructions };
 module.exports.default = ensureAutoRetrieveInstructions;

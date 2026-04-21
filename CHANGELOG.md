@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.3
+
+### Changed
+- **Project-local instructions**: AGENTS.md moved from global `~/.gsd/agent/AGENTS.md` to project-local `<cwd>/.gsd/agent/AGENTS.md`, so instructions only load when GSD/pi runs inside the specific project that has Qdrant installed.
+- **Uninstall cleanup**: CLI `uninstall` now removes Qdrant section from AGENTS.md (marker-based partial removal, preserving other content).
+- **CLAUDE.md support disabled**: CLAUDE.md writing is commented and gated behind `// FUTURE` markers — will be activated when proper Claude Code detection is implemented.
+
 ## 2.1.2
 
 ### Fixed

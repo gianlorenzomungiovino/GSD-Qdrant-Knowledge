@@ -319,6 +319,22 @@ function uninstallProjectArtifacts() {
     rmSync(TOOL_DIR, { recursive: true, force: true });
     console.log(`🧹 Removed: ${TOOL_DIR_NAME}/`);
   }
+
+  // Remove auto-retrieve instructions from project-level AGENTS.md
+  // CLAUDE.md — FUTURE: When Claude Code integration is ready, uncomment the CLAUDE.md removal code below
+  const instructionsScript = findFileInCliRoot('auto-retrieve-instructions.js');
+  if (existsSync(instructionsScript)) {
+    try {
+      const { removeAutoRetrieveInstructions } = require(instructionsScript);
+      removeAutoRetrieveInstructions({ cwd: PROJECT_ROOT });
+      // CLAUDE.md — FUTURE: Uncomment when Claude Code integration is ready
+      // if (result.claudeRemoved) {
+      //   console.log('🧹 Removed Qdrant section from CLAUDE.md');
+      // }
+    } catch (err) {
+      console.warn('⚠️  Auto-retrieve instructions cleanup failed:', err.message);
+    }
+  }
 }
 
 function installPostCommitHook() {
