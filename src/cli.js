@@ -320,31 +320,15 @@ function uninstallProjectArtifacts() {
     console.log(`🧹 Removed: ${TOOL_DIR_NAME}/`);
   }
 
- // Remove auto-retrieve instructions from project-level AGENTS.md (root)
-  const instructionsScript = findFileInCliRoot('auto-retrieve-instructions.js');
+ // Remove auto-retrieve instructions from project-level KNOWLEDGE.md
+  const instructionsScript = findFileInCliRoot('knowledge-instructions.js');
   if (existsSync(instructionsScript)) {
     try {
-      const { removeAutoRetrieveInstructions } = require(instructionsScript);
-      removeAutoRetrieveInstructions({ cwd: PROJECT_ROOT });
-      // CLAUDE.md — FUTURE: Uncomment when Claude Code integration is ready
-      // if (result.claudeRemoved) {
-      //   console.log('🧹 Removed Qdrant section from CLAUDE.md');
-      // }
+      const { removeKnowledgeInstructions } = require(instructionsScript);
+      removeKnowledgeInstructions({ cwd: PROJECT_ROOT });
     } catch (err) {
-      console.warn('⚠️  Auto-retrieve instructions cleanup failed:', err.message);
+      console.warn('⚠️  Knowledge instructions cleanup failed:', err.message);
     }
-  }
-
-  // Also clean up old path (.gsd/agent/AGENTS.md) if it still exists
-  const oldAgentsPath = join(PROJECT_ROOT, '.gsd', 'agent', 'AGENTS.md');
-  if (existsSync(oldAgentsPath)) {
-    try {
-      const content = readFileSync(oldAgentsPath, 'utf-8');
-      if (content.includes('Cross-Project Knowledge Retrieval (Qdrant)')) {
-        const { removeInstructionsFromFile } = require(instructionsScript);
-        removeInstructionsFromFile(oldAgentsPath, '.gsd/agent/AGENTS.md');
-      }
-    } catch (_) {}
   }
 }
 
@@ -386,26 +370,14 @@ async function bootstrapProject() {
   console.log('🚀 GSD + Qdrant CLI\n');
   createGsdQdrantDirectory(PROJECT_ROOT);
 
-  // Migrate old AGENTS.md path (.gsd/agent/AGENTS.md → root AGENTS.md)
-  const oldAgentsPath = join(PROJECT_ROOT, '.gsd', 'agent', 'AGENTS.md');
-  const newAgentsPath = join(PROJECT_ROOT, 'AGENTS.md');
-  if (existsSync(oldAgentsPath) && !existsSync(newAgentsPath)) {
-    try {
-      const content = readFileSync(oldAgentsPath, 'utf-8');
-      writeFileSync(newAgentsPath, content, 'utf-8');
-      unlinkSync(oldAgentsPath);
-      console.log('🔄 Migrated: .gsd/agent/AGENTS.md → AGENTS.md (root)');
-    } catch (_) {}
-  }
-
-  // Ensure auto-retrieve instructions are in project-level AGENTS.md (safe to run multiple times)
-  const instructionsScript = findFileInCliRoot('auto-retrieve-instructions.js');
+  // Ensure auto-retrieve instructions are in project-level KNOWLEDGE.md (safe to run multiple times)
+  const instructionsScript = findFileInCliRoot('knowledge-instructions.js');
   if (existsSync(instructionsScript)) {
     try {
-      const { ensureAutoRetrieveInstructions } = require(instructionsScript);
-      ensureAutoRetrieveInstructions();
+      const { ensureKnowledgeInstructions } = require(instructionsScript);
+      ensureKnowledgeInstructions();
     } catch (err) {
-      console.warn('⚠️  Auto-retrieve instructions setup failed:', err.message);
+      console.warn('⚠️  Knowledge instructions setup failed:', err.message);
     }
   }
 

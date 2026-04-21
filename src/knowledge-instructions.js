@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
 /**
- * Auto-Retrieve Instructions Installer
+ * Knowledge Instructions Installer
  *
  * Writes auto-retrieve instructions for the GSD agent into project-level
- * AGENTS.md. This file is loaded automatically by GSD (pi) from the project
- * root when the agent starts in a project that contains it.
+ * KNOWLEDGE.md. This file is loaded automatically by GSD (pi) and injected
+ * into the system prompt on every turn.
  *
  * Installation is safe-to-run-multiple-times: uses marker-based dedup with
  * version-aware patching to avoid duplication and update only the Qdrant
@@ -13,11 +13,7 @@
  * is preserved.
  *
  * Target file:
- *   - <cwd>/AGENTS.md   (project root — loaded by GSD/pi)
- *
- * FUTURE: CLAUDE.md support for Claude Code compatibility.
- * When Claude Code integration is ready, uncomment the CLAUDE.md writing
- * code below. See comments marked "CLAUDE.md — FUTURE" for details.
+ *   - <cwd>/.gsd/KNOWLEDGE.md   (project-level — loaded by GSD/pi)
  */
 
 const { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } = require('fs');
@@ -62,24 +58,17 @@ The tool returns relevant context from other GSD projects indexed in Qdrant. Use
 `;
 
 /**
- * Resolve target file paths for agent instructions.
+ * Resolve target file path for knowledge instructions.
  *
- * Current target:
- *   - <cwd>/AGENTS.md   (project root — loaded by GSD/pi)
- *
- * FUTURE CLAUDE.md: When Claude Code integration is ready, uncomment the
- * CLAUDE.md path below. Claude Code loads CLAUDE.md from the project root
- * (not from .gsd/), so the path would be <cwd>/CLAUDE.md.
+ * Target:
+ *   - <cwd>/.gsd/KNOWLEDGE.md   (project-level — loaded by GSD/pi)
  *
  * @param {string} cwd - Current working directory (project root)
- * @returns {{ agentsPath: string, claudePath: string }}
+ * @returns {{ knowledgePath: string }}
  */
-function resolveAgentPaths(cwd) {
+function resolveKnowledgePaths(cwd) {
   return {
-    agentsPath: join(cwd, 'AGENTS.md'),
-    // CLAUDE.md — FUTURE: Uncomment when Claude Code integration is ready
-    // claudePath: join(cwd, 'CLAUDE.md'),
-    claudePath: null,
+    knowledgePath: join(cwd, '.gsd', 'KNOWLEDGE.md'),
   };
 }
 
@@ -106,16 +95,13 @@ function replaceBetweenMarkers(content, startMarker, replacement) {
   if (startIndex === -1) return replacement;
 
   // Find the next section heading or end of file
-  // A section heading is a line starting with ## at the beginning
   const afterStart = content.substring(startIndex + startMarker.length);
   const nextHeadingMatch = afterStart.match(/\n##\s+\S/);
 
   let endIndex;
   if (nextHeadingMatch) {
-    // Replace everything from startMarker up to (but not including) the next ## heading
     endIndex = startIndex + startMarker.length + nextHeadingMatch.index;
   } else {
-    // No more sections — replace everything from startMarker to end of file
     endIndex = content.length;
   }
 
@@ -123,11 +109,11 @@ function replaceBetweenMarkers(content, startMarker, replacement) {
 }
 
 /**
- * Write instructions to a single file using marker-based dedup.
+ * Write instructions to KNOWLEDGE.md using marker-based dedup.
  *
  * @param {string} filePath - Path to the target file
  * @param {string} packageVersion - Current package version
- * @param {string} label - Display label for the file (e.g. "AGENTS.md")
+ * @param {string} label - Display label for the file (e.g. "KNOWLEDGE.md")
  * @param {{ force?: boolean }} [options]
  * @returns {{ created: boolean, updated: boolean }}
  */
@@ -154,7 +140,6 @@ function writeInstructionsToFile(filePath, packageVersion, label, options = {}) 
 
   if (hasMarker && installedVersion !== packageVersion) {
     // Strip ALL version marker lines first, then replace the section.
-    // This avoids stale markers from old versions.
     const cleaned = existingContent.replace(
       /# GSD-QDRANT-TEMPLATE-VERSION: \d+\.\d+\.\d+\n?/g,
       ''
@@ -177,17 +162,14 @@ function writeInstructionsToFile(filePath, packageVersion, label, options = {}) 
 }
 
 /**
- * Ensure auto-retrieve instructions are present in project-level AGENTS.md.
- *
- * CLAUDE.md — FUTURE: When Claude Code integration is ready, uncomment the
- * CLAUDE.md writing code below and update the return object.
+ * Ensure auto-retrieve instructions are present in project-level KNOWLEDGE.md.
  *
  * @param {{ cwd?: string, force?: boolean }} [options]
  * @param {{ cwd?: string }} [options.cwd] - Project root directory (defaults to process.cwd())
  * @param {{ force?: boolean }} [options.force] - If true, always update even if versions match
- * @returns {{ agentsCreated: boolean, agentsUpdated: boolean }}
+ * @returns {{ knowledgeCreated: boolean, knowledgeUpdated: boolean }}
  */
-function ensureAutoRetrieveInstructions(options = {}) {
+function ensureKnowledgeInstructions(options = {}) {
   const cwd = options.cwd || process.cwd();
 
   // Read current package version from package.json (source of truth)
@@ -200,21 +182,13 @@ function ensureAutoRetrieveInstructions(options = {}) {
     packageVersion = null;
   }
 
-  const { agentsPath, claudePath } = resolveAgentPaths(cwd);
+  const { knowledgePath } = resolveKnowledgePaths(cwd);
 
-  const agentsResult = writeInstructionsToFile(agentsPath, packageVersion, 'AGENTS.md', options);
+  const knowledgeResult = writeInstructionsToFile(knowledgePath, packageVersion, 'KNOWLEDGE.md', options);
 
-  // CLAUDE.md — FUTURE: Uncomment when Claude Code integration is ready
-  // const claudeResult = writeInstructionsToFile(claudePath, packageVersion, 'CLAUDE.md', options);
-  // return {
-  //   agentsCreated: agentsResult.created,
-  //   agentsUpdated: agentsResult.updated,
-  //   claudeCreated: claudeResult.created,
-  //   claudeUpdated: claudeResult.updated,
-  // };
   return {
-    agentsCreated: agentsResult.created,
-    agentsUpdated: agentsResult.updated,
+    knowledgeCreated: knowledgeResult.created,
+    knowledgeUpdated: knowledgeResult.updated,
   };
 }
 
@@ -264,32 +238,23 @@ function removeInstructionsFromFile(filePath, label) {
 }
 
 /**
- * Remove auto-retrieve instructions from project-level AGENTS.md.
+ * Remove auto-retrieve instructions from project-level KNOWLEDGE.md.
  * Only removes the Qdrant section, preserving other content in the file.
- *
- * CLAUDE.md — FUTURE: When Claude Code integration is ready, uncomment the
- * CLAUDE.md removal code below.
  *
  * @param {{ cwd?: string }} [options]
  * @param {{ cwd?: string }} [options.cwd] - Project root directory (defaults to process.cwd())
- * @returns {{ agentsRemoved: boolean }}
+ * @returns {{ knowledgeRemoved: boolean }}
  */
-function removeAutoRetrieveInstructions(options = {}) {
+function removeKnowledgeInstructions(options = {}) {
   const cwd = options.cwd || process.cwd();
-  const { agentsPath, claudePath } = resolveAgentPaths(cwd);
+  const { knowledgePath } = resolveKnowledgePaths(cwd);
 
-  const agentsResult = removeInstructionsFromFile(agentsPath, 'AGENTS.md');
+  const knowledgeResult = removeInstructionsFromFile(knowledgePath, 'KNOWLEDGE.md');
 
-  // CLAUDE.md — FUTURE: Uncomment when Claude Code integration is ready
-  // const claudeResult = removeInstructionsFromFile(claudePath, 'CLAUDE.md');
-  // return {
-  //   agentsRemoved: agentsResult.removed,
-  //   claudeRemoved: claudeResult.removed,
-  // };
   return {
-    agentsRemoved: agentsResult.removed,
+    knowledgeRemoved: knowledgeResult.removed,
   };
 }
 
-module.exports = { ensureAutoRetrieveInstructions, removeAutoRetrieveInstructions, removeInstructionsFromFile };
-module.exports.default = ensureAutoRetrieveInstructions;
+module.exports = { ensureKnowledgeInstructions, removeKnowledgeInstructions, removeInstructionsFromFile };
+module.exports.default = ensureKnowledgeInstructions;

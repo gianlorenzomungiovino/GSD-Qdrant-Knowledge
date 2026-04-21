@@ -1,11 +1,14 @@
 # Changelog
 
+## 2.1.5
+
+### Changed
+- **Writes to KNOWLEDGE.md instead of AGENTS.md**: The GSD (pi) CLI does not inject AGENTS.md into the system prompt — it only discovers it for `discover_configs`. KNOWLEDGE.md is actually injected. Bootstrap now writes the Qdrant auto-retrieve instructions to `.gsd/KNOWLEDGE.md` (project-level) with marker-based dedup, same as the previous AGENTS.md approach. Uninstall removes only the Qdrant section from KNOWLEDGE.md. AGENTS.md is no longer used.
+
 ## 2.1.4
 
 ### Changed
 - **AGENTS.md path corrected**: Moved from `.gsd/agent/AGENTS.md` to project root `AGENTS.md`. The GSD (pi) CLI loads `AGENTS.md` from the project root (Codex convention at `<projectRoot>/AGENTS.md`), not from `.gsd/agent/`. Bootstrap now auto-migrates existing files from the old path to the new one. Uninstall cleans up both paths.
-
-## 2.1.3
 
 ### Changed
 - **Project-local instructions**: AGENTS.md moved from global `~/.gsd/agent/AGENTS.md` to project-local `<cwd>/.gsd/agent/AGENTS.md`, so instructions only load when GSD/pi runs inside the specific project that has Qdrant installed.
