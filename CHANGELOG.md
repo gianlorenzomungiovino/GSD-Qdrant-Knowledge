@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.1.9
+
+### Fixed
+
+- **Document embedding title missing**: `buildDocPayload` now includes a `title` field so that `buildDocText` can inject the document title into the embedding text. Previously only `.summary` existed but `.title` was expected, causing document titles to be omitted from vectors — weakening semantic search quality for docs.
+
+### Removed
+
+- **Dead code cleanup**: Removed orphaned and unused methods from `GSDKnowledgeSync`:
+  - `findRelevantDocsForSnippet` (buggy: iterated `docIndex.allDocs` on an array, never called)
+  - `buildSnippetText` (never called)
+  - `indexFile` (never called, also referenced undefined `metadata`)
+  - Duplicate `buildDocText` definition (was silently overwritten by the later one)
+- **Orphaned file**: Removed `src/knowledge-sharing.js` — zero importers across the entire codebase.
+
 ## 2.1.8
 
 ### Fixed

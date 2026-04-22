@@ -186,30 +186,6 @@ class GSDKnowledgeSync {
     return filtered.map((hit) => ({ score: hit.score, ...hit.payload }));
   }
 
-  async indexFile(filePath, syncState, seenIds, fileType, count, docIndex = null) {
-    const content = await fs.readFile(filePath, 'utf8');
-    const relPath = this.toProjectRelative(filePath);
-    const id = this.makePointId(fileType, relPath);
-    const hash = this.hashContent(content);
-    seenIds.add(relPath);
-    
-    // Check if already indexed
-    if (syncState[this.indexedFileKey(relPath)]?.hash === hash) return;
-    
-    // Build payload based on file type
-    const payload = fileType === 'doc' 
-      ? await this.buildDocPayload(filePath, content, relPath, content)
-      : await this.buildCodePayload(filePath, content, relPath, docIndex);
-    
-    const vector = await this.embedText(fileType === 'doc' 
-      ? this.buildDocText(relPath, content, metadata || {})
-      : this.buildCodeText(relPath, content, payload)
-    );
-    
-    await this.client.upsert(this.collectionName, { points: [{ id, vector: { [this.vectorName]: vector }, payload }] });
-    syncState[this.indexedFileKey(relPath)] = { path: relPath, hash };
-  }
-
   startWatcher() { console.log('👀 Watch mode not implemented yet. Run `gsd-qdrant-knowledge` or `node src/sync-knowledge.js`.'); }
   async walkGsd(dir) {
     const files = [];
@@ -304,9 +280,6 @@ class GSDKnowledgeSync {
     scored.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
     return scored.slice(0, 5);
   }
-  findRelevantDocsForSnippet(relPath, content, docIndex) { const snippetIds = new Set(this.extractGsdIds(relPath, content)); const lowerPath = relPath.toLowerCase(); const contentSlice = content.toLowerCase().slice(0, 4000); const scored = []; for (const doc of docIndex.allDocs) { let score = 0; const reasons = []; if (doc.ids.some((id) => snippetIds.has(id))) { score += 6; reasons.push('shared-gsd-id'); } for (const id of doc.ids) { if (lowerPath.includes(id.toLowerCase())) { score += 4; reasons.push('path-id-match'); break; } } for (const keyword of doc.keywords) { if (keyword.length < 4) continue; if (lowerPath.includes(keyword) || contentSlice.includes(keyword)) { score += 1; reasons.push(`keyword:${keyword}`); if (score >= 10) break; } } if (score > 0) scored.push({ ...doc, score, reason: [...new Set(reasons)].join(',') }); } scored.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path)); return scored.slice(0, 5); }
-  buildDocText(relPath, content, metadata) { return [`project:${this.projectName}`, `path:${relPath}`, metadata.title ? `title:${metadata.title}` : null, content].filter(Boolean).join('\n'); }
-  buildSnippetText(relPath, content, payload) { const contextLine = payload.relatedDocPaths.length ? `related-docs:${payload.relatedDocPaths.join(', ')}` : null; const idsLine = payload.relatedDocIds.length ? `related-ids:${payload.relatedDocIds.join(', ')}` : null; const nameLine = payload.name ? `name:${payload.name}` : null; const symbolLine = payload.symbolNames?.length ? `symbols:${payload.symbolNames.join(', ')}` : null; const exportLine = payload.exports?.length ? `exports:${payload.exports.join(', ')}` : null; return [`project:${this.projectName}`, `path:${relPath}`, `language:${payload.language}`, `scope:${payload.scope}`, `workspace:${payload.workspace}`, `kind-detail:${payload.kindDetail}`, nameLine, symbolLine, exportLine, idsLine, contextLine, content].filter(Boolean).join('\n'); }
   async upsertPoint(collection, point) { await this.client.upsert(collection, { points: [point] }); }
   async deleteMissingPoints(seenIds, syncState) {
     const deletedIds = Object.keys(syncState).filter((key) => {
@@ -349,6 +322,7 @@ class GSDKnowledgeSync {
       section: this.inferSection(content),
       content: content,
       summary: metadata.title || basename(filePath),
+      title: metadata.title || basename(filePath),
       language: 'markdown',
       reusable: await this.isReusable(filePath, fullContent || content),
       tags: this.extractTags(content),
