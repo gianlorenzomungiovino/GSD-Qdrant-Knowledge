@@ -24,34 +24,27 @@ gsd-qdrant-knowledge --version
 
 ## 2. Avvia Qdrant
 
-### Opzione A: Docker (raccomandato per produzione)
+Qdrant deve essere in esecuzione su `localhost:6333`.
+
+### Docker (consigliato)
 
 ```bash
-docker run -d --name qdrant -p 6333:6333 -p 6334:6334 qdrant/qdrant
+docker run -d \
+  --name qdrant \
+  -p 6333:6333 -p 6334:6334 \
+  qdrant/qdrant
 ```
 
-### Opzione B: Modalità Embedded (senza Docker)
+Verifica: `curl http://localhost:6333/healthz` → `"healthz check passed"`
 
-Se non hai Docker, la CLI avvia automaticamente un embedded QDrant:
+Dashboard: `http://localhost:6333/dashboard`
 
-```bash
-# Avvia manualmente l'embedded QDrant
-npm run start-qdrant
+### Installazione standalone
 
-# Oppure il bootstrap avvia embedded automaticamente se non trova Docker
-gsd-qdrant-knowledge
-```
-
-L'embedded QDrant:
-- Scarica automaticamente il binary per la tua piattaforma
-- Usa storage locale in `.qdrant-data/` (non committare — è in `.gitignore`)
-- Ascolta sulla porta 6333 come la versione Docker
-- Dashboard accessibile a `http://localhost:6333/dashboard`
-
-Per fermare l'embedded QDrant:
+Scarica il binary da [GitHub releases](https://github.com/qdrant/qdrant/releases) e lancialo:
 
 ```bash
-npm run stop-qdrant
+./qdrant --config config.yaml
 ```
 
 ## 3. Esegui il bootstrap nella root del progetto

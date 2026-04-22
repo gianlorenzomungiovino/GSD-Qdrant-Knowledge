@@ -23,11 +23,6 @@ const TOOL_MARKER = 'managedBy';
 const TOOL_MARKER_VALUE = 'gsd-qdrant-knowledge';
 const MCP_SERVER_NAME = 'gsd-qdrant';
 
-// Embedded Qdrant module
-const { EmbeddedQdrant } = require('./embedded-qdrant.js');
-
-// Embedded mode flag file
-const EMBEDDED_MODE_FILE = join(TOOL_DIR, '.qdrant-mode');
 const DEFAULT_QDRANT_URL = 'http://localhost:6333';
 const QDRANT_HEALTHZ_PATH = '/healthz';
 
@@ -171,7 +166,7 @@ function writeJsonFile(path, value) {
   writeFileSync(path, JSON.stringify(value, null, 2) + '\n', 'utf8');
 }
 
-// ─── QDrant health check & embedded management ────────────────────────
+// ─── QDrant health check ──────────────────────────────────────────────
 
 /**
  * Check if a QDrant server is healthy at the given URL.
@@ -197,40 +192,22 @@ async function checkQdrantHealth(url) {
 }
 
 /**
- * Start embedded QDrant if no external server is available.
- * Writes the mode flag file so uninstall knows whether to clean up storage.
- * @returns {{ embedded: boolean, instance: EmbeddedQdrant|null }}
+ * Check if QDrant is running. Exits with error if not available.
+ * @returns {{ url: string }}
  */
 async function ensureQdrantRunning() {
   const qdrantUrl = process.env.QDRANT_URL || DEFAULT_QDRANT_URL;
 
-  // Check if external QDrant is available
   const healthy = await checkQdrantHealth(qdrantUrl);
   if (healthy) {
-    console.log('✅ External QDrant server detected at ' + qdrantUrl);
-    return { embedded: false, instance: null };
+    console.log('✅ QDrant server detected at ' + qdrantUrl);
+    return { url: qdrantUrl };
   }
 
-  // No external server — start embedded
-  console.log('⚠️  No external QDrant server found — starting embedded QDrant...');
-
-  const instance = new EmbeddedQdrant({
-    storageDir: process.env.QDRANT_EMBEDDED_DIR || join(process.cwd(), '.qdrant-data'),
-    port: parseInt(process.env.QDRANT_EMBEDDED_PORT, 10) || 6333,
-    autoInstall: true,
-    autoCleanup: true, // EmbeddedQdrant registers SIGINT/SIGTERM handlers
-  });
-
-  await instance.start();
-
-  // Set QDRANT_URL for child processes (sync-knowledge, MCP config)
-  process.env.QDRANT_URL = instance.url;
-
-  // Write mode flag so uninstall knows we used embedded
-  writeJsonFile(EMBEDDED_MODE_FILE, { mode: 'embedded', url: instance.url });
-
-  console.log(`🧠 Embedded QDrant ready at ${instance.url} (PID: ${instance.pid})`);
-  return { embedded: true, instance };
+  console.error('❌ QDrant is not running at ' + qdrantUrl);
+  console.error('   Start it with: docker run -d --name qdrant -p 6333:6333 qdrant/qdrant');
+  console.error('   Or set QDRANT_URL environment variable to your QDrant instance.');
+  process.exit(1);
 }
 
 function createGsdQdrantDirectory(projectRoot) {
@@ -386,27 +363,6 @@ function uninstallProjectArtifacts() {
     }
   }
 
-  // Only remove .qdrant-data/ if embedded QDrant was used (not Docker)
-  const modeFile = EMBEDDED_MODE_FILE;
-  if (existsSync(modeFile)) {
-    try {
-      const modeData = JSON.parse(readFileSync(modeFile, 'utf8'));
-      if (modeData.mode === 'embedded') {
-        const storageDir = join(process.cwd(), '.qdrant-data');
-        if (existsSync(storageDir)) {
-          rmSync(storageDir, { recursive: true, force: true });
-          console.log(`🧹 Removed: .qdrant-data/ (embedded storage)`);
-        }
-      }
-      // Always remove the mode flag file
-      unlinkSync(modeFile);
-      console.log(`🧹 Removed: ${TOOL_DIR_NAME}/.qdrant-mode`);
-    } catch (_) {
-      // Corrupt mode file — best effort removal
-      try { unlinkSync(modeFile); } catch {}
-    }
-  }
-
   if (existsSync(TOOL_DIR)) {
     rmSync(TOOL_DIR, { recursive: true, force: true });
     console.log(`🧹 Removed: ${TOOL_DIR_NAME}/`);
@@ -503,7 +459,7 @@ async function bootstrapProject() {
 
   await addToGitignore(PROJECT_ROOT, `${TOOL_DIR_NAME}/`);
 
-  // Ensure QDrant is running (external or embedded) before sync
+  // Ensure QDrant is running before sync
   const qdrantResult = await ensureQdrantRunning();
 
   // Run sync with the correct QDRANT_URL in env
@@ -516,13 +472,6 @@ async function bootstrapProject() {
   if (syncResult.status !== 0) {
     console.error('\n❌ Initial knowledge sync failed. Collections may be empty.');
     process.exit(syncResult.status || 1);
-  }
-
-  // Leave QDrant running — do NOT stop it here.
-  // EmbeddedQdrant registered SIGINT/SIGTERM handlers via autoCleanup:true.
-  if (qdrantResult.embedded) {
-    console.log(`\n🧠 QDrant is running at ${qdrantResult.instance.url} (PID: ${qdrantResult.instance.pid})`);
-    console.log('   Dashboard: http://localhost:6333/dashboard');
   }
 
   console.log('\n✅ Ready');

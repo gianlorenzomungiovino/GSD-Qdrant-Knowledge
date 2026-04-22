@@ -7,7 +7,7 @@ Thumbs.db
 __pycache__/
 *.pyc
 
-# ── Embedded Qdrant data (not committed) ──
+# ── Qdrant data directory (not committed) ──
 .qdrant-data/
 
 # ── GSD baseline (auto-generated) ──

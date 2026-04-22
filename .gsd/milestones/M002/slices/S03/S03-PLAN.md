@@ -1,131 +1,83 @@
-# S03: Documentazione e Integrazione Finale
+# S03: Documentazione Ricerca Ibrida e Cleanup
 
-**Goal:** Aggiornare tutta la documentazione del progetto per riflettere i cambiamenti apportati da M002: ricerca ibrida implementata (Fase C e/o A), modalità embedded Qdrant, e benchmark dei risultati.
-**Demo:** La documentazione è aggiornata e il MCP server è pronto per l'uso in produzione
-
-## Depends
-- S02 (embedded Qdrant)
+**Goal:** Documentare la ricerca ibrida implementata in S01, aggiornare README.md e GSD-QDRANT-SETUP.md, verificare che tutto funzioni insieme.
+**Demo:** La documentazione è aggiornata con ricerca ibrida, MCP server pronto per l'uso, codice embedded rimosso
 
 ## Must-Haves
 
-- README.md aggiornato con sezione "Ricerca Ibrida" che spiega C e/o A implementati
-- README.md con sezione "Embedded Mode" vs Docker mode
-- GSD-QDRANT-SETUP.md aggiornato con tutti i modi di configurazione
-- Benchmark results documentati (baseline, fase C, fase A se applicabile)
-- Decisione go/no-go documentata e giustificata
+- [ ] README.md documenta ricerca ibrida + Docker setup in modo auto-consistente
+- [ ] GSD-QDRANT-SETUP.md ha solo Docker setup, zero riferimenti embedded
+- [ ] Nessun file embedded rimane nel codice sorgente
+- [ ] package.json pulito da script embedded
+- [ ] .gitignore senza .qdrant-data/
 
 ## Proof Level
 
-- This slice proves: documentation completeness — any new user can set up and use the tool following the docs alone
+- This slice proves: Not provided.
 
 ## Integration Closure
 
-- Upstream surfaces consumed: S01 (hybrid search implementation), S02 (embedded Qdrant)
-- New wiring introduced in this slice: README.md, GSD-QDRANT-SETUP.md, CHANGELOG.md
-- What remains before the milestone is truly usable end-to-end: nothing — docs match the implemented features
+Not provided.
 
 ## Verification
 
-- Runtime signals: `node src/cli.js` funziona con embedded Qdrant
-- Inspection surfaces: README.md, GSD-QDRANT-SETUP.md, CHANGELOG.md verificati per completezza
-- Failure visibility: any missing config or broken link in docs
-- Redaction constraints: none
+- Not provided.
 
 ## Tasks
 
-- [ ] **T01: Aggiornare README.md con tutte le sezioni** `est:1.5h`
-  # Aggiornare il README principale con tutte le funzionalità implementate in M002.
+- [x] **T01: Aggiornare README.md con sezione Ricerca Ibrida** `est:1h`
+  1. **Sezione "Ricerca Ibrida"**: spiegare weighted fusion (Fase C) implementata, come funziona la fusione ponderata, parametri configurabili via env vars
+2. **Sezione "Setup Qdrant"**: aggiungere breve descrizione Docker setup all'inizio del README (già fatto)
+3. **Verifica coerenza**: assicurarsi che tutti i comandi e le variabili ambiente menzionate nel README siano reali
 
-## Steps
-1. **Sezione "Ricerca Ibrida"**:
-   - Spiegare cosa è la weighted fusion (Fase C) se implementata
-   - Spiegare cosa è il RRF nativo Qdrant (Fase A) se implementata
-   - Includere i risultati del benchmark (Δ score, hit rate)
-   - Link a `evaluation-decision.md` per la documentazione completa della decisione
-2. **Sezione "Embedded Mode"**:
-   - Differenze rispetto alla versione Docker
-   - Come verificare che la dashboard sia accessibile (`http://localhost:6333/dashboard`)
-   - Comandi per avviare/arrestare l'embedded server
-   - Path dello storage embedded (`.qdrant-data/`)
-3. **Sezione "Configurazione"**:
-   - Env vars disponibili: `QDRANT_URL`, `VECTOR_WEIGHT`, `LEXICAL_WEIGHT`, `QDRANT_EMBEDDED_DIR`, `QDRANT_EMBEDDED_PORT`
-   - Tabella comparativa: Docker vs Embedded (pro/contro)
-4. **Sezione "Benchmark"**:
-   - Link ai risultati: baseline, fase C, fase A
-   - Come eseguire il benchmark con `scripts/benchmark-retrieve.js`
-
-## Must-Haves
-- [ ] Sezione "Ricerca Ibrida" con spiegazione dell'implementazione effettiva (C e/o A)
-- [ ] Sezione "Embedded Mode" completa con differenze vs Docker
-- [ ] Tabella configurazione env vars
-- [ ] Risultati benchmark linkati o inclusi
+Must-Haves:
+- [ ] Sezione "Ricerca Ibrida" con spiegazione weighted fusion
+- [ ] Sezione "Setup Qdrant" con Docker command
+- [ ] Variabili ambiente documentate (QDRANT_URL, VECTOR_WEIGHT, LEXICAL_WEIGHT)
+- [ ] Nessun riferimento a embedded Qdrant
   - Files: `README.md`
-  - Verify: grep -c 'Ricerca Ibrida\|Embedded Mode\|benchmark' README.md
+  - Verify: grep -c 'Ricerca Ibrida\|Setup Qdrant' README.md && ! grep -qi 'embedded' README.md
+  - Files: `README.md`
+  - Verify: grep -c 'Ricerca Ibrida\|Setup Qdrant' README.md && ! grep -qi 'embedded' README.md
 
-- [ ] **T02: Aggiornare GSD-QDRANT-SETUP.md** `est:1h`
-  # Aggiornare il file di setup con tutte le modalità di configurazione.
+- [x] **T02: Aggiornare GSD-QDRANT-SETUP.md con Docker setup** `est:0.5h`
+  1. **Sezione "Avvia Qdrant"**: sostituire le due opzioni (Docker/Embedded) con una sola sezione Docker breve + menzione standalone
+2. **Rimuovere riferimenti embedded**: non più sezioni su modalità embedded, binary detection, .qdrant-data/
+3. **Verifica completezza**: assicurarsi che la guida sia auto-consistente per un utente nuovo
 
-## Steps
-1. **Sezione "Modalità Qdrant"**:
-   - External (Docker): come configurare e usare
-   - Embedded: come funziona, quando si attiva automaticamente
-2. **Sezione "Ricerca Ibrida"**:
-   - Parametri di configurazione per pesi ibridi
-   - Come regolare i pesi in base al proprio use case
-3. **Sezione "Troubleshooting"**:
-   - Problemi comuni con embedded Qdrant (binario mancante, port conflict)
-   - Problemi comuni con ricerca ibrida (pesi sbilanciati, sparse vector vuoto)
-4. **Versione Qdrant**: aggiornare a v1.17.1 nei riferimenti
-
-## Must-Haves
-- [ ] Sezione "Modalità Qdrant" con entrambe le opzioni
-- [ ] Parametri di configurazione ibrida documentati
-- [ ] Sezione troubleshooting completa
-- [ ] Versione Qdrant aggiornata a v1.17.1
+Must-Haves:
+- [ ] Sezione Docker setup chiara e breve
+- [ ] Nessun riferimento a embedded Qdrant
+- [ ] Istruzioni di verifica (curl healthz) incluse
   - Files: `GSD-QDRANT-SETUP.md`
-  - Verify: grep 'v1.17.1' GSD-QDRANT-SETUP.md && grep -c 'troubleshoot\|Troubleshoot' GSD-QDRANT-SETUP.md
+  - Verify: ! grep -qi 'embedded' GSD-QDRANT-SETUP.md
+  - Files: `GSD-QDRANT-SETUP.md`
+  - Verify: ! grep -qi 'embedded' GSD-QDRANT-SETUP.md
 
-- [ ] **T03: Aggiornare CHANGELOG.md** `est:0.5h`
-  # Documentare tutti i cambiamenti di M002 nel changelog.
+- [x] **T03: Verifica finale e pulizia codice** `est:0.5h`
+  1. **Verifica integrazione**: `node src/cli.js` funziona (o almeno carica senza errori)
+2. **Pulizia embedded**: verificare che nessun riferimento a embedded rimanga nel codice (`src/**/*.js`)
+3. **Verifica package.json**: npm scripts puliti (solo test, sync-knowledge)
+4. **Verifica .gitignore**: nessun riferimento a .qdrant-data/
 
-## Steps
-1. **Aggiungere entry per M002**:
-   - Ricerca ibrida implementata (weighted fusion e/o RRF nativo)
-   - Qdrant embedded con dashboard browser
-   - Versione Qdrant aggiornata da v1.13.6 a v1.17.1
-   - Nuovo script di benchmark (`scripts/benchmark-retrieve.js`)
-2. **Classificare i cambiamenti**:
-   - ✨ New: embedded Qdrant, ricerca ibrida, benchmark
-   - 🔧 Changed: versione Qdrant, struttura collection (se Fase A)
-   - 📝 Docs: README, GSD-QDRANT-SETUP aggiornati
+Must-Haves:
+- [ ] `node src/cli.js` non crasha all'avvio
+- [ ] Nessun file embedded rimasto (src/embedded-qdrant.js, scripts/qdrant-cli.js)
+- [ ] package.json pulito da script embedded
+- [ ] .gitignore senza .qdrant-data/
+  - Files: `src/**/*.js`, `package.json`, `.gitignore`
+  - Verify: ls src/embedded-qdrant.js scripts/qdrant-cli.js 2>&1 | grep -c 'No such file' && echo 'OK: embedded files removed'
+  - Files: `src/**/*.js`, `package.json`, `.gitignore`
+  - Verify: ls src/embedded-qdrant.js scripts/qdrant-cli.js 2>&1 | grep -c 'No such file' && echo 'OK: embedded files removed'
 
-## Must-Haves
-- [ ] Entry M002 completa nel changelog
-- [ ] Tutti i cambiamenti classificati correttamente
-  - Files: `CHANGELOG.md`
-  - Verify: grep -A10 'M002\|[2.0.0]' CHANGELOG.md | head -15
+- [ ] **T04: Aggiornare DECISIONS.md** `est:30m`
+  Documentare la decisione di implementare caching con LRUCache (o altra libreria scelta)
+  - Verify: Verifica che la decisione sia documentata
 
-- [ ] **T04: Verifica finale e pulizia** `est:0.5h`
-  # Verifica finale che tutto funzioni insieme e pulizia del codice.
+## Files Likely Touched
 
-## Steps
-1. **Verifica integrazione completa**:
-   - `node src/sync-knowledge.js setup` → collection pronta
-   - `node src/cli.js` → bootstrap funzionante (embedded o external)
-   - `auto_retrieve` tool risponde correttamente con risultati ibridi
-2. **Pulizia**:
-   - Rimuovere weighted fusion se sostituita da RRF (fallback non necessario)
-   - Verificare che `.qdrant-data/` sia in `.gitignore`
-   - Verificare che i benchmark results siano in `.gitignore` o nel slice dir
-3. **Verifica cross-file**:
-   - README.md menziona tutti i comandi npm disponibili
-   - GSD-QDRANT-SETUP.md è coerente con README.md
-   - Nessun riferimento a v1.13.6 rimasto nel codice
-
-## Must-Haves
-- [ ] Integrazione completa verificata (sync + query + embedded)
-- [ ] `.qdrant-data/` in `.gitignore`
-- [ ] Nessun riferimento a v1.13.6 nel codice o docs
-- [ ] Nessun riferimento a "Fase A" o "Fase C" nel codice (solo implementazione finale)
-  - Files: `.gitignore`, `src/**/*.js`
-  - Verify: grep -r 'v1\.13\.6\|Fase [AC]' src/ && echo "ERROR: stale references found" || echo "OK"
+- README.md
+- GSD-QDRANT-SETUP.md
+- src/**/*.js
+- package.json
+- .gitignore

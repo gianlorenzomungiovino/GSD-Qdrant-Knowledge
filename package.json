@@ -14,10 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "sync-knowledge": "node src/sync-knowledge.js",
-    "start-qdrant": "node scripts/qdrant-cli.js start",
-    "stop-qdrant": "node scripts/qdrant-cli.js stop",
-    "sync": "node scripts/qdrant-cli.js sync"
+    "sync-knowledge": "node src/sync-knowledge.js"
   },
   "keywords": [
     "gsd",
@@ -44,7 +41,6 @@
   "files": [
     "index.js",
     "src/cli.js",
-    "src/embedded-qdrant.js",
     "src/context-analyzer.js",
     "src/gsd-qdrant-mcp/index.js",
     "src/gsd-qdrant-mcp/package.json",
@@ -60,7 +56,6 @@
     "src/hooks/post-commit.bat",
     "src/hooks/post-commit.ps1",
     "src/hooks/post-commit.sh",
-    "scripts/qdrant-cli.js",
     "README.md",
     "GSD-QDRANT-SETUP.md",
     "CHANGELOG.md"

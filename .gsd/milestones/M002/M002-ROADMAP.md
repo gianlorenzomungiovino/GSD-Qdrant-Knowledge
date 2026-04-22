@@ -7,11 +7,11 @@
 - [x] **S01: Implementare Embedding Ibrido (Vettoriale + Testuale)** `risk:low` `depends:[]`
   > After this: La ricerca restituisce risultati più precisi combinando similarità vettoriale e match testuale
 
-- [ ] **S02: S02** `risk:medium` `depends:[]`
+- [x] **S02: S02** `risk:medium` `depends:[]`
   > After this: Qdrant parte automaticamente con il CLI e la dashboard è accessibile via browser
 
-- [ ] **S03: Documentazione e integrazione** `risk:low` `depends:[S02]`
-  > After this: La documentazione è aggiornata e il MCP server è pronto per l'uso
+- [ ] **S03: S03** `risk:low` `depends:[]`
+  > After this: La documentazione è aggiornata con ricerca ibrida, MCP server pronto per l'uso, codice embedded rimosso
 
 ## Boundary Map
 

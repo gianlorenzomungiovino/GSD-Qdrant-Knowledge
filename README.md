@@ -2,6 +2,24 @@
 
 CLI Node.js per creare e sincronizzare una knowledge base semantica di progetto su Qdrant, con retrieving cross-project accessibile da GSD via MCP.
 
+## Prerequisiti
+
+- **Node.js** >= 18
+- **Qdrant** in esecuzione su `localhost:6333`
+
+### Setup Qdrant (Docker)
+
+```bash
+docker run -d \
+  --name qdrant \
+  -p 6333:6333 -p 6334:6334 \
+  qdrant/qdrant
+```
+
+Verifica: `curl http://localhost:6333/healthz` → `"healthz check passed"`
+
+Dashboard: `http://localhost:6333/dashboard`
+
 ## Installazione
 
 ```bash
@@ -96,58 +114,21 @@ Questo permette a GSD di scoprirlo senza scrivere nulla dentro `.gsd/`.
 - i file principali del progetto corrente restano gestiti da GSD
 - il retrieval automatico deve integrare, non duplicare, il contesto locale
 
-## Modalità Embedded
+## Ricerca Ibrida
 
-Questa CLI supporta la modalità embedded di Qdrant, che non richiede Docker.
+La ricerca combina similarità vettoriale e matching testuale sui payload Qdrant per risultati più precisi.
 
-### Differenze rispetto alla modalità Docker
+### Come funziona
 
-| Aspetto | Docker | Embedded |
-|---------|--------|----------|
-| **Requisiti** | Docker installato e in esecuzione | Nessun requisito aggiuntivo |
-| **Installazione** | `docker pull qdrant/qdrant` | Binary scaricato automaticamente |
-| **Storage** | Volume Docker o bind mount | `.qdrant-data/` nella root del progetto |
-| **Avvio** | `docker run -d ...` | `npm run start-qdrant` |
-| **Portata** | Server condiviso tra progetti | Isolato per progetto |
-| **Dashboard** | `http://localhost:6333/dashboard` | `http://localhost:6333/dashboard` |
+1. **Ricerca vettoriale** — similarità cosine sul dense vector (384 dimensioni)
+2. **Scoring lessicale** — TF-lite sui campi `summary` e `source` dei payload
+3. **Fusione ponderata** — `finalScore = vectorScore * 0.65 + lexicalScore * 0.35`
 
-### Comandi
+I pesi sono configurabili via variabili ambiente:
 
 ```bash
-# Avvia l'embedded QDrant
-npm run start-qdrant
-
-# Ferma l'embedded QDrant
-npm run stop-qdrant
-
-# Avvia QDrant (se necessario) ed esegui il sync
-npm run sync
-
-# Verifica lo stato
-node scripts/qdrant-cli.js status
-```
-
-### Verifica
-
-Dopo aver avviato l'embedded QDrant, verifica che la dashboard sia accessibile:
-
-```bash
-open http://localhost:6333/dashboard   # macOS
-start http://localhost:6333/dashboard  # Windows
-xdg-open http://localhost:6333/dashboard  # Linux
-```
-
-Oppure con curl:
-
-```bash
-curl http://localhost:6333/healthz
-```
-
-### Variabili ambiente
-
-```bash
-QDRANT_EMBEDDED_DIR=.qdrant-data    # Directory di storage (default: ./.qdrant-data/)
-QDRANT_EMBEDDED_PORT=6333           # Porta HTTP (default: 6333)
+VECTOR_WEIGHT=0.65   # Default: 0.65
+LEXICAL_WEIGHT=0.35  # Default: 0.35
 ```
 
 ## Compatibilità Windows
