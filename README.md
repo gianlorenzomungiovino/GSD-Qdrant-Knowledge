@@ -96,6 +96,60 @@ Questo permette a GSD di scoprirlo senza scrivere nulla dentro `.gsd/`.
 - i file principali del progetto corrente restano gestiti da GSD
 - il retrieval automatico deve integrare, non duplicare, il contesto locale
 
+## Modalità Embedded
+
+Questa CLI supporta la modalità embedded di Qdrant, che non richiede Docker.
+
+### Differenze rispetto alla modalità Docker
+
+| Aspetto | Docker | Embedded |
+|---------|--------|----------|
+| **Requisiti** | Docker installato e in esecuzione | Nessun requisito aggiuntivo |
+| **Installazione** | `docker pull qdrant/qdrant` | Binary scaricato automaticamente |
+| **Storage** | Volume Docker o bind mount | `.qdrant-data/` nella root del progetto |
+| **Avvio** | `docker run -d ...` | `npm run start-qdrant` |
+| **Portata** | Server condiviso tra progetti | Isolato per progetto |
+| **Dashboard** | `http://localhost:6333/dashboard` | `http://localhost:6333/dashboard` |
+
+### Comandi
+
+```bash
+# Avvia l'embedded QDrant
+npm run start-qdrant
+
+# Ferma l'embedded QDrant
+npm run stop-qdrant
+
+# Avvia QDrant (se necessario) ed esegui il sync
+npm run sync
+
+# Verifica lo stato
+node scripts/qdrant-cli.js status
+```
+
+### Verifica
+
+Dopo aver avviato l'embedded QDrant, verifica che la dashboard sia accessibile:
+
+```bash
+open http://localhost:6333/dashboard   # macOS
+start http://localhost:6333/dashboard  # Windows
+xdg-open http://localhost:6333/dashboard  # Linux
+```
+
+Oppure con curl:
+
+```bash
+curl http://localhost:6333/healthz
+```
+
+### Variabili ambiente
+
+```bash
+QDRANT_EMBEDDED_DIR=.qdrant-data    # Directory di storage (default: ./.qdrant-data/)
+QDRANT_EMBEDDED_PORT=6333           # Porta HTTP (default: 6333)
+```
+
 ## Compatibilità Windows
 
 - hook post-commit: `.bat` / `.ps1`

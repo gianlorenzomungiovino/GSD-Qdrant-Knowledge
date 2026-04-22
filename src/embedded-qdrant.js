@@ -3,6 +3,8 @@
 const { spawn, execFile } = require('child_process');
 const fs = require('fs');
 const http = require('http');
+const https = require('https');
+const zlib = require('zlib');
 const os = require('os');
 const path = require('path');
 
@@ -17,33 +19,33 @@ const BIN_DIR = path.join(process.cwd(), '.gsd', 'bin', 'qdrant');
 // ─── Platform detection ────────────────────────────────────────────────
 
 /**
- * Detect the platform and architecture to determine the correct binary.
- * @returns {{ name: string, platform: string, arch: string }}
+ * Detect the platform and architecture to determine the correct release asset.
+ * @returns {{ archiveName: string, extension: string, binaryName: string, platform: string, arch: string }}
  */
 function detectPlatform() {
   const platform = os.platform(); // 'linux', 'darwin', 'win32'
   const arch = os.arch(); // 'x64', 'arm64', etc.
 
-  let name;
+  let archiveName;
   if (platform === 'linux') {
     if (arch === 'arm64') {
-      name = 'qdrant-static-aarch64-linux';
+      archiveName = 'qdrant-aarch64-unknown-linux-musl.tar.gz';
     } else {
-      name = 'qdrant-static-x86_64-linux';
+      archiveName = 'qdrant-x86_64-unknown-linux-gnu.tar.gz';
     }
   } else if (platform === 'darwin') {
     if (arch === 'arm64') {
-      name = 'qdrant-static-aarch64-apple-darwin';
+      archiveName = 'qdrant-aarch64-apple-darwin.tar.gz';
     } else {
-      name = 'qdrant-static-x86_64-apple-darwin';
+      archiveName = 'qdrant-x86_64-apple-darwin.tar.gz';
     }
   } else if (platform === 'win32') {
-    name = 'qdrant-windows-x86_64';
+    archiveName = 'qdrant-x86_64-pc-windows-msvc.zip';
   } else {
     throw new Error(`Unsupported platform: ${platform} (${arch})`);
   }
 
-  return { name, platform, arch };
+  return { archiveName, extension: archiveName.split('.').pop(), binaryName: getBinaryName(), platform, arch };
 }
 
 /**
@@ -51,8 +53,7 @@ function detectPlatform() {
  * @returns {string}
  */
 function getBinaryName() {
-  const { platform } = detectPlatform();
-  return platform === 'win32' ? 'qdrant.exe' : 'qdrant';
+  return os.platform() === 'win32' ? 'qdrant.exe' : 'qdrant';
 }
 
 // ─── Binary detection ──────────────────────────────────────────────────
@@ -179,17 +180,74 @@ function getNpmGlobalBin() {
   });
 }
 
+// ─── Archive extraction ────────────────────────────────────────────────
+
+/**
+ * Extract a tar.gz archive to the destination directory.
+ * @param {string} archivePath - Path to the tar.gz file
+ * @param {string} destDir - Destination directory
+ * @returns {Promise<void>}
+ */
+function extractTarGz(archivePath, destDir) {
+  return new Promise((resolve, reject) => {
+    const gunzip = zlib.createGunzip();
+    const tar = spawn('tar', ['-xzf', archivePath, '-C', destDir]);
+
+    const input = fs.createReadStream(archivePath);
+    input.pipe(gunzip).pipe(tar.stdin);
+
+    tar.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`tar exited with code ${code}`));
+    });
+
+    tar.stderr.on('data', (chunk) => {
+      // tar stderr is noisy — only log errors
+      const line = chunk.toString().trim();
+      if (line && !line.includes('Cannot utime') && !line.includes('Cannot set access')) {
+        console.error(`[qdrant] tar: ${line}`);
+      }
+    });
+
+    input.on('error', reject);
+    gunzip.on('error', reject);
+  });
+}
+
+/**
+ * Extract a zip archive to the destination directory.
+ * Tries: unzip command → tar command → fallback error.
+ * @param {string} archivePath - Path to the zip file
+ * @param {string} destDir - Destination directory
+ * @returns {Promise<void>}
+ */
+function extractZip(archivePath, destDir) {
+  return new Promise((resolve, reject) => {
+    // Try 'unzip' first (Git Bash, WSL, etc.)
+    execFile('unzip', ['-o', archivePath, '-d', destDir], { timeout: 30000 }, (err) => {
+      if (!err) { resolve(); return; }
+
+      // Fallback: try 'tar' (Windows 10+ built-in tar supports zip)
+      execFile('tar', ['-xf', archivePath, '-C', destDir], { timeout: 30000 }, (err2) => {
+        if (!err2) { resolve(); return; }
+
+        reject(new Error(`Zip extraction failed (unzip: ${err.message}, tar: ${err2.message})`));
+      });
+    });
+  });
+}
+
 // ─── Binary installation ──────────────────────────────────────────────
 
 /**
  * Download and install the qdrant binary for the current platform.
+ * Downloads an archive (tar.gz or zip), extracts it, and places the binary.
  * @returns {Promise<string>} Path to the installed binary
  */
 async function installBinary() {
-  const { name, platform } = detectPlatform();
-  const binName = getBinaryName();
+  const { archiveName, extension, binaryName } = detectPlatform();
   const destDir = BIN_DIR;
-  const destPath = path.join(destDir, binName);
+  const destPath = path.join(destDir, binaryName);
 
   // Check if already installed (idempotent)
   if (isBinaryAvailable(destPath)) {
@@ -200,18 +258,54 @@ async function installBinary() {
   fs.mkdirSync(destDir, { recursive: true });
 
   // Determine download URL
-  const url = `https://github.com/qdrant/qdrant/releases/download/${VERSION}/${name}`;
-
+  const url = `https://github.com/qdrant/qdrant/releases/download/${VERSION}/${archiveName}`;
   console.log(`[qdrant] Downloading ${VERSION} from ${url}`);
 
-  // Stream the download
-  await new Promise((resolve, reject) => {
-    http.get(url, (res) => {
+  // Download the archive to a temp file
+  const tmpArchive = path.join(destDir, `${archiveName}.tmp`);
+  await downloadFile(url, tmpArchive);
+
+  // Extract the archive
+  console.log(`[qdrant] Extracting ${archiveName}...`);
+  if (extension === 'tar.gz') {
+    await extractTarGz(tmpArchive, destDir);
+  } else if (extension === 'zip') {
+    await extractZip(tmpArchive, destDir);
+  } else {
+    throw new Error(`Unknown archive extension: ${extension}`);
+  }
+
+  // Clean up temp file
+  try { fs.unlinkSync(tmpArchive); } catch {}
+
+  // On Unix, ensure the binary is executable
+  if (os.platform() !== 'win32') {
+    try { fs.chmodSync(destPath, 0o755); } catch { /* best effort */ }
+  }
+
+  console.log(`[qdrant] Installed to ${destPath}`);
+  return destPath;
+}
+
+/**
+ * Download a file from a URL and write it to disk.
+ * Follows redirects automatically.
+ * @param {string} url - Download URL (http or https)
+ * @param {string} destPath - Output file path
+ * @returns {Promise<void>}
+ */
+function downloadFile(url, destPath) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const mod = parsed.protocol === 'https:' ? https : http;
+
+    const req = mod.get(url, (res) => {
+      // Handle redirects
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        // Follow redirects
-        http.get(res.headers.location, resolve).on('error', reject);
+        downloadFile(res.headers.location, destPath).then(resolve).catch(reject);
         return;
       }
+
       if (res.statusCode !== 200) {
         reject(new Error(`Download failed: HTTP ${res.statusCode} from ${url}`));
         return;
@@ -222,39 +316,37 @@ async function installBinary() {
 
       file.on('finish', () => {
         file.close();
-        // Ensure executable on Unix
-        if (platform !== 'win32') {
-          try { fs.chmodSync(destPath, 0o755); } catch { /* best effort */ }
-        }
         resolve();
       });
 
       res.on('error', reject);
       file.on('error', reject);
-    }).on('error', reject);
-  });
+    });
 
-  console.log(`[qdrant] Installed to ${destPath}`);
-  return destPath;
+    req.on('error', reject);
+    req.setTimeout(60_000, () => { req.destroy(); reject(new Error('Download timeout (60s)')); });
+  });
 }
 
 // ─── HTTP readiness check ─────────────────────────────────────────────
 
 /**
  * Check if the Qdrant server is ready via its healthz endpoint.
- * @param {string} url - Full URL to check (e.g. http://localhost:6333/healthz)
+ * Qdrant v1.x returns plain text "healthz check passed" on /healthz.
+ * @param {string} baseUrl - Base URL (e.g. http://localhost:6333)
  * @param {number} timeoutMs - Timeout in milliseconds
  * @param {number} intervalMs - Poll interval in milliseconds
- * @returns {Promise<boolean>}
+ * @returns {Promise<void>}
  */
-async function waitForReady(url, timeoutMs = DEFAULT_READY_TIMEOUT, intervalMs = DEFAULT_POLL_INTERVAL) {
+async function waitForReady(baseUrl, timeoutMs = DEFAULT_READY_TIMEOUT, intervalMs = DEFAULT_POLL_INTERVAL) {
+  const healthUrl = `${baseUrl}/healthz`;
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
     try {
-      const ready = await httpGetJson(url);
-      if (ready && ready.status === 'ok') {
-        return true;
+      const body = await httpGetText(healthUrl);
+      if (body && (body.includes('ok') || body.includes('passed'))) {
+        return; // ready
       }
     } catch {
       // Server not ready yet — continue polling
@@ -266,13 +358,31 @@ async function waitForReady(url, timeoutMs = DEFAULT_READY_TIMEOUT, intervalMs =
 }
 
 /**
+ * Make an HTTP GET request and return plain text response.
+ * @param {string} urlString
+ * @returns {Promise<string>} Response body text or empty string on error
+ */
+function httpGetText(urlString) {
+  return new Promise((resolve, reject) => {
+    const req = http.get(urlString, (res) => {
+      let body = '';
+      res.on('data', (chunk) => { body += chunk; });
+      res.on('end', () => {
+        resolve(body);
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(3000, () => { req.destroy(); reject(new Error('HTTP timeout')); });
+  });
+}
+
+/**
  * Make an HTTP GET request and parse JSON response.
  * @param {string} urlString
  * @returns {Promise<object|null>} Parsed JSON or null on connection error
  */
 function httpGetJson(urlString) {
   return new Promise((resolve, reject) => {
-    const parsed = new URL(urlString);
     const req = http.get(urlString, (res) => {
       let body = '';
       res.on('data', (chunk) => { body += chunk; });
@@ -299,6 +409,36 @@ function sleep(ms) {
 }
 
 // ─── EmbeddedQdrant class ─────────────────────────────────────────────
+
+/**
+ * Normalize a path for use in YAML config files.
+ * On Windows, backslashes are YAML escape triggers — convert to forward slashes.
+ * @param {string} p
+ * @returns {string}
+ */
+function yamlSafePath(p) {
+  return p.replace(/\\/g, '/');
+}
+
+/**
+ * Write a minimal Qdrant config file for embedded mode.
+ * @param {string} storageDir - Storage directory path
+ * @param {number} port - HTTP port to listen on
+ * @param {string} configPath - Path to write the config file
+ */
+function writeConfig(storageDir, port, configPath) {
+  const snapshotsPath = yamlSafePath(path.join(storageDir, 'snapshots'));
+  const tmpPath = yamlSafePath(path.join(storageDir, 'tmp'));
+  const content = `storage:
+  storage_path: ${yamlSafePath(storageDir)}
+  snapshots_path: ${snapshotsPath}
+  temp_path: ${tmpPath}
+service:
+  disable_telemetry: true
+  http_port: ${port}
+`;
+  fs.writeFileSync(configPath, content, 'utf8');
+}
 
 /**
  * Manages an embedded Qdrant server process.
@@ -381,10 +521,15 @@ class EmbeddedQdrant {
       }
     }
 
-    // Build command arguments
+    // Create a minimal config file for embedded mode
+    const configDir = path.join(process.cwd(), '.gsd', 'bin', 'qdrant');
+    fs.mkdirSync(configDir, { recursive: true });
+    const configPath = path.join(configDir, 'config.yaml');
+    writeConfig(this.storageDir, this.port, configPath);
+
+    // Build command arguments (new qdrant uses --config-path only; port is in config)
     const args = [
-      '--storage', this.storageDir,
-      '--port', String(this.port),
+      '--config-path', configPath,
     ];
 
     console.log(`[qdrant] Starting: ${binaryPath} ${args.join(' ')}`);
