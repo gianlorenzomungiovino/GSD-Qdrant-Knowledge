@@ -1,11 +1,18 @@
 # M002: Miglioramenti Ricerca e Deployment
 
-## Vision
-Migliorare la precisione della ricerca semantica con embedding ibrido e rendere il tool plug-and-play con Qdrant embedded che include la dashboard browser senza limitazioni rispetto alla versione Docker.
+**Vision:** Migliorare la precisione della ricerca semantica con embedding ibrido e rendere il tool plug-and-play con Qdrant embedded che include la dashboard browser senza limitazioni rispetto alla versione Docker.
 
-## Slice Overview
-| ID | Slice | Risk | Depends | Done | After this |
-|----|-------|------|---------|------|------------|
-| S01 | Ricerca Ibrida: Fase C (weighted fusion) → Valutazione → Fase A (RRF nativo) | low | — | ⬜ | La ricerca restituisce risultati più precisi combinando similarità vettoriale e match testuale, con benchmark documentato |
-| S02 | Qdrant Embedded con Dashboard Browser (v1.17.1) | medium | — | ⬜ | Qdrant parte automaticamente con il CLI e la dashboard è accessibile via browser |
-| S03 | Documentazione e Integrazione Finale | low | S02 | ⬜ | La documentazione è aggiornata, tutti i cambiamenti di M002 sono documentati |
+## Slices
+
+- [x] **S01: Implementare Embedding Ibrido (Vettoriale + Testuale)** `risk:low` `depends:[]`
+  > After this: La ricerca restituisce risultati più precisi combinando similarità vettoriale e match testuale
+
+- [ ] **S02: S02** `risk:medium` `depends:[]`
+  > After this: Qdrant parte automaticamente con il CLI e la dashboard è accessibile via browser
+
+- [ ] **S03: Documentazione e integrazione** `risk:low` `depends:[S02]`
+  > After this: La documentazione è aggiornata e il MCP server è pronto per l'uso
+
+## Boundary Map
+
+Not provided.

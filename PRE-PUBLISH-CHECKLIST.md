@@ -52,6 +52,7 @@ node ./node_modules/gsd-qdrant-knowledge/src/cli.js
 ```
 
 Verifica che vengano creati:
+
 - `gsd-qdrant-knowledge/`
 - `gsd-qdrant-knowledge/.qdrant-sync-state.json`
 - `gsd-qdrant-knowledge/index.js`
@@ -60,6 +61,7 @@ Verifica che vengano creati:
 - `.mcp.json`
 
 Verifica anche che:
+
 - senza `.gsd/` il tool indicizzi comunque il codice
 - con `.gsd/` il tool indicizzi docs + code
 
@@ -76,6 +78,7 @@ node ./node_modules/gsd-qdrant-knowledge/src/gsd-qdrant-mcp/index.js
 Oppure testa tramite client MCP/GSD nel progetto sandbox.
 
 Controlla che:
+
 - la config in `.mcp.json` punti al server giusto
 - il retrieval favorisca contenuti cross-project senza escludere il progetto corrente
 
@@ -86,6 +89,7 @@ node ./node_modules/gsd-qdrant-knowledge/src/cli.js uninstall
 ```
 
 Verifica che rimuova:
+
 - `gsd-qdrant-knowledge/`
 - entry `gsd-qdrant` da `.mcp.json`
 - entry `gsd-qdrant-knowledge/` da `.gitignore`
@@ -97,6 +101,7 @@ npm publish --dry-run
 ```
 
 Controlla che nel payload siano presenti almeno:
+
 - `src/cli.js`
 - `src/auto-retrieve-mcp.js`
 - `src/gsd-qdrant-mcp/index.js`
@@ -105,11 +110,5 @@ Controlla che nel payload siano presenti almeno:
 - `README.md`
 - `GSD-QDRANT-SETUP.md`
 - `CHANGELOG.md`
-
-## 11. Solo a questo punto: publish
-
-```bash
-npm publish
-```
 
 Se durante i test trovi un problema, correggilo e riparti da `npm pack`.
