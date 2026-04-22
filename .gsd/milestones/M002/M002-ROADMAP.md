@@ -6,6 +6,6 @@ Migliorare la precisione della ricerca semantica con embedding ibrido e rendere 
 ## Slice Overview
 | ID | Slice | Risk | Depends | Done | After this |
 |----|-------|------|---------|------|------------|
-| S01 | Implementare Embedding Ibrido (Vettoriale + Testuale) | low | — | ✅ | La ricerca restituisce risultati più precisi combinando similarità vettoriale e match testuale |
-| S02 | Qdrant Embedded con Dashboard Browser | medium | — | ⬜ | Qdrant parte automaticamente con il CLI e la dashboard è accessibile via browser |
-| S03 | Documentazione e integrazione | low | S02 | ⬜ | La documentazione è aggiornata e il MCP server è pronto per l'uso |
+| S01 | Ricerca Ibrida: Fase C (weighted fusion) → Valutazione → Fase A (RRF nativo) | low | — | ⬜ | La ricerca restituisce risultati più precisi combinando similarità vettoriale e match testuale, con benchmark documentato |
+| S02 | Qdrant Embedded con Dashboard Browser (v1.17.1) | medium | — | ⬜ | Qdrant parte automaticamente con il CLI e la dashboard è accessibile via browser |
+| S03 | Documentazione e Integrazione Finale | low | S02 | ⬜ | La documentazione è aggiornata, tutti i cambiamenti di M002 sono documentati |
