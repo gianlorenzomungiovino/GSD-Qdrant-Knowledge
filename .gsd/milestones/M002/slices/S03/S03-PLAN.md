@@ -70,7 +70,7 @@ Must-Haves:
   - Files: `src/**/*.js`, `package.json`, `.gitignore`
   - Verify: ls src/embedded-qdrant.js scripts/qdrant-cli.js 2>&1 | grep -c 'No such file' && echo 'OK: embedded files removed'
 
-- [ ] **T04: Aggiornare DECISIONS.md** `est:30m`
+- [x] **T04: Aggiornare DECISIONS.md** `est:30m`
   Documentare la decisione di implementare caching con LRUCache (o altra libreria scelta)
   - Verify: Verifica che la decisione sia documentata
 
