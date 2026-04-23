@@ -40,7 +40,8 @@ tmp/
 
 
 
-gsd-qdrant-knowledge/
 
 # ── GSD baseline (auto-generated) ──
 .mcp.json
+
+gsd-qdrant-knowledge/

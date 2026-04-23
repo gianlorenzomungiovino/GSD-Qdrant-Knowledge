@@ -21,6 +21,9 @@ async function main() {
   } else if (action === 'setup') {
     await sync.ensureCollection(sync.collectionName);
     console.log(`✅ Collection '${sync.collectionName}' is ready`);
+    console.log('🔄 Running initial full sync with orphan cleanup...');
+    const summary = await sync.syncToGsdMemory();
+    console.log(`✅ Initial sync complete! Indexed: ${summary.total}, Deleted orphans: ${summary.deleted}`);
   } else {
     await sync.syncToGsdMemory();
   }

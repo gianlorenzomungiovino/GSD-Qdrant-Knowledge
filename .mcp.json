@@ -17,7 +17,7 @@
     "gsd-qdrant": {
       "command": "node",
       "args": [
-        "C:\\nvm4w\\nodejs\\node_modules\\gsd-qdrant-knowledge\\src\\gsd-qdrant-mcp\\index.js"
+        "C:\\Users\\Gianlorenzo\\AppData\\Local\\nvm\\v22.13.1\\node_modules\\gsd-qdrant-knowledge\\src\\gsd-qdrant-mcp\\index.js"
       ],
       "cwd": ".",
       "env": {

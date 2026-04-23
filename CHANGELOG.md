@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.2.0
+
+### Added
+
+- **QDrant health check before sync**: Bootstrap now runs `ensureQdrantRunning()` which hits `/healthz` before attempting sync. Provides clear error message with Docker command if QDrant is not available, and accepts `QDRANT_URL` environment variable override.
+- **Environment propagation during sync**: `spawnSync` for the sync script now passes `env: { ...process.env }` instead of inheriting implicitly, ensuring `QDRANT_URL` and `COLLECTION_NAME` are available to the sync process.
+- **Hybrid search documentation**: README.md and GSD-QDRANT-SETUP.md updated with Docker setup instructions, standalone QDrant installation, and hybrid search explanation (vector cosine + lexical TF-lite, weighted fusion).
+- **QDrant v1.17.1 compatibility**: M002 roadmap updated for Qdrant client v1.17.1, with new S03 documentation slice.
+- **Pre-publish checklist cleanup**: Removed step 11 (publish command) from checklist — publish is now a manual action the user runs separately.
+
+### Changed
+
+- **M002 roadmap restructured**: Hybrid search approach changed from C→A, with updated slice plans and new S03 documentation slice.
+
+### Removed
+
+- **Embedded QDrant experiment**: `src/embedded-qdrant.js` and `scripts/qdrant-cli.js` were created and then removed during the branch exploration. The final approach keeps Docker-based QDrant as the only deployment option.
+
 ## 2.1.9
 
 ### Fixed
@@ -8,7 +26,7 @@
 
 ### Removed
 
-- **Dead code cleanup**: Removed orphaned and unused methods from `GSDKnowledgeSync`:
+- **Dead code cleanup**: Removed orphaned and unused methods from `GSDKnowledgeSync`:non hffff
   - `findRelevantDocsForSnippet` (buggy: iterated `docIndex.allDocs` on an array, never called)
   - `buildSnippetText` (never called)
   - `indexFile` (never called, also referenced undefined `metadata`)

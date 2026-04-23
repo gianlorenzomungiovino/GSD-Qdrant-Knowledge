@@ -78,8 +78,10 @@ class GSDKnowledgeSync {
     return summary;
   }
 
-  indexedFileKey(relPath) {
-    return `indexed_${relPath.replace(/\//g, '_').replace(/\\/g, '_')}`;
+  indexedFileKey(type, relPath) {
+    // Use a delimiter that cannot appear in filesystem paths (ASCII 0x01)
+    // This avoids ambiguity when paths contain underscores (e.g. src/gsd_qdrant_mcp/index.js)
+    return `indexed_${type}\x01${relPath}`;
   }
 
   async syncToGsdMemory() {
@@ -95,7 +97,8 @@ class GSDKnowledgeSync {
     let collectionEmpty = false;
     try {
       const countResult = await this.client.count(this.collectionName);
-      if (countResult.total === 0) {
+      const total = countResult.count ?? countResult.total ?? 0;
+      if (total === 0) {
         console.log('  ⚠️  Collection is empty — forcing full re-index');
         collectionEmpty = true;
       }
@@ -128,13 +131,13 @@ class GSDKnowledgeSync {
       seenIds.add(relPath);
       
       // Check if already indexed
-      if (syncState[this.indexedFileKey(relPath)]?.hash === hash) continue;
+      if (syncState[this.indexedFileKey('doc', relPath)]?.hash === hash) continue;
       
       const payload = await this.buildDocPayload(filePath, content, relPath, content);
       const vector = await this.embedText(this.buildDocText(relPath, content, payload));
       
       await this.client.upsert(this.collectionName, { points: [{ id, vector: { [this.vectorName]: vector }, payload }] });
-      syncState[this.indexedFileKey(relPath)] = { path: relPath, hash };
+      syncState[this.indexedFileKey('doc', relPath)] = { path: relPath, type: 'doc', hash };
       updated += 1;
     }
     
@@ -147,17 +150,24 @@ class GSDKnowledgeSync {
       seenIds.add(relPath);
       
       // Check if already indexed
-      if (syncState[this.indexedFileKey(relPath)]?.hash === hash) continue;
+      if (syncState[this.indexedFileKey('code', relPath)]?.hash === hash) continue;
       
       const payload = await this.buildCodePayload(filePath, content, relPath, docIndex);
       const vector = await this.embedText(this.buildCodeText(relPath, content, payload));
       
       await this.client.upsert(this.collectionName, { points: [{ id, vector: { [this.vectorName]: vector }, payload }] });
-      syncState[this.indexedFileKey(relPath)] = { path: relPath, hash };
+      syncState[this.indexedFileKey('code', relPath)] = { path: relPath, type: 'code', hash };
       updated += 1;
     }
     
-    const deleted = await this.deleteMissingPoints(seenIds, syncState);
+    let deleted = await this.deleteMissingPoints(seenIds, syncState);
+    
+    // Second pass: scan all points in the collection for this project and delete any
+    // that no longer have a corresponding file on disk. This catches orphans whose
+    // syncState entry was lost (corrupted state, manual file deletion, etc.).
+    const staleOrphans = await this.deleteStaleProjectPoints(seenIds);
+    deleted += staleOrphans;
+    
     syncState.lastSync = new Date().toISOString();
     await this.saveSyncState(syncState);
     
@@ -282,25 +292,132 @@ class GSDKnowledgeSync {
   }
   async upsertPoint(collection, point) { await this.client.upsert(collection, { points: [point] }); }
   async deleteMissingPoints(seenIds, syncState) {
-    const deletedIds = Object.keys(syncState).filter((key) => {
-      // Protect reserved keys that are not file indices
-      if (key === 'lastSync' || key === 'indexed') return false;
-      // This is a file index key (indexed_<path>), check if file still exists
-      // Transform path the same way indexedFileKey does: replace slashes with underscores
-      // Need to try both forward and backward slashes since we lost that info
-      const relPath = key.replace('indexed_', '').replace(/_/g, '\\');
-      const relPathAlt = key.replace('indexed_', '').replace(/_/g, '/');
-      return !seenIds.has(relPath) && !seenIds.has(relPathAlt);
-    });
-    if (deletedIds.length) {
-      const pointsToDelete = deletedIds.map((key) => {
-        const relPath = key.replace('indexed_', '');
-        return this.makePointId(relPath);
-      });
-      await this.client.delete(this.collectionName, { points: pointsToDelete });
-      for (const id of deletedIds) delete syncState[id];
+    // Collect entries to delete — use stored path and type directly instead of
+    // reverse-engineering from the key (which was ambiguous with underscore-encoded paths)
+    const candidates = [];
+    
+    for (const [key, entry] of Object.entries(syncState)) {
+      // Skip reserved keys
+      if (key === 'lastSync') continue;
+      if (!key.startsWith('indexed_')) continue;
+      
+      // Skip malformed entries (legacy format without type)
+      const relPath = entry.path;
+      const type = entry.type;
+      if (!relPath || !type) {
+        // Legacy entry — try to repair by removing it (orphaned data)
+        delete syncState[key];
+        continue;
+      }
+      
+      if (!seenIds.has(relPath)) {
+        candidates.push({ key, relPath, type });
+      }
     }
-    return deletedIds.length;
+    
+    if (candidates.length === 0) return 0;
+    
+    // Before deleting, verify these points actually belong to this project.
+    // This prevents cross-project collisions when two projects share the same
+    // file path (e.g., both have src/cli.js) but different content.
+    const candidateIds = new Set(candidates.map(({ relPath, type }) => 
+      this.makePointId(type, relPath)
+    ));
+    
+    // Scroll points for this project only and find which candidates actually exist
+    let pointsToDelete = [];
+    let hasMore = true;
+    while (hasMore) {
+      const scrollResult = await this.client.scroll(this.collectionName, {
+        limit: 200,
+        with_payload: ['project_id', 'source', 'type'],
+        with_vector: false,
+        scroll_filter: {
+          must: [
+            { key: 'project_id', match: { value: this.projectName } }
+          ]
+        }
+      });
+      
+      for (const point of scrollResult.points) {
+        if (!candidateIds.has(point.id)) continue;
+        // Verify project_id matches as a safety net
+        if (point.payload?.project_id !== this.projectName) continue;
+        pointsToDelete.push(point.id);
+      }
+      
+      if (scrollResult.points.length < 200) hasMore = false;
+    }
+    
+    if (pointsToDelete.length > 0) {
+      await this.client.delete(this.collectionName, { points: pointsToDelete });
+      console.log(`  🗑️  Deleted ${pointsToDelete.length} orphaned point(s) from project '${this.projectName}'`);
+    }
+    
+    // Always clean up syncState for candidates we attempted to delete
+    for (const { key } of candidates) delete syncState[key];
+    
+    return pointsToDelete.length;
+  }
+
+  /**
+   * Second-pass orphan cleanup: scan points belonging to THIS project only and delete any
+   * that no longer have a corresponding file on disk.
+   * Filters by project_id so other projects' points are never touched.
+   */
+  async deleteStaleProjectPoints(seenIds) {
+    let deleted = 0;
+    const BATCH_SIZE = 50;
+    
+    // Scroll only points belonging to this project via Qdrant filter
+    let hasMore = true;
+    while (hasMore) {
+      const scrollResult = await this.client.scroll(this.collectionName, {
+        limit: BATCH_SIZE,
+        with_payload: ['project_id', 'source', 'type'],
+        with_vector: false,
+        scroll_filter: {
+          must: [
+            {
+              key: 'project_id',
+              match: { value: this.projectName }
+            }
+          ]
+        }
+      });
+      
+      if (scrollResult.points.length === 0) {
+        hasMore = false;
+        break;
+      }
+      
+      const pointsToDelete = [];
+      for (const point of scrollResult.points) {
+        // Double-check project_id as a safety net
+        if (point.payload?.project_id !== this.projectName) continue;
+        
+        const relPath = point.payload?.source;
+        const type = point.payload?.type;
+        if (!relPath || !type) continue;
+        
+        // If the file is still on disk, skip it
+        if (seenIds.has(relPath)) continue;
+        
+        pointsToDelete.push(point.id);
+      }
+      
+      if (pointsToDelete.length > 0) {
+        await this.client.delete(this.collectionName, { points: pointsToDelete });
+        deleted += pointsToDelete.length;
+        console.log(`  🗑️  Deleted ${pointsToDelete.length} stale point(s) from project '${this.projectName}'`);
+      }
+      
+      if (scrollResult.points.length < BATCH_SIZE) {
+        hasMore = false;
+      }
+    }
+    
+    return deleted;
   }
 
   inferType(filePath, content) {
@@ -507,7 +624,7 @@ class GSDKnowledgeSync {
     ...[...content.matchAll(/(?:function|class|const)\s+([A-Za-z_][\w$]*)/g)].slice(0, 20).map((m) => m[1]),
   ])]; const scope = this.detectScope(relPath); const workspace = relPath.split('/')[0] || '.'; const name = symbolNames[0] || baseName; let kindDetail = scope; if (/\.tsx?$/.test(filePath) && /<[A-Z][A-Za-z0-9]*/.test(content)) kindDetail = 'react-component'; else if (scope === 'api') kindDetail = 'api-module'; else if (scope === 'script') kindDetail = 'script'; else if (/use[A-Z]/.test(name)) kindDetail = 'hook'; return { name, symbolNames, exports: [...new Set([...exportMatches, ...commonJsExports])], imports: [...new Set(importMatches)].slice(0, 50), workspace, kindDetail }; }
   generatePlaceholderEmbedding(content) { const hash = crypto.createHash('md5').update(content).digest('hex'); const vector = new Array(this.embeddingDimensions).fill(0); for (let i = 0; i < this.embeddingDimensions; i++) { const startIdx = (i * 4) % hash.length; const hashPart = hash.substring(startIdx, startIdx + 4) || hash.substring(0, 4); vector[i] = parseInt(hashPart, 16) / 0xffff; } const norm = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0)); if (norm > 0 && !Number.isNaN(norm)) for (let i = 0; i < this.embeddingDimensions; i++) vector[i] /= norm; return vector; }
-  makePointId(kind, relPath) { return parseInt(crypto.createHash('md5').update(`${kind}:${relPath}`).digest('hex').substring(0, 8), 16); }
+  makePointId(kind, relPath) { return parseInt(crypto.createHash('md5').update(`${this.projectName}\x01${kind}:${relPath}`).digest('hex').substring(0, 8), 16); }
   hashContent(content) { return crypto.createHash('md5').update(content).digest('hex'); }
   toProjectRelative(filePath) { return relative(PROJECT_ROOT, filePath).replace(/\\/g, '/'); }
   async loadSyncState() {
@@ -515,7 +632,7 @@ class GSDKnowledgeSync {
       const content = await fs.readFile(STATE_FILE, 'utf8');
       return JSON.parse(content);
     } catch (_) {
-      return { lastSync: null, indexed: {} };
+      return { lastSync: null };
     }
   }
   async saveSyncState(state) {
