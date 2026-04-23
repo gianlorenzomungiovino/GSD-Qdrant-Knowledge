@@ -11,11 +11,11 @@ Un agent che reinventa la ruota ogni volta che cambia progetto? Non più. Questo
 ## Come funziona
 
 ```
-┌──────────────┐     sync      ┌─────────────┐
-│  .gsd/*.md   │ ──────────►   │             │
-│  codice src  │   post-commit  │  Qdrant     │
-│  (tutti i    │                │  gsd_memory │
-│   progetti)  │ ◄────────────  │  collection │
+┌──────────────┐     sync        ┌─────────────┐
+│  .gsd/*.md   │ ──────────►     │             │
+│  codice src  │   post-commit   │  Qdrant     │
+│  (tutti i    │                 │  gsd_memory │
+│   progetti)  │ ◄────────────   │  collection │
 └──────────────┘   auto-retrieve └─────────────┘
                           │
                           ▼
