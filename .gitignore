@@ -7,9 +7,6 @@ Thumbs.db
 __pycache__/
 *.pyc
 
-# ── Qdrant data directory (not committed) ──
-.qdrant-data/
-
 # ── GSD baseline (auto-generated) ──
 .gsd
 .gsd-id
@@ -44,4 +41,8 @@ tmp/
 # ── GSD baseline (auto-generated) ──
 .mcp.json
 
+
 gsd-qdrant-knowledge/
+
+# ── Checklist pre-pubblicazione (locale) ──
+PRE-PUBLISH-CHECKLIST.md
