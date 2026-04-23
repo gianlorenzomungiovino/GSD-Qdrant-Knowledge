@@ -1,138 +1,128 @@
 # gsd-qdrant-knowledge
 
-CLI Node.js per creare e sincronizzare una knowledge base semantica di progetto su Qdrant, con retrieving cross-project accessibile da GSD via MCP.
+**Knowledge base semantica cross-project per AI coding agents.**
 
-## Prerequisiti
+Un agent che reinventa la ruota ogni volta che cambia progetto? Non più. Questo tool indicizza automaticamente `.gsd/` e codice sorgente in una collection Qdrant unificata, poi fa retrieving di contesto rilevante da _altri progetti_ — con scoring intelligente che premia contenuti riutilizzabili e cross-project.
 
-- **Node.js** >= 18
-- **Qdrant** in esecuzione su `localhost:6333`
+**E non serve mai ricordare di cercarlo.** L'hook inietta contesto rilevante prima di ogni risposta, automaticamente. Zero query manuali. **E zero tokens sprecati a reinventare soluzioni che esistono già.**
 
-### Setup Qdrant (Docker)
+---
 
-```bash
-docker run -d \
-  --name qdrant \
-  -p 6333:6333 -p 6334:6334 \
-  qdrant/qdrant
+## Come funziona
+
+```
+┌──────────────┐     sync      ┌─────────────┐
+│  .gsd/*.md   │ ──────────►   │             │
+│  codice src  │   post-commit  │  Qdrant     │
+│  (tutti i    │                │  gsd_memory │
+│   progetti)  │ ◄────────────  │  collection │
+└──────────────┘   auto-retrieve └─────────────┘
+                          │
+                          ▼
+              Risultati con relevance_score
+              (0.92 — 0.99 per match forti)
 ```
 
-Verifica: `curl http://localhost:6333/healthz` → `"healthz check passed"`
+1. **Sync automatico** — dopo ogni commit locale, `.gsd/` e il codice vengono indicizzati in `gsd_memory`, una collection condivisa tra tutti i progetti
+2. **Codice analizzato in profondità** — estrazione di signatures, JSDoc, commenti, GSD IDs, link bidirezionali con la documentazione
+3. **Ricerca boostata** — vector cosine + lexical TF-lite + boosting per contenuti riutilizzabili e cross-project
+4. **Auto-retrieve hook** — inietta contesto rilevante prima di ogni risposta, senza che l'agent debba ricordarsi di cercarlo
 
-Dashboard: `http://localhost:6333/dashboard`
+## Auto-retrieve: il contesto arriva da solo
 
-## Installazione
+**Nessun altro tool inietta automaticamente contesto cross-project nel flusso dell'agent.**
 
-```bash
-npm install gsd-qdrant-knowledge
+L'hook intercetta ogni richiesta utente, chiama `auto_retrieve()` nel server MCP, filtra per soglia di rilevanza e inietta il contesto nel payload. L'agent vede solo il risultato — zero overhead.
+
+### Risparmio tokens
+
+| Cosa                   | Senza hook                             | Con hook                                    |
+| ---------------------- | -------------------------------------- | ------------------------------------------- |
+| **Chi chiama il tool** | L'agent (via KNOWLEDGE.md)             | L'hook (trasparente)                        |
+| **Tokens nel prompt**  | Input tool call + output risultati     | Solo la richiesta dell'utente               |
+| **Reasoning**          | L'agent ragiona al buio su cosa esiste | L'agent vede subito il contesto disponibile |
+| **Fiducia**            | A volte ricorda di cercare, a volte no | Contesto sempre consistente                 |
+
+Un'agent senza contesto cross-project tende a riscrivere pattern che esistono già. Ogni riga di codice riscritta da zero è un token sprecato.
+
+## Features
+
+| Feature                        | Dettaglio                                                                                                                                                                                |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ⚡ **Auto-retrieve hook**      | **★ Unique** — Iniezione automatica di contesto prima di ogni risposta. Zero query manuali, zero tokens sprecati a reinventare                                                           |
+| 🌐 **Cross-project retrieval** | Collection unificata `gsd_memory` — tutti i progetti condividono la stessa knowledge base                                                                                                |
+| 🔍 **Hybrid matching**         | Vector cosine (semantico) + lexical TF-lite (nomi, pattern) — i risultati più pertinenti arrivano primi                                                                                  |
+| 📊 **Scoring intelligente**    | Boost per contenuti `reusable` (+0.08), cross-project (+0.12), importanza e recency — i match forti superano 0.95                                                                        |
+| 🔗 **Doc↔Code linking**        | **★ Unique** — ogni snippet ha `relatedDocPaths` e `relatedDocIds`: il codice sa quali docs gli appartengono, e i docs sanno quali code file citano. Retrieval contestuale bidirezionale |
+| 💻 **Smart code indexing**     | Estrae signatures, JSDoc, comments, exports, imports, GSD IDs, language scope — il codice è indicizzato come lo leggono gli agent                                                        |
+| 🔄 **Auto-sync**               | Hook `post-commit` sincronizza automaticamente. Health check su Qdrant prima di ogni sync. Zero configurazione manuale                                                                   |
+| ⚡ **Zero config**             | Un comando: `gsd-qdrant-knowledge`. Bootstrap, collection, MCP registration, hook — tutto automatico                                                                                     |
+
+## Scoring
+
+| Range           | Significato                                                        |
+| --------------- | ------------------------------------------------------------------ |
+| **0.95 – 0.99** | Match eccellente — vettoriale forte + boost cross-project/reusable |
+| **0.90 – 0.94** | Match forte — buon embedding + boosting applicato                  |
+| **0.80 – 0.89** | Match buono — rilevante ma boosting limitato                       |
+| **0.70 – 0.79** | Rilevante — contesto utile ma non ottimale                         |
+| **< 0.70**      | Debole — verificare la query                                       |
+
+Il boosting premia contenuti riutilizzabili, cross-project, e documenti ad alta importanza (`STATE.md`, `REQUIREMENTS.md`, `DECISIONS.md`).
+
+## Esempio di output
+
+```
+=== CONTESTO DA MEMORIA CROSS-PROJECT ===
+Task: "implementare autenticazione JWT"
+Trovati 3 risultati rilevanti:
+
+• [doc] Authentication middleware pattern
+  Score: 0.967 | Source: auth-middleware/DECISIONS.md
+  Match type: semantic
+
+• [code] JWT auth module with refresh tokens
+  Score: 0.942 | Source: payment-service/src/auth/jwt.js
+  Match type: semantic
+  relatedDocPaths: [auth-middleware/DECISIONS.md]
+
+• [doc] Security decisions and patterns
+  Score: 0.918 | Source: api-gateway/DECISIONS.md
+  Match type: semantic
 ```
 
-## Obiettivo
+## Architettura
 
-Rendere naturale una richiesta come: "prendi il componente X dal progetto Y e applicalo qui".
-
-**Architettura V2:**
-
-- **Single collection `gsd_memory`**: tutti i progetti condividono la stessa collection Qdrant
-- **Type-based classification**: punti classificati come `doc` (`.gsd`) o `code`
-- **Cross-project priority**: il retrieval favorisce contenuti cross-project e `reusable`, senza escludere il progetto corrente
-- **GSD = source of truth**: i file `.gsd` locali restano il riferimento principale del progetto corrente
-- **Qdrant = enhancer**: memoria condivisa tra progetti, non sostituzione del contesto locale GSD
-
-## Setup
-
-```bash
-gsd-qdrant-knowledge
+```
+gsd_memory (single Qdrant collection)
+├── type: doc          → .gsd/*.md (STATE.md escluso)
+└── type: code         → src/**/*.js,ts,py,go,...
+    ├── signatures, comments, exports, imports
+    └── relatedDocPaths → docs collegati (GSD IDs matching)
 ```
 
-Il comando crea o aggiorna automaticamente:
+**Link bidirezionale docs ↔ code:** durante l'indicizzazione, il tool estrae i GSD IDs (M001, S02, T03…) da ogni file. Se uno snippet di codice cita `M003/S01/` e un doc contiene gli stessi IDs, il link viene creato automaticamente.
 
-- `gsd-qdrant-knowledge/`
-- `gsd-qdrant-knowledge/.qdrant-sync-state.json`
-- `gsd-qdrant-knowledge/index.js`
-- `gsd-qdrant-knowledge/auto-retrieve-mcp.js`
-- `gsd-qdrant-knowledge/mcp.json`
-- `.mcp.json` nella root del progetto con la registrazione del server MCP `gsd-qdrant`
-- `.git/hooks/post-commit*` per auto-sync
+- **GSD = source of truth** — i file `.gsd/` del progetto corrente restano gestiti localmente
+- **Qdrant = enhancer** — memoria condivisa tra progetti, non sostituzione del contesto locale
+- **Nessuna scrittura dentro `.gsd/`** — il tool rispetta i flussi nativi di GSD
 
-Il tool evita di scrivere dentro `.gsd/` per non confondere i flussi gestiti nativamente da GSD.
-
-## Uninstall
+## CLI
 
 ```bash
-gsd-qdrant-knowledge uninstall
+gsd-qdrant-knowledge                        # Bootstrap completo
+gsd-qdrant-knowledge context "query"        # Query manuale
+gsd-qdrant-knowledge uninstall              # Rimuove gli artifact
 ```
 
-Rimuove:
+Installazione completa: **[GSD-QDRANT-SETUP.md](GSD-QDRANT-SETUP.md)**
 
-- `gsd-qdrant-knowledge/`
-- la registrazione `gsd-qdrant` da `.mcp.json`
-- l'entry `gsd-qdrant-knowledge/` da `.gitignore`
+## Integrazione
 
-## Auto-sync su Git Commit
+Il tool espone un **MCP server** (`gsd-qdrant-mcp`) con lo strumento `auto_retrieve`. Attualmente integrato con **GSD/pi** tramite hook `before_provider_request`, l'architettura è agnostica e può essere adattata ad altri agent.
 
-L'hook `post-commit` esegue il sync automatico dopo ogni commit locale.
+Durante il bootstrap, il progetto registra automaticamente il server in `.mcp.json` — nessuna configurazione manuale richiesta.
 
-Per un sync immediato dopo modifiche non committate, usa di nuovo:
+---
 
-```bash
-gsd-qdrant-knowledge
-```
-
-## Comandi
-
-```bash
-gsd-qdrant-knowledge
-gsd-qdrant-knowledge context "query"
-gsd-qdrant-knowledge uninstall
-```
-
-## Variabili ambiente
-
-```bash
-QDRANT_URL=http://localhost:6333
-COLLECTION_NAME=gsd_memory
-VECTOR_NAME=fast-all-minilm-l6-v2
-EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
-EMBEDDING_DIMENSIONS=384
-```
-
-## MCP server
-
-Il pacchetto espone il server MCP:
-
-```bash
-gsd-qdrant-mcp
-```
-
-Durante il setup, il progetto registra in `.mcp.json` un server chiamato `gsd-qdrant`.
-Questo permette a GSD di scoprirlo senza scrivere nulla dentro `.gsd/`.
-
-## Filosofia
-
-- **GSD** gestisce il contesto locale del progetto corrente
-- **Qdrant** abilita knowledge sharing cross-project
-- i file principali del progetto corrente restano gestiti da GSD
-- il retrieval automatico deve integrare, non duplicare, il contesto locale
-
-## Ricerca Ibrida
-
-La ricerca combina similarità vettoriale e matching testuale sui payload Qdrant per risultati più precisi.
-
-### Come funziona
-
-1. **Ricerca vettoriale** — similarità cosine sul dense vector (384 dimensioni)
-2. **Scoring lessicale** — TF-lite sui campi `summary` e `source` dei payload
-3. **Fusione ponderata** — `finalScore = vectorScore * 0.65 + lexicalScore * 0.35`
-
-I pesi sono configurabili via variabili ambiente:
-
-```bash
-VECTOR_WEIGHT=0.65   # Default: 0.65
-LEXICAL_WEIGHT=0.35  # Default: 0.35
-```
-
-## Compatibilità Windows
-
-- hook post-commit: `.bat` / `.ps1`
-- path separatori uniformati
-- bootstrap compatibile con install locale e da pacchetto npm
+**Link utili:** [Setup completo](GSD-QDRANT-SETUP.md) · [Changelog](CHANGELOG.md)

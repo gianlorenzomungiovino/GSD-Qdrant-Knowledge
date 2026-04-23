@@ -2,6 +2,10 @@
 
 Guida rapida al setup locale della CLI e di Qdrant.
 
+> **Panoramica completa del tool e delle features:** [README.md](README.md)
+
+---
+
 ## 1. Installa la CLI
 
 Da npm:
@@ -59,6 +63,8 @@ Il comando:
 - registra il server MCP `gsd-qdrant` in `.mcp.json` nella root del progetto
 - crea/valida la collection unificata `gsd_memory`
 - sincronizza `.gsd/` e il codice del progetto
+- configura l'hook `post-commit` per auto-sync
+- scrive le istruzioni auto-retrieve in `.gsd/KNOWLEDGE.md`
 
 ## 4. Verifica rapida
 
@@ -82,16 +88,13 @@ cat .mcp.json
 
 La root `.mcp.json` è usata solo come punto standard di discovery per GSD. Gli asset del tool restano dentro `gsd-qdrant-knowledge/`.
 
-## 5. Retrieval contestuale
+## 5. Query manuale
 
 ```bash
 gsd-qdrant-knowledge context "query"
 ```
 
-Il retrieval automatico via MCP:
-- favorisce contenuti cross-project
-- premia contenuti `reusable`
-- non esclude il progetto corrente
+Per come funziona il retrieval automatico (auto-retrieve hook, scoring, link bidirezionali): [README.md](README.md)
 
 ## 6. Uninstall
 
@@ -101,20 +104,16 @@ gsd-qdrant-knowledge uninstall
 
 Rimuove gli artifact del tool dal progetto senza toccare `.gsd/`.
 
-## Stato del flusso (V2.0.7)
+## Variabili ambiente
 
-### Core features
-- tool project-wide
-- collection unificata `gsd_memory`
-- classificazione `doc` / `code`
-- GSD resta il source of truth per il progetto corrente
-- Qdrant resta un enhancer per la memoria condivisa
-
-### Integrazione MCP
-- server MCP `gsd-qdrant`
-- registrazione automatica in `.mcp.json`
-- nessuna scrittura dentro `.gsd/`
+| Variabile | Default | Descrizione |
+|---|---|---|
+| `QDRANT_URL` | `http://localhost:6333` | URL del server Qdrant |
+| `COLLECTION_NAME` | `gsd_memory` | Nome della collection unificata |
+| `VECTOR_NAME` | `fast-all-minilm-l6-v2` | Nome del vettore nella collection |
+| `EMBEDDING_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` | Modello per le embedding |
+| `EMBEDDING_DIMENSIONS` | `1024` | Dimensione del vettore |
 
 ## Versione
 
-Versione target: `2.0.7`
+Versione target: `2.2.0`
