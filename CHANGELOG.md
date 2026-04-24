@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.1
+
+### Fixed
+
+- **Uninstall cancellava tutti i punti della collection, non solo quelli del progetto corrente**: Il parametro `scroll_filter` passato a `/points/scroll` era ignorato da Qdrant (il parametro corretto è `filter`). Senza filtro server-side, lo scroll restituiva **tutti** i punti della collection e l'uninstall cancellava anche i dati di altri progetti. Sostituito `scroll_filter` con `filter` in tutti e tre i metodi: `deleteAllProjectPoints()`, `deleteMissingPoints()`, `deleteStaleProjectPoints()`.
+- **Aggiunto cleanup Qdrant durante uninstall**: Il comando `gsd-qdrant-knowledge uninstall` ora cancella esplicitamente tutti i punti Qdrant del progetto prima di rimuovere gli artifact locali. In precedenza l'uninstall non toccava affatto la collection, lasciando dati orfani che potevano essere cancellati in modo errato dai successivi sync.
+- **Setup hanging dopo completamento**: `setup-from-templates.js` non chiamava più `process.exit()` dopo il completamento asincrono, causando un terminale apparentemente bloccato. Aggiunto `.then(() => process.exit(0))` per uscita pulita.
+
 ## 2.2.0
 
 ### Added

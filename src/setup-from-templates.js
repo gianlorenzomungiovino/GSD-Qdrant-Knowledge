@@ -111,7 +111,9 @@ async function setup() {
   console.log(`   Collection '${COLLECTION_NAME}' is ready for unified indexing.`);
 }
 
-setup().catch((err) => {
-  console.error('❌ Setup failed:', err.message);
-  process.exit(1);
-});
+setup()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error('❌ Setup failed:', err.message);
+    process.exit(1);
+  });

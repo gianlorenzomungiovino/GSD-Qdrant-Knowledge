@@ -196,6 +196,45 @@ class GSDKnowledgeSync {
     return filtered.map((hit) => ({ score: hit.score, ...hit.payload }));
   }
 
+  /**
+   * Delete ALL points belonging to this project from the collection.
+   * Uses server-side filter so only points with matching project_id are ever fetched.
+   * Called during uninstall to clean up Qdrant before removing local artifacts.
+   */
+  async deleteAllProjectPoints() {
+    let deleted = 0;
+    const BATCH_SIZE = 100;
+
+    let hasMore = true;
+    while (hasMore) {
+      const scrollResult = await this.client.scroll(this.collectionName, {
+        limit: BATCH_SIZE,
+        with_payload: false,
+        with_vector: false,
+        filter: {
+          must: [
+            { key: 'project_id', match: { value: this.projectName } }
+          ]
+        }
+      });
+
+      if (scrollResult.points.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      const pointIds = scrollResult.points.map(p => p.id);
+      await this.client.delete(this.collectionName, { points: pointIds });
+      deleted += pointIds.length;
+
+      if (scrollResult.points.length < BATCH_SIZE) {
+        hasMore = false;
+      }
+    }
+
+    return deleted;
+  }
+
   startWatcher() { console.log('👀 Watch mode not implemented yet. Run `gsd-qdrant-knowledge` or `node src/sync-knowledge.js`.'); }
   async walkGsd(dir) {
     const files = [];
@@ -332,7 +371,7 @@ class GSDKnowledgeSync {
         limit: 200,
         with_payload: ['project_id', 'source', 'type'],
         with_vector: false,
-        scroll_filter: {
+        filter: {
           must: [
             { key: 'project_id', match: { value: this.projectName } }
           ]
@@ -376,7 +415,7 @@ class GSDKnowledgeSync {
         limit: BATCH_SIZE,
         with_payload: ['project_id', 'source', 'type'],
         with_vector: false,
-        scroll_filter: {
+        filter: {
           must: [
             {
               key: 'project_id',

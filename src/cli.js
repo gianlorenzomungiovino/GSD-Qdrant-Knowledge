@@ -343,7 +343,29 @@ async function removeFromGitignore(projectRoot, entry) {
   }
 }
 
-function uninstallProjectArtifacts() {
+async function uninstallProjectArtifacts() {
+  // Step 1: Clean up Qdrant collection FIRST — delete all points for this project
+  // Uses server-side filter (scroll ignores unknown params) so only matching points are fetched.
+  const qdrantUrl = process.env.QDRANT_URL || DEFAULT_QDRANT_URL;
+  try {
+    const templatePath = findFileInCliRoot('gsd-qdrant-template.js');
+    if (templatePath) {
+      const { GSDKnowledgeSync } = require(templatePath);
+      // Override QDRANT_URL env for this instance
+      const sync = new GSDKnowledgeSync();
+      sync.client = new (require('@qdrant/js-client-rest').QdrantClient)({ url: qdrantUrl });
+      const deleted = await sync.deleteAllProjectPoints();
+      if (deleted > 0) {
+        console.log(`🧹 Qdrant: Deleted ${deleted} point(s) for project '${sync.projectName}'`);
+      } else {
+        console.log(`ℹ️  Qdrant: No points found for project '${sync.projectName}'`);
+      }
+    }
+  } catch (err) {
+    console.warn('⚠️  Qdrant cleanup skipped (collection may not exist or be unreachable):', err.message);
+  }
+
+  // Step 2: Remove local artifacts
   removeRootMcpRegistration();
 
   const hooksDir = join(PROJECT_ROOT, '.git', 'hooks');
