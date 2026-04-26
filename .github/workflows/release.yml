@@ -26,10 +26,14 @@ jobs:
             /^## / && found { exit }
             found { print }
           ' CHANGELOG.md > release-body.md
+          
+          # Escape newlines for GitHub Actions environment variable
+          BODY=$(sed -z 's/\n/\\n/g' release-body.md)
+          echo "body=${BODY}" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          body_path: release-body.md
+          body: "${{ steps.changelog.outputs.body }}"
           draft: false
           prerelease: false
