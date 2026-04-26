@@ -28,3 +28,33 @@ jobs:
         with:
           package-manifest-path: './package.json'
           access: public
+
+  release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Extract changelog for version
+        id: changelog
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          
+          # Extract the section between ## VERSION and the next ## (or EOF)
+          awk -v ver="## ${VERSION}" '
+            $0 ~ "^## " ver "$" { found=1; next }
+            /^## / && found { exit }
+            found { print }
+          ' CHANGELOG.md > release-body.md
+          
+          echo "body=$(cat release-body.md)" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release-body.md
+          draft: false
+          prerelease: false

@@ -42,7 +42,9 @@ tmp/
 .mcp.json
 
 
-gsd-qdrant-knowledge/
 
 # ── Checklist pre-pubblicazione (locale) ──
 PRE-PUBLISH-CHECKLIST.md
+
+
+gsd-qdrant-knowledge/

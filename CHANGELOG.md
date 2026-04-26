@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.2
+
+### Fixed
+
+- **Setup hanging dopo completamento (rimanente)**: Il fix di 2.2.1 applicava `process.exit(0)` solo a `setup-from-templates.js`, ma il CLI principale (`src/cli.js`) in `bootstrapProject()` non chiamava più `process.exit()` dopo `console.log('\n✅ Ready')`. Node.js manteneva il processo vivo perché il client Qdrant tiene connessioni TCP keep-alive aperte. Aggiunto `process.exit(0)` in `cli.js` e `.then(() => process.exit(0))` in `sync-knowledge.js`.
+
 ## 2.2.1
 
 ### Fixed

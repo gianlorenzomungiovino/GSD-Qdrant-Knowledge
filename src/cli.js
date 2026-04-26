@@ -497,6 +497,7 @@ async function bootstrapProject() {
   }
 
   console.log('\n✅ Ready');
+  process.exit(0);
 }
 
 async function main() {
