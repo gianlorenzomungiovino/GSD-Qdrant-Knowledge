@@ -20,8 +20,9 @@ jobs:
           VERSION="${TAG#v}"
           
           # Extract the section between ## VERSION and the next ## (or EOF)
-          awk -v ver="## ${VERSION}" '
-            $0 ~ "^## " ver "$" { found=1; next }
+          awk -v ver="${VERSION}" '
+            BEGIN { pat = "^## " ver "$" }
+            $0 ~ pat { found=1; next }
             /^## / && found { exit }
             found { print }
           ' CHANGELOG.md > release-body.md
