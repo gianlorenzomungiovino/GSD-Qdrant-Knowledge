@@ -659,24 +659,49 @@ class GSDKnowledgeSync {
   }
 
   buildCodeText(relPath, content, payload) {
-    // For code embedding, use signatures + comments (semantic summary)
-    const sigText = payload.signatures.join('\n');
-    const exportText = payload.exports ? `exports:${payload.exports.join(', ')}` : null;
-    const importText = payload.imports ? `imports:${payload.imports.join(', ')}` : null;
-    const symbolText = payload.symbolNames ? `symbols:${payload.symbolNames.join(', ')}` : null;
-    const commentText = payload.comments ? `comments:${payload.comments.join(' | ')}` : null;
+    // Weighted code text: structural elements (signatures/exports/imports) prepended
+    // so CodeBERT gives them more attention — early tokens receive higher positional weight.
+    const MAX_WEIGHTED_HEADER = 2000;   // chars for signatures + exports + imports
+    const MAX_BODY = 4000;              // chars reserved for main content
     
-    return [
+    // --- Weighted header: structural elements first ---
+    const sigText = payload.signatures?.join(' | ') || '';
+    const exportText = payload.exports?.length ? `EXPORTS:${payload.exports.join(', ')}` : '';
+    const importText = payload.imports?.length ? `IMPORTS:${payload.imports.join(', ')}` : '';
+    
+    let headerParts = [sigText, exportText, importText].filter(Boolean);
+    
+    // Only build header if there are structural elements to weight
+    let header = '';
+    if (headerParts.length > 0) {
+      header = 'SIGNATURES:' +
+        (sigText ? `\nsignatures: ${sigText}` : '') +
+        (exportText ? `\nexports: ${exportText.replace('EXPORTS:', '')}` : '') +
+        (importText ? `\nimports: ${importText.replace('IMPORTS:', '')}` : '');
+      
+      // Truncate header to budget
+      if (header.length > MAX_WEIGHTED_HEADER) {
+        header = header.slice(0, MAX_WEIGHTED_HEADER);
+      }
+    }
+    
+    // --- Body: metadata + content summary ---
+    const bodyParts = [
       `project:${this.projectName}`,
       `path:${relPath}`,
       `language:${payload.language}`,
       `kind:${payload.kindDetail}`,
-      exportText,
-      importText,
-      symbolText,
-      commentText,
-      sigText
-    ].filter(Boolean).join('\n');
+      payload.symbolNames?.length ? `symbols:${payload.symbolNames.join(', ')}` : null,
+      payload.comments?.length ? `comments:${payload.comments.slice(0, 10).join(' | ')}` : null,
+    ].filter(Boolean);
+    
+    // Truncate body to budget
+    let body = bodyParts.join('\n');
+    if (body.length > MAX_BODY) {
+      body = body.slice(0, MAX_BODY);
+    }
+    
+    return header + '\n' + body;
   }
   async embedText(text) { if (this.pipeline) { const output = await this.pipeline(text, { pooling: 'mean', normalize: true }); return Array.from(output.data); } return this.generatePlaceholderEmbedding(text); }
   extractMetadata(filePath, content) { const metadata = { relativePath: this.toProjectRelative(filePath) }; const titleMatch = content.match(/^#\s+(.+)$/m); if (titleMatch) metadata.title = titleMatch[1].trim(); const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/); if (frontmatterMatch) { const dateMatch = frontmatterMatch[1].match(/date:\s+(.+)/); if (dateMatch) metadata.date = dateMatch[1].trim(); } return metadata; }
