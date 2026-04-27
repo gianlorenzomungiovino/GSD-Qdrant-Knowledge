@@ -311,6 +311,80 @@ function extractSearchTerms(query, filters) {
 }
 
 /**
+ * Build a Qdrant filter payload from structured intent.
+ *
+ * Certain filters (language, type, project_id with confident values) become
+ * `must` clauses — they must match for a point to be returned.
+ * Only low-confidence or absent-filter cases go into `should` as soft boosts.
+ *
+ * @param {Object} intent - The structured search intent
+ * @returns {Object} Qdrant-compatible filter object with must/should clauses
+ */
+function buildQdrantFilter(intent) {
+  const must = [];
+  const should = [];
+
+  // ── language (certain) ────────────────────────────────────────────
+  if (intent.filters.language) {
+    // Map our internal language names to Qdrant stored values
+    const langMap = {
+      javascript: 'javascript',
+      typescript: 'typescript',
+      python: 'python',
+      go: 'go',
+      rust: 'rust',
+      java: 'java',
+      c: 'c',
+      cpp: 'cpp',
+      'c#': 'csharp',
+      ruby: 'ruby',
+      php: 'php',
+      html: 'html',
+      css: 'css',
+      sql: 'sql',
+      json: 'json',
+      yaml: 'yaml',
+      shell: 'shell',
+      docker: 'docker',
+    };
+    const qdrantLang = langMap[intent.filters.language] || intent.filters.language;
+    must.push({ key: 'language', match: { value: qdrantLang } });
+  }
+
+  // ── type (certain) ────────────────────────────────────────────────
+  if (intent.filters.type) {
+    must.push({ key: 'type', match: { value: intent.filters.type } });
+  }
+
+  // ── project_id (certain) ──────────────────────────────────────────
+  if (intent.filters.project_id) {
+    must.push({ key: 'project_id', match: { value: intent.filters.project_id } });
+  }
+
+  // ── tags (soft boost — should) ────────────────────────────────────
+  if (intent.filters.tags && intent.filters.tags.length > 0) {
+    for (const tag of intent.filters.tags) {
+      should.push({ key: 'tags', match: { value: tag } });
+    }
+  }
+
+  // ── crossProject scope ────────────────────────────────────────────
+  if (intent.filters.crossProject) {
+    // No filter needed — just means don't exclude other projects.
+    // If crossProject is false, we could add a must for project_id match.
+  }
+
+  const filter = {};
+  if (must.length > 0) filter.must = must;
+  if (should.length > 0) filter.should = should;
+
+  // Log what we built for agent observability
+  console.log('[qdrant] filter: must=%d, should=%d', must.length, should.length);
+
+  return Object.keys(filter).length > 0 ? filter : null;
+}
+
+/**
  * Generate a search query from structured intent
  * 
  * @param {Object} intent - The structured intent
@@ -394,6 +468,16 @@ function main() {
     console.log('-'.repeat(60));
   });
   
+  // Test buildQdrantFilter
+  console.log('\n--- Qdrant Filter Builder ---');
+  testQueries.forEach(query => {
+    const intent = detectIntent(query);
+    const filter = buildQdrantFilter(intent);
+    console.log(`Query: "${query}"`);
+    console.log(`  filter: ${JSON.stringify(filter)}`);
+    console.log('-'.repeat(60));
+  });
+
   console.log('\n✅ Intent detector module ready!');
 }
 
@@ -404,7 +488,8 @@ module.exports = {
   extractFilters,
   extractPreferences,
   extractSearchTerms,
-  generateQuery
+  generateQuery,
+  buildQdrantFilter
 };
 
 // Execute if run directly
