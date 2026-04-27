@@ -4,6 +4,7 @@ const { QdrantClient } = require('@qdrant/js-client-rest');
 const { promises: fs, existsSync } = require('fs');
 const { join, basename, extname, relative } = require('path');
 const crypto = require('crypto');
+const { execFileSync } = require('child_process');
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
 const PROJECT_ROOT = process.cwd();
@@ -324,6 +325,29 @@ class GSDKnowledgeSync {
     return 'context';
   }
 
+  /**
+   * Get the last modified timestamp from git for a file.
+   * Returns unix timestamp (seconds) or 0 if not in a git repo / no commits.
+   */
+  getGitLastModified(filePath) {
+    try {
+      const ts = execFileSync('git', ['log', '-1', '--format=%ct', filePath], {
+        cwd: PROJECT_ROOT,
+        timeout: 3000,
+        encoding: 'utf8'
+      }).trim();
+      return parseInt(ts, 10) || 0;
+    } catch (err) {
+      // Not in git repo or file not tracked → fallback to 0
+      if (process.env.GSD_QDRANT_VERBOSE === '1') {
+        console.log(`[index] lastModified: 0 (not in git), file: ${filePath}`);
+      } else {
+        console.log('[index] lastModified: 0, file: %s', filePath);
+      }
+      return 0;
+    }
+  }
+
   async buildDocPayload(filePath, content, relPath, fullContent) {
     const metadata = this.extractMetadata(filePath, content);
     return {
@@ -346,16 +370,17 @@ class GSDKnowledgeSync {
   async buildCodePayload(filePath, content, relPath, docIndex = null) {
     const metadata = this.extractCodeMetadata(filePath, content, relPath);
     const lang = this.detectLanguage(filePath);
-    
+    const lastModified = this.getGitLastModified(filePath);
+
     // Extract only function/class signatures (not full body)
     const signatures = this.extractSignatures(content);
-    
+
     // Extract comments (JSDoc, single-line, multi-line) - these act as semantic summaries
     const comments = this.extractComments(content);
-    
+
     // Extract GSD IDs from code file (M003, S01, T02, etc.)
     const snippetIds = this.extractGsdIds(relPath, content);
-    
+
     // Find related documentation files based on shared GSD IDs
     let relatedDocPaths = [];
     let relatedDocIds = [];
@@ -364,7 +389,13 @@ class GSDKnowledgeSync {
       relatedDocPaths = docMatches.map(d => d.path);
       relatedDocIds = docMatches.flatMap(d => d.ids);
     }
-    
+
+    if (process.env.GSD_QDRANT_VERBOSE === '1') {
+      console.log(`[index] lastModified: ${lastModified}, file: ${filePath}`);
+    } else {
+      console.log('[index] lastModified: %s, file: %s', lastModified, filePath);
+    }
+
     return {
       project_id: this.projectName,
       type: 'code',
@@ -383,6 +414,7 @@ class GSDKnowledgeSync {
       relatedDocPaths: relatedDocPaths, // Related documentation files
       relatedDocIds: relatedDocIds, // Related GSD IDs from docs
       timestamp: Date.now(),
+      lastModified: lastModified,
       hash: this.hashContent(content)
     };
   }
@@ -486,7 +518,7 @@ class GSDKnowledgeSync {
   }
 
   buildCodeText(relPath, content, payload) {
-    // For code embedding, use signatures + comments (semantic summary)
+    // For code embedding, prepend full file path so CodeBERT gives it highest positional weight
     const sigText = payload.signatures.join('\n');
     const exportText = payload.exports ? `exports:${payload.exports.join(', ')}` : null;
     const importText = payload.imports ? `imports:${payload.imports.join(', ')}` : null;
@@ -494,8 +526,8 @@ class GSDKnowledgeSync {
     const commentText = payload.comments ? `comments:${payload.comments.join(' | ')}` : null;
     
     return [
+      relPath,                          // Full path first — highest positional weight for CodeBERT
       `project:${this.projectName}`,
-      `path:${relPath}`,
       `language:${payload.language}`,
       `kind:${payload.kindDetail}`,
       exportText,
