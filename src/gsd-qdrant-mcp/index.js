@@ -18,6 +18,9 @@ const fs = require('fs');
 // Load re-ranking utilities (estimateTokens, trimResultsByTokenBudget)
 const { estimateTokens, trimResultsByTokenBudget } = require(path.join(__dirname, '..', 're-ranking'));
 
+// Load query cache for deduplicating repeated queries
+const queryCache = require(path.join(__dirname, '..', 'query-cache'));
+
 // Read version from this package's package.json (single source of truth)
 const MCP_PKG_PATH = path.join(__dirname, 'package.json');
 const SERVER_VERSION = (() => {
@@ -85,6 +88,16 @@ function createMcpServer() {
     },
     async ({ task, limit = 3, maxQueries = 2, includeContent = false }) => {
       try {
+        // Build cache key from normalized query + limit (limit affects result set)
+        const cacheKey = `${task}|${limit}`;
+
+        // Check cache first — serve repeated queries without hitting Qdrant
+        const cachedResult = queryCache.get(cacheKey);
+        if (cachedResult !== undefined) {
+          console.log(`[cache] hit: ${cacheKey} → serving from cache`);
+          return { content: [{ type: 'text', text: JSON.stringify(cachedResult) }] };
+        }
+
         // Initialize Knowledge Sync
         const sync = new GSDKnowledgeSync();
         await sync.init();
@@ -231,16 +244,22 @@ function createMcpServer() {
           match_type: 'semantic',
         }));
 
+        const cachePayload = {
+          task,
+          results,
+          totalResults: ranked.length,
+          projectId,
+        };
+
+        // Store in cache for future repeated queries
+        queryCache.set(cacheKey, cachePayload);
+        console.log(`[cache] stored: ${cacheKey} (${ranked.length} results)`);
+
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({
-                task,
-                results,
-                totalResults: ranked.length,
-                projectId,
-              }),
+              text: JSON.stringify(cachePayload),
             },
           ],
         };
