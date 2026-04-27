@@ -89,15 +89,22 @@ function createMcpServer() {
         // Generate query embedding and search using prefetch
         const t0 = Date.now();
         const vector = await sync.embedText(task);
-        
+
+        // Detect search intent and build Qdrant filter from certain filters (must)
+        // vs uncertain ones (should). This ensures language/type/project constraints
+        // are applied as hard must-clauses when the intent is confident.
+        const { detectIntent, buildQdrantFilter } = require(path.join(__dirname, '..', 'intent-detector'));
+        const intent = detectIntent(task);
+        const qdrantFilter = buildQdrantFilter(intent);
+
         // Prefetch: broad candidate gathering without score threshold,
         // then refine with a tighter limit for high-relevance results.
-        const prefetchLimit = Math.max(limit * 3, 20);
+        const prefetchLimit = Math.max(Math.max(limit * 3, 20) + (qdrantFilter && qdrantFilter.must ? 30 : 0), 20);
         const PREFETCH_SCORE_THRESHOLD = 0.65;
 
         let hits = [];
         try {
-          hits = await sync.client.search(COLLECTION_NAME, { 
+          const searchConfig = {
             vector: { name: VECTOR_NAME, vector },
             prefetch: {
               query: { name: VECTOR_NAME, vector },
@@ -105,18 +112,26 @@ function createMcpServer() {
             },
             limit: limit * 2,
             score_threshold: PREFETCH_SCORE_THRESHOLD,
-            with_payload: true, 
+            with_payload: true,
             with_vector: false,
-          });
+          };
+          if (qdrantFilter) {
+            searchConfig.filter = qdrantFilter;
+          }
+          hits = await sync.client.search(COLLECTION_NAME, searchConfig);
         } catch (prefetchErr) {
           // Fallback: plain search if prefetch fails (e.g. version incompatibility)
           console.warn('[qdrant] prefetch not supported, falling back to search');
-          hits = await sync.client.search(COLLECTION_NAME, { 
-            vector: { name: VECTOR_NAME, vector }, 
+          const fallbackConfig = {
+            vector: { name: VECTOR_NAME, vector },
             limit: limit * 2,
-            with_payload: true, 
-            with_vector: false
-          });
+            with_payload: true,
+            with_vector: false,
+          };
+          if (qdrantFilter) {
+            fallbackConfig.filter = qdrantFilter;
+          }
+          hits = await sync.client.search(COLLECTION_NAME, fallbackConfig);
         }
 
         const elapsed = Date.now() - t0;

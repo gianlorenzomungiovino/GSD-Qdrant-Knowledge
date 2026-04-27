@@ -524,6 +524,7 @@ async function main() {
 
   if (args[0] === 'context') {
     const { GSDKnowledgeSync } = require(findFileInCliRoot('gsd-qdrant-template.js'));
+    const intentDetector = require(findFileInCliRoot('intent-detector.js'));
     const query = args[1] || '';
     const project_id = basename(PROJECT_ROOT);
 
@@ -533,6 +534,11 @@ async function main() {
       process.exit(1);
     }
 
+    // Detect search intent and build Qdrant filter from certain filters (must)
+    // vs uncertain ones (should)
+    const intent = intentDetector.detectIntent(query);
+    const qdrantFilter = intentDetector.buildQdrantFilter(intent);
+
     const sync = new GSDKnowledgeSync();
     await sync.init();
     const vector = await sync.embedText(query);
@@ -540,14 +546,14 @@ async function main() {
     // Prefetch-based query: first do a broad search to gather candidates,
     // then refine with score threshold for high-relevance results only.
     const t0 = Date.now();
-    const prefetchLimit = 50;
+    const prefetchLimit = qdrantFilter && qdrantFilter.must ? 100 : 50; // wider prefetch when must-filter applied
     const finalLimit = 10;
     const SCORE_THRESHOLD = 0.65;
 
     let hits = [];
     try {
-      // Prefetch: broad vector search (no filter, wide limit)
-      const prefetchResults = await sync.client.search(sync.collectionName, {
+      // Prefetch: broad vector search with filter if intent is certain
+      const prefetchConfig = {
         vector: { name: sync.vectorName, vector },
         prefetch: {
           query: { name: sync.vectorName, vector },
@@ -557,18 +563,26 @@ async function main() {
         score_threshold: SCORE_THRESHOLD,
         with_payload: true,
         with_vector: false,
-      });
+      };
+      if (qdrantFilter) {
+        prefetchConfig.filter = qdrantFilter;
+      }
+      const prefetchResults = await sync.client.search(sync.collectionName, prefetchConfig);
       hits = prefetchResults;
     } catch (prefetchErr) {
       // Fallback: plain search if prefetch is not supported in this Qdrant version
       console.warn('[qdrant] prefetch not supported, falling back to search');
-      hits = await sync.client.search(sync.collectionName, {
+      const fallbackConfig = {
         vector: { name: sync.vectorName, vector },
         limit: finalLimit,
         score_threshold: SCORE_THRESHOLD,
         with_payload: true,
         with_vector: false,
-      });
+      };
+      if (qdrantFilter) {
+        fallbackConfig.filter = qdrantFilter;
+      }
+      hits = await sync.client.search(sync.collectionName, fallbackConfig);
     }
 
     const elapsed = Date.now() - t0;
