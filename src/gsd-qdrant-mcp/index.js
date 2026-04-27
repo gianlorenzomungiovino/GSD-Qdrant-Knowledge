@@ -97,45 +97,65 @@ function createMcpServer() {
         const intent = detectIntent(task);
         const qdrantFilter = buildQdrantFilter(intent);
 
-        // Prefetch: broad candidate gathering without score threshold,
-        // then refine with a tighter limit for high-relevance results.
-        const prefetchLimit = Math.max(Math.max(limit * 3, 20) + (qdrantFilter && qdrantFilter.must ? 30 : 0), 20);
-        const PREFETCH_SCORE_THRESHOLD = 0.65;
+        // Grouped search: return max GROUP_SIZE chunks per source document.
+        const GROUP_SIZE = 2;        // max chunks per source document
+        const GROUP_LIMIT = Math.max(limit * 3, 10); // groups to request
+        const GROUP_SCORE_THRESHOLD = 0.65;
 
         let hits = [];
+        let groupCount = 0;
         try {
-          const searchConfig = {
+          const groupConfig = {
             vector: { name: VECTOR_NAME, vector },
-            prefetch: {
-              query: { name: VECTOR_NAME, vector },
-              limit: prefetchLimit,
-            },
-            limit: limit * 2,
-            score_threshold: PREFETCH_SCORE_THRESHOLD,
+            group_by: 'source',
+            group_size: GROUP_SIZE,
+            limit: GROUP_LIMIT,
+            score_threshold: GROUP_SCORE_THRESHOLD,
             with_payload: true,
             with_vector: false,
           };
           if (qdrantFilter) {
-            searchConfig.filter = qdrantFilter;
+            groupConfig.filter = qdrantFilter;
           }
-          hits = await sync.client.search(COLLECTION_NAME, searchConfig);
-        } catch (prefetchErr) {
-          // Fallback: plain search if prefetch fails (e.g. version incompatibility)
-          console.warn('[qdrant] prefetch not supported, falling back to search');
-          const fallbackConfig = {
-            vector: { name: VECTOR_NAME, vector },
-            limit: limit * 2,
-            with_payload: true,
-            with_vector: false,
-          };
-          if (qdrantFilter) {
-            fallbackConfig.filter = qdrantFilter;
+          const groupedResults = await sync.client.searchPointGroups(COLLECTION_NAME, groupConfig);
+          groupCount = groupedResults.groups.length;
+
+          // Flatten groups into a single hits array
+          for (const group of groupedResults.groups) {
+            hits = hits.concat(group.hits);
           }
-          hits = await sync.client.search(COLLECTION_NAME, fallbackConfig);
+        } catch (groupErr) {
+          // Fallback: plain search with client-side dedup
+          console.warn('[qdrant] searchPointGroups failed, falling back to search');
+          try {
+            const searchConfig = {
+              vector: { name: VECTOR_NAME, vector },
+              limit: GROUP_LIMIT * 10,
+              score_threshold: GROUP_SCORE_THRESHOLD,
+              with_payload: true,
+              with_vector: false,
+            };
+            if (qdrantFilter) {
+              searchConfig.filter = qdrantFilter;
+            }
+            const rawHits = await sync.client.search(COLLECTION_NAME, searchConfig);
+
+            // Client-side dedup: max GROUP_SIZE per source document
+            const sourceCounts = {};
+            for (const hit of rawHits) {
+              const src = hit.payload && hit.payload.source;
+              if (!src || (sourceCounts[src] || 0) >= GROUP_SIZE) continue;
+              sourceCounts[src] = (sourceCounts[src] || 0) + 1;
+              hits.push(hit);
+            }
+            groupCount = Object.keys(sourceCounts).length;
+          } catch (searchErr) {
+            console.warn('[qdrant] search also failed, returning empty:', searchErr.message);
+          }
         }
 
         const elapsed = Date.now() - t0;
-        console.log('[qdrant] auto_retrieve: %d results in %dms (prefetch)', hits.length, elapsed);
+        console.log('[qdrant] auto_retrieve: groups=%d, chunks=%d in %dms (group_by)', groupCount, hits.length, elapsed);
 
         const projectId = PROJECT_ROOT.split(/[/\\]/).pop();
 

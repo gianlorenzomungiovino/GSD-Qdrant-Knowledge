@@ -543,50 +543,75 @@ async function main() {
     await sync.init();
     const vector = await sync.embedText(query);
 
-    // Prefetch-based query: first do a broad search to gather candidates,
-    // then refine with score threshold for high-relevance results only.
+    // Prefetch-based query with group_by: return max 2 chunks per source document.
+    // Uses searchPointGroups() to deduplicate across source documents.
     const t0 = Date.now();
     const prefetchLimit = qdrantFilter && qdrantFilter.must ? 100 : 50; // wider prefetch when must-filter applied
-    const finalLimit = 10;
+    const GROUP_SIZE = 2;        // max chunks per source document
+    const GROUP_LIMIT = 5;       // max groups (documents) to return
     const SCORE_THRESHOLD = 0.65;
 
     let hits = [];
+    let groupCount = 0;
     try {
-      // Prefetch: broad vector search with filter if intent is certain
-      const prefetchConfig = {
+      // searchPointGroups requires the vector query directly (no prefetch syntax).
+      // We use prefetch inside the query via Qdrant's internal mechanism, but since
+      // searchPointGroups does not support prefetch natively, we fall back to the
+      // simpler grouped search approach. The must-filter narrows candidates before scoring.
+      const groupConfig = {
         vector: { name: sync.vectorName, vector },
-        prefetch: {
-          query: { name: sync.vectorName, vector },
-          limit: prefetchLimit,
-        },
-        limit: finalLimit,
+        group_by: 'source',
+        group_size: GROUP_SIZE,
+        limit: GROUP_LIMIT,
         score_threshold: SCORE_THRESHOLD,
         with_payload: true,
         with_vector: false,
       };
       if (qdrantFilter) {
-        prefetchConfig.filter = qdrantFilter;
+        groupConfig.filter = qdrantFilter;
       }
-      const prefetchResults = await sync.client.search(sync.collectionName, prefetchConfig);
-      hits = prefetchResults;
-    } catch (prefetchErr) {
-      // Fallback: plain search if prefetch is not supported in this Qdrant version
-      console.warn('[qdrant] prefetch not supported, falling back to search');
-      const fallbackConfig = {
-        vector: { name: sync.vectorName, vector },
-        limit: finalLimit,
-        score_threshold: SCORE_THRESHOLD,
-        with_payload: true,
-        with_vector: false,
-      };
-      if (qdrantFilter) {
-        fallbackConfig.filter = qdrantFilter;
+      const groupedResults = await sync.client.searchPointGroups(
+        sync.collectionName,
+        groupConfig
+      );
+      groupCount = groupedResults.groups.length;
+
+      // Flatten groups into a single hits array (preserving score order within each group)
+      for (const group of groupedResults.groups) {
+        hits = hits.concat(group.hits);
       }
-      hits = await sync.client.search(sync.collectionName, fallbackConfig);
+    } catch (groupErr) {
+      // Fallback: plain search with grouping done client-side if searchPointGroups fails
+      console.warn('[qdrant] searchPointGroups not supported, falling back to search');
+      try {
+        const searchConfig = {
+          vector: { name: sync.vectorName, vector },
+          limit: GROUP_LIMIT * 10, // wider search for client-side dedup
+          score_threshold: SCORE_THRESHOLD,
+          with_payload: true,
+          with_vector: false,
+        };
+        if (qdrantFilter) {
+          searchConfig.filter = qdrantFilter;
+        }
+        const rawHits = await sync.client.search(sync.collectionName, searchConfig);
+
+        // Client-side dedup: max GROUP_SIZE per source document
+        const sourceCounts = {};
+        for (const hit of rawHits) {
+          const src = hit.payload && hit.payload.source;
+          if (!src || (sourceCounts[src] || 0) >= GROUP_SIZE) continue;
+          sourceCounts[src] = (sourceCounts[src] || 0) + 1;
+          hits.push(hit);
+        }
+        groupCount = Object.keys(sourceCounts).length;
+      } catch (searchErr) {
+        console.warn('[qdrant] search also failed, returning empty:', searchErr.message);
+      }
     }
 
     const elapsed = Date.now() - t0;
-    console.log('[qdrant] prefetch: %d results in %dms', hits.length, elapsed);
+    console.log('[qdrant] group_by: groups=%d, chunks=%d in %dms', groupCount, hits.length, elapsed);
 
     const ranked = hits.map(hit => ({ ...hit.payload, score: hit.score }));
     console.log(JSON.stringify({ query, project_id, results: ranked }, null, 2));

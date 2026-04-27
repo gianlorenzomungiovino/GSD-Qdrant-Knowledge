@@ -1,0 +1,191 @@
+[qdrant] filter: must=0, should=0
+[qdrant] group_by: groups=5, chunks=6 in 28ms
+{
+  "query": "embedding model comparison",
+  "project_id": "GSD-Qdrant-Knowledge",
+  "results": [
+    {
+      "project_id": "website-agency",
+      "type": "code",
+      "language": "javascript",
+      "source": "apps/web/src/components/TeamMember.jsx",
+      "summary": "TeamMemberImage",
+      "kindDetail": "component",
+      "workspace": "apps",
+      "content": "import \"./TeamMember.css\";\n\n/**\n * TeamMemberImage - Card immagine del membro del team\n * @param {Object} props - Props del membro\n * @param {Object} props.member - Oggetto membro con image e name\n */\nfunction TeamMemberImage({ member }) {\n  const getImageSrc = () => {\n    if (!member.image) {\n      return \"/assets/team/default.jpg\";\n    }\n    return member.image;\n  };\n\n  const getImageAlt = () => {\n    if (!member.name) {\n      return \"Membro del team\";\n    }\n    return `Ritratto di ${member.name}`;\n  };\n\n  return (\n    <div className=\"team-member-image\">\n      <div className=\"team-member-image__wrapper\">\n        <img\n          src={getImageSrc()}\n          alt={getImageAlt()}\n          className=\"team-member-image__img\"\n          loading=\"lazy\"\n        />\n      </div>\n      <div className=\"team-member-image__content\">\n        <span className=\"team-member-image__role\">{member.role}</span>\n        <h3 className=\"team-member-image__name\">{member.name}</h3>\n      </div>\n    </div>\n  );\n}\n\n/**\n * TeamMemberContent - Card contenuto/testo del membro del team\n * @param {Object} props - Props del membro\n * @param {Object} props.member - Oggetto membro con role, name, description\n */\nfunction TeamMemberContent({ member }) {\n  return (\n    <div className=\"team-member-content\">\n      <span className=\"team-member-content__role\">{member.role}</span>\n      <h3 className=\"team-member-content__name\">{member.name}</h3>\n      <p className=\"team-member-content__description\">{member.description}</p>\n    </div>\n  );\n}\n\nexport { TeamMemberImage, TeamMemberContent };\n",
+      "signatures": [
+        "function TeamMemberImage({ member })",
+        "function TeamMemberContent({ member })",
+        "TeamMemberImage({ member }) {",
+        "if (!member.image) {",
+        "if (!member.name) {",
+        "TeamMemberContent({ member }) {",
+        "const getImageSrc = () =>",
+        "const getImageAlt = () =>"
+      ],
+      "exports": [],
+      "imports": [
+        "./TeamMember.css"
+      ],
+      "symbolNames": [
+        "TeamMemberImage",
+        "getImageSrc",
+        "getImageAlt",
+        "TeamMemberContent"
+      ],
+      "comments": [
+        "/**\n * TeamMemberImage - Card immagine del membro del team\n * @param {Object} props - Props del membro\n * @param {Object} props.member - Oggetto membro con image e name\n */",
+        "/**\n * TeamMemberContent - Card contenuto/testo del membro del team\n * @param {Object} props - Props del membro\n * @param {Object} props.member - Oggetto membro con role, name, description\n */",
+        "/**\n * TeamMemberImage - Card immagine del membro del team\n * @param {Object} props - Props del membro\n * @param {Object} props.member - Oggetto membro con image e name\n */",
+        "/**\n * TeamMemberContent - Card contenuto/testo del membro del team\n * @param {Object} props - Props del membro\n * @param {Object} props.member - Oggetto membro con role, name, description\n */"
+      ],
+      "relatedDocPaths": [
+        ".gsd/milestones/M001/slices/S04/S04-UAT.md",
+        ".gsd/milestones/M001/slices/S03/tasks/T04-PLAN.md",
+        ".gsd/milestones/M001/slices/S04/tasks/T02-PLAN.md",
+        ".gsd/milestones/M001/slices/S05/tasks/T03-PLAN.md",
+        ".gsd/milestones/M001/M001-CONTEXT.md"
+      ],
+      "relatedDocIds": [
+        "M001",
+        "S04",
+        "M001",
+        "S03",
+        "T04",
+        "M001",
+        "S04",
+        "T02",
+        "M001",
+        "S05",
+        "T03",
+        "M001"
+      ],
+      "timestamp": 1777228943049,
+      "hash": "4137029fe1b19d106cb5032f551ea572",
+      "score": 0.9814139
+    },
+    {
+      "project_id": "WooNext",
+      "type": "code",
+      "language": "typescript",
+      "source": "lib/store-types.ts",
+      "summary": "type",
+      "kindDetail": "code",
+      "workspace": "lib",
+      "content": "export type StoreProduct = {\r\n  id: string;\r\n  databaseId: number;\r\n  slug: string;\r\n  name: string;\r\n  price: number;\r\n  regularPrice: number;\r\n  description: string;\r\n  image: string;\r\n  inStock: boolean;\r\n};\r\n\r\nexport type StoreCategory = {\r\n  databaseId: number;\r\n  slug: string;\r\n  name: string;\r\n  description: string;\r\n  count: number | null;\r\n};\r\n\r\nexport type ProductsPageResult = {\r\n  products: StoreProduct[];\r\n  endCursor: string | null;\r\n  hasNextPage: boolean;\r\n  /** Set when data came from WooCommerce REST (GraphQL had no `products` field or failed). */\r\n  viaRest?: boolean;\r\n  restPage?: number;\r\n};\r\n",
+      "signatures": [],
+      "exports": [
+        "type"
+      ],
+      "imports": [],
+      "symbolNames": [
+        "type"
+      ],
+      "comments": [
+        "/** Set when data came from WooCommerce REST (GraphQL had no `products` field or failed). */",
+        "/** Set when data came from WooCommerce REST (GraphQL had no `products` field or failed). */"
+      ],
+      "relatedDocPaths": [
+        ".gsd/CODEBASE.md"
+      ],
+      "relatedDocIds": [],
+      "timestamp": 1777228832257,
+      "hash": "2b0428319d6be948870a575c49cef483",
+      "score": 0.9780852
+    },
+    {
+      "project_id": "WooNext",
+      "type": "code",
+      "language": "typescript",
+      "source": "app/pages/page.tsx",
+      "summary": "dynamic",
+      "kindDetail": "react-component",
+      "workspace": "app",
+      "content": "import { getAllPages } from \"@/lib/wordpress\";\r\nimport { ArchiveList } from \"@/components/archive-list\";\r\nimport type { Page as WPPage } from \"@/lib/wordpress.d\";\r\nimport type { Metadata } from \"next\";\r\n\r\n/** Always resolve CMS routes at request time so builds succeed without WordPress. */\r\nexport const dynamic = \"force-dynamic\";\r\n\r\nexport const metadata: Metadata = {\r\n  title: \"All Pages\",\r\n  description: \"Browse all pages of our site\",\r\n  alternates: {\r\n    canonical: \"/pages\",\r\n  },\r\n};\r\n\r\nexport default async function Page() {\r\n  const pages = await getAllPages();\r\n\r\n  return (\r\n    <ArchiveList<WPPage>\r\n      title=\"All Pages\"\r\n      items={pages}\r\n      getItemHref={(p) => `/pages/${p.slug}`}\r\n      getItemLabel={(p) => p.title.rendered}\r\n      emptyMessage=\"No pages available yet.\"\r\n    />\r\n  );\r\n}\r\n",
+      "signatures": [
+        "function Page()",
+        "Page() {",
+        "async function Page"
+      ],
+      "exports": [
+        "dynamic",
+        "metadata",
+        "Page"
+      ],
+      "imports": [
+        "@/lib/wordpress",
+        "@/components/archive-list",
+        "@/lib/wordpress.d",
+        "next"
+      ],
+      "symbolNames": [
+        "dynamic",
+        "metadata",
+        "Page",
+        "pages"
+      ],
+      "comments": [
+        "/** Always resolve CMS routes at request time so builds succeed without WordPress. */",
+        "/** Always resolve CMS routes at request time so builds succeed without WordPress. */"
+      ],
+      "relatedDocPaths": [
+        ".gsd/CODEBASE.md"
+      ],
+      "relatedDocIds": [],
+      "timestamp": 1777228829108,
+      "hash": "372d0efa7f19c4a24859256e38181aa3",
+      "score": 0.96152914
+    },
+    {
+      "project_id": "GSD-Qdrant-Knowledge",
+      "type": "doc",
+      "subtype": "context",
+      "source": ".gsd/milestones/M005/slices/S04/tasks/T01-PLAN.md",
+      "section": "general",
+      "content": "---\nestimated_steps: 13\nestimated_files: 1\nskills_used: []\n---\n\n# T01: Implementare cache in memoria Map con TTL 5 minuti\n\nCreare `src/query-cache.js` (nuovo modulo) che gestisce la cache dei risultati di query Qdrant.\n\nSteps:\n1. Creare src/query-cache.js con classe/methods:\n   - QueryCache.get(key) → risultato o undefined\n   - QueryCache.set(key, value) → memorizza con timestamp\n   - QueryCache.has(key) → verifica presenza senza update TTL\n   - QueryCache.clear() → svuota tutto\n2. Internamente usare Map + setInterval(5*60*1000) per sweep vecchi entry\n3. Max cache size: 100 entries per evitare memory leak\n4. Log: `console.log('[cache] hit=%d, miss=%d', hits, misses);`\n5. Integrare in gsd-qdrant-mcp/index.js come primo step della pipeline di retrieval\n\nFiles: src/query-cache.js (new), src/gsd-qdrant-mcp/index.js\nVerify: eseguire query due volte → la seconda dovrebbe essere cache hit\n\n## Inputs\n\n- None specified.\n\n## Expected Output\n\n- `src/query-cache.js con TTL map cache`\n\n## Verification\n\nnode -e \"const Cache = require('./src/query-cache'); Cache.set('test', 'data'); console.log(Cache.get('test'));\" → stampa 'data'\n",
+      "summary": "T01: Implementare cache in memoria Map con TTL 5 minuti",
+      "title": "T01: Implementare cache in memoria Map con TTL 5 minuti",
+      "language": "markdown",
+      "reusable": false,
+      "tags": [],
+      "importance": 2,
+      "timestamp": 1777296702136,
+      "hash": "2d7da17710314dd0d43ee52ca7be3f4d",
+      "score": 0.96123385
+    },
+    {
+      "project_id": "GSD-Qdrant-Knowledge",
+      "type": "doc",
+      "subtype": "context",
+      "source": ".gsd/milestones/M001/slices/S01/tasks/T02-SUMMARY.md",
+      "section": "general",
+      "content": "---\nid: T02\nparent: S01\nmilestone: M001\nkey_files:\n  - (none)\nkey_decisions:\n  - (none)\nduration: \nverification_result: untested\ncompleted_at: \nblocker_discovered: false\n---\n\n# T02: Aggiungere funzione di generazione query (generateSearchQueries)\n\n****\n\n## What Happened\n\nNo summary recorded.\n\n## Verification\n\nNo verification recorded.\n\n## Verification Evidence\n\n| # | Command | Exit Code | Verdict | Duration |\n|---|---------|-----------|---------|----------|\n| — | No verification commands discovered | — | — | — |\n\n## Deviations\n\nNone.\n\n## Known Issues\n\nNone.\n\n## Files Created/Modified\n\nNone.\n",
+      "summary": "T02: Aggiungere funzione di generazione query (generateSearchQueries)",
+      "title": "T02: Aggiungere funzione di generazione query (generateSearchQueries)",
+      "language": "markdown",
+      "reusable": false,
+      "tags": [],
+      "importance": 2,
+      "timestamp": 1777296696344,
+      "hash": "f75ba05aed6c84f778d31d38dbe7d4fa",
+      "score": 0.9610735
+    },
+    {
+      "project_id": "marketing espresso_scraping",
+      "type": "doc",
+      "subtype": "context",
+      "source": ".gsd/milestones/M001/slices/S01/tasks/T02-SUMMARY.md",
+      "section": "general",
+      "content": "---\r\nid: T02\r\nparent: S01\r\nmilestone: M001\r\nkey_files:\r\n  - tailwind.config.js\r\nkey_decisions:\r\n  - Extended Tailwind theme with custom primary and accent colors\r\n  - Configured content paths to scan all relevant files\r\nduration: \r\nverification_result: passed\r\ncompleted_at: 2026-03-28T13:00:39.431Z\r\nblocker_discovered: false\r\n---\r\n\r\n# T02: Extended Tailwind theme with custom primary and accent colors and configured content scanning\r\n\r\n**Extended Tailwind theme with custom primary and accent colors and configured content scanning**\r\n\r\n## What Happened\r\n\r\nEdited tailwind.config.js to extend theme.colors with custom colors and set content array to '**/*.{js,jsx,ts,tsx,html}'. Then verified the configuration by running the Tailwind CSS compiler which completed successfully.\r\n\r\n## Verification\r\n\r\nRan `npx tailwindcss -i ./src/index.css -o ./dist/output.css` which completed successfully, generating the output CSS file.\r\n\r\n## Verification Evidence\r\n\r\n| # | Command | Exit Code | Verdict | Duration |\r\n|---|---------|-----------|---------|----------|\r\n| 1 | `npx tailwindcss -i ./src/index.css -o ./dist/output.css` | 0 | ✅ pass | 72ms |\r\n\r\n## Deviations\r\n\r\nNone - followed the task plan exactly.\r\n\r\n## Known Issues\r\n\r\nNone\r\n\r\n## Files Created/Modified\r\n\r\n- `tailwind.config.js`\r\n",
+      "summary": "T02: Extended Tailwind theme with custom primary and accent colors and configured content scanning",
+      "title": "T02: Extended Tailwind theme with custom primary and accent colors and configured content scanning",
+      "language": "markdown",
+      "reusable": false,
+      "tags": [],
+      "importance": 2,
+      "timestamp": 1777228793704,
+      "hash": "47012873c86f22bf7dfc45ba07b24bf8",
+      "score": 0.94461036
+    }
+  ]
+}
