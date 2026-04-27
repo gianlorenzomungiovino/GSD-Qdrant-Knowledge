@@ -8,8 +8,8 @@ const { join, basename, dirname } = require('path');
 const existsSync = fs.existsSync;
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
-const VECTOR_NAME = process.env.VECTOR_NAME || 'fast-all-minilm-l6-v2';
-const EMBEDDING_DIMENSIONS = parseInt(process.env.EMBEDDING_DIMENSIONS || '1024', 10);
+const VECTOR_NAME = process.env.VECTOR_NAME || 'codebert-768';
+const EMBEDDING_DIMENSIONS = parseInt(process.env.EMBEDDING_DIMENSIONS || '768', 10);
 const PROJECT_ROOT = process.cwd();
 const PROJECT_NAME = basename(PROJECT_ROOT.replace(/\\/g, '/'));
 const COLLECTION_NAME = 'gsd_memory'; // Unified collection for all projects

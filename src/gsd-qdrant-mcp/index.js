@@ -28,7 +28,7 @@ const SERVER_VERSION = (() => {
 // Read environment variables
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
 const COLLECTION_NAME = process.env.COLLECTION_NAME || 'gsd_memory';
-const VECTOR_NAME = process.env.VECTOR_NAME || 'fast-all-minilm-l6-v2';
+const VECTOR_NAME = process.env.VECTOR_NAME || 'codebert-768';
 const PROJECT_ROOT = process.cwd();
 
 // Load the GSDKnowledgeSync module
