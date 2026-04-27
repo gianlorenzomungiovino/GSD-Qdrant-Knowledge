@@ -1,39 +1,24 @@
-name: Create GitHub Release
+- name: Extract changelog for version
+  id: changelog
+  run: |
+    TAG="${{ github.ref_name }}"
+    VERSION="${TAG#v}"
 
-on:
-  push:
-    tags:
-      - 'v*'
+    # Estrae la sezione e salva in un file temporaneo
+    awk -v ver="${VERSION}" '
+      $0 ~ "^## " ver { found=1; next }
+      /^## / && found { found=0; exit }
+      found { print }
+    ' CHANGELOG.md > release_notes.md
 
-jobs:
-  release:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Extract changelog for version
-        id: changelog
-        run: |
-          TAG="${{ github.ref_name }}"
-          VERSION="${TAG#v}"
-          
-          # Extract the section between ## VERSION and the next ## (or EOF)
-          awk -v ver="${VERSION}" '
-            BEGIN { pat = "^## " ver "$" }
-            $0 ~ pat { found=1; next }
-            /^## / && found { exit }
-            found { print }
-          ' CHANGELOG.md > release-body.md
-          
-          # Escape newlines for GitHub Actions environment variable
-          BODY=$(sed -z 's/\n/\\n/g' release-body.md)
-          echo "body=${BODY}" >> "$GITHUB_OUTPUT"
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          body: "${{ steps.changelog.outputs.body }}"
-          draft: false
-          prerelease: false
+- name: Create GitHub Release
+  uses: softprops/action-gh-release@v2
+  with:
+    # Invece di "body", usiamo "body_path" che legge direttamente dal file creato sopra
+    body_path: release_notes.md
+    files: |
+      gsd-qdrant-knowledge-linux-amd64
+      gsd-qdrant-knowledge-darwin-amd64
+      gsd-qdrant-knowledge-windows-amd64.exe
+    draft: false
+    prerelease: false
