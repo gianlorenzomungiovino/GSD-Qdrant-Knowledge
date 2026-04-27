@@ -10,6 +10,7 @@ const fs = require('fs');
 const { existsSync, readFileSync, mkdirSync, writeFileSync, copyFileSync, rmSync, unlinkSync } = fs;
 const { join, dirname, extname, basename } = require('path');
 const readline = require('readline');
+const { applyRecencyBoost } = require('./re-ranking');
 
 const PROJECT_ROOT = process.cwd();
 const ROOT_PKG = join(PROJECT_ROOT, 'package.json');
@@ -624,11 +625,18 @@ async function main() {
       rankedHits = hits.filter(hit => hit.score >= FALLBACK_THRESHOLD);
     }
 
-    // Sort by score descending and limit to LIMIT results
-    const ranked = rankedHits
+    // Map hits to result objects (payload + score), attach _query for path matching
+    let rankedResults = rankedHits.map(hit => {
+      return { ...hit.payload, score: hit.score, _query: query };
+    });
+
+    // Apply recency boost and path matching re-ranking
+    applyRecencyBoost(rankedResults);
+
+    // Sort by updated score descending and limit to LIMIT results
+    const ranked = rankedResults
       .sort((a, b) => b.score - a.score)
-      .slice(0, LIMIT)
-      .map(hit => ({ ...hit.payload, score: hit.score }));
+      .slice(0, LIMIT);
 
     const elapsed = Date.now() - t0;
     console.log(`[qdrant] group_by: groups=${groupCount}, chunks=${totalResults} (threshold=${SCORE_THRESHOLD.toFixed(2)} → ${rankedHits.length} above), in ${elapsed}ms`);
