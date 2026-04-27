@@ -546,10 +546,11 @@ async function main() {
     // Prefetch-based query with group_by: return max 2 chunks per source document.
     // Uses searchPointGroups() to deduplicate across source documents.
     const t0 = Date.now();
-    const prefetchLimit = qdrantFilter && qdrantFilter.must ? 100 : 50; // wider prefetch when must-filter applied
+    const PREFETCH_LIMIT = 50; // wider prefetch when must-filter applied
     const GROUP_SIZE = 2;        // max chunks per source document
-    const GROUP_LIMIT = 5;       // max groups (documents) to return
-    const SCORE_THRESHOLD = 0.65;
+    const LIMIT = 5;             // max results to return
+    const SCORE_THRESHOLD = 0.85;  // minimum score for inclusion
+    const FALLBACK_THRESHOLD = 0.75; // lowered threshold if too few results
 
     let hits = [];
     let groupCount = 0;
@@ -562,7 +563,7 @@ async function main() {
         vector: { name: sync.vectorName, vector },
         group_by: 'source',
         group_size: GROUP_SIZE,
-        limit: GROUP_LIMIT,
+        limit: LIMIT * 3,  // request more groups so we can filter by threshold after
         score_threshold: SCORE_THRESHOLD,
         with_payload: true,
         with_vector: false,
@@ -586,7 +587,7 @@ async function main() {
       try {
         const searchConfig = {
           vector: { name: sync.vectorName, vector },
-          limit: GROUP_LIMIT * 10, // wider search for client-side dedup
+          limit: LIMIT * 10, // wider search for client-side dedup
           score_threshold: SCORE_THRESHOLD,
           with_payload: true,
           with_vector: false,
@@ -610,10 +611,28 @@ async function main() {
       }
     }
 
-    const elapsed = Date.now() - t0;
-    console.log('[qdrant] group_by: groups=%d, chunks=%d in %dms', groupCount, hits.length, elapsed);
+    // Log totals before threshold filtering
+    const totalResults = hits.length;
+    console.log('[qdrant] results: %d total, %d above threshold', totalResults, hits.filter(h => h.score >= SCORE_THRESHOLD).length);
 
-    const ranked = hits.map(hit => ({ ...hit.payload, score: hit.score }));
+    // Apply score threshold filter
+    let rankedHits = hits.filter(hit => hit.score >= SCORE_THRESHOLD);
+
+    // Fallback: if fewer than 2 results above threshold, retry with lowered threshold
+    if (rankedHits.length < 2 && totalResults > 0) {
+      console.log(`[qdrant] fallback: only ${rankedHits.length} results above ${SCORE_THRESHOLD.toFixed(2)}, retrying with ${FALLBACK_THRESHOLD.toFixed(2)}`);
+      rankedHits = hits.filter(hit => hit.score >= FALLBACK_THRESHOLD);
+    }
+
+    // Sort by score descending and limit to LIMIT results
+    const ranked = rankedHits
+      .sort((a, b) => b.score - a.score)
+      .slice(0, LIMIT)
+      .map(hit => ({ ...hit.payload, score: hit.score }));
+
+    const elapsed = Date.now() - t0;
+    console.log(`[qdrant] group_by: groups=${groupCount}, chunks=${totalResults} (threshold=${SCORE_THRESHOLD.toFixed(2)} → ${rankedHits.length} above), in ${elapsed}ms`);
+
     console.log(JSON.stringify({ query, project_id, results: ranked }, null, 2));
     return;
   }

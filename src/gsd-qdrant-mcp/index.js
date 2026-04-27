@@ -99,8 +99,9 @@ function createMcpServer() {
 
         // Grouped search: return max GROUP_SIZE chunks per source document.
         const GROUP_SIZE = 2;        // max chunks per source document
-        const GROUP_LIMIT = Math.max(limit * 3, 10); // groups to request
-        const GROUP_SCORE_THRESHOLD = 0.65;
+        const LIMIT = 5;             // max results to return
+        const SCORE_THRESHOLD = 0.85;  // minimum score for inclusion
+        const FALLBACK_THRESHOLD = 0.75; // lowered threshold if too few results
 
         let hits = [];
         let groupCount = 0;
@@ -109,8 +110,8 @@ function createMcpServer() {
             vector: { name: VECTOR_NAME, vector },
             group_by: 'source',
             group_size: GROUP_SIZE,
-            limit: GROUP_LIMIT,
-            score_threshold: GROUP_SCORE_THRESHOLD,
+            limit: LIMIT * 3,  // request more groups so we can filter by threshold after
+            score_threshold: SCORE_THRESHOLD,
             with_payload: true,
             with_vector: false,
           };
@@ -130,8 +131,8 @@ function createMcpServer() {
           try {
             const searchConfig = {
               vector: { name: VECTOR_NAME, vector },
-              limit: GROUP_LIMIT * 10,
-              score_threshold: GROUP_SCORE_THRESHOLD,
+              limit: LIMIT * 10,
+              score_threshold: SCORE_THRESHOLD,
               with_payload: true,
               with_vector: false,
             };
@@ -154,13 +155,30 @@ function createMcpServer() {
           }
         }
 
+        // Log totals before threshold filtering
+        const totalResults = hits.length;
+        console.log('[qdrant] auto_retrieve: results: %d total, %d above threshold', totalResults, hits.filter(h => h.score >= SCORE_THRESHOLD).length);
+
+        // Apply score threshold filter
+        let rankedHits = hits.filter(hit => hit.score >= SCORE_THRESHOLD);
+
+        // Fallback: if fewer than 2 results above threshold, retry with lowered threshold
+        if (rankedHits.length < 2 && totalResults > 0) {
+           console.log(`[qdrant] auto_retrieve: fallback: only ${rankedHits.length} results above ${SCORE_THRESHOLD.toFixed(2)}, retrying with ${FALLBACK_THRESHOLD.toFixed(2)}`);
+          rankedHits = hits.filter(hit => hit.score >= FALLBACK_THRESHOLD);
+        }
+
+        // Sort by Qdrant score descending
+        const sortedByQdrantScore = rankedHits.sort((a, b) => b.score - a.score);
+
         const elapsed = Date.now() - t0;
-        console.log('[qdrant] auto_retrieve: groups=%d, chunks=%d in %dms (group_by)', groupCount, hits.length, elapsed);
+        console.log(`[qdrant] auto_retrieve: groups=${groupCount}, chunks=${totalResults} (threshold=${SCORE_THRESHOLD.toFixed(2)} → ${rankedHits.length} above), in ${elapsed}ms`);
 
         const projectId = PROJECT_ROOT.split(/[/\\]/).pop();
 
         // Rank results prioritizing cross-project reuse without excluding current project results.
-        const ranked = hits.map(hit => {
+        // Use threshold-filtered hits (sortedByQdrantScore) instead of raw hits.
+        const ranked = sortedByQdrantScore.map(hit => {
           const recencyScore = Math.min(1, (Date.now() - hit.payload.timestamp) / (30 * 24 * 60 * 60 * 1000));
           const importanceScore = (hit.payload.importance || 1) / 5;
           const reusableBoost = hit.payload.reusable ? 0.08 : 0;
@@ -168,7 +186,7 @@ function createMcpServer() {
           const sameProjectBoost = hit.payload.project_id === projectId ? 0.04 : 0;
           const score = hit.score * 0.6 + (1 - recencyScore) * 0.15 + importanceScore * 0.05 + reusableBoost + crossProjectBoost + sameProjectBoost;
           return { ...hit.payload, score };
-        }).sort((a, b) => b.score - a.score).slice(0, limit);
+        }).slice(0, limit);
 
         // Format results for MCP response
         const results = ranked.map(hit => ({
