@@ -15,6 +15,9 @@ const { QdrantClient } = require('@qdrant/js-client-rest');
 const path = require('path');
 const fs = require('fs');
 
+// Load re-ranking utilities (estimateTokens, trimResultsByTokenBudget)
+const { estimateTokens, trimResultsByTokenBudget } = require(path.join(__dirname, '..', 're-ranking'));
+
 // Read version from this package's package.json (single source of truth)
 const MCP_PKG_PATH = path.join(__dirname, 'package.json');
 const SERVER_VERSION = (() => {
@@ -187,6 +190,30 @@ function createMcpServer() {
           const score = hit.score * 0.6 + (1 - recencyScore) * 0.15 + importanceScore * 0.05 + reusableBoost + crossProjectBoost + sameProjectBoost;
           return { ...hit.payload, score };
         }).slice(0, limit);
+
+        // Token estimation: calculate total tokens across all result text fields
+        let totalTokens = 0;
+        for (const r of ranked) {
+          if (!r) continue;
+          const textFields = [r.content, r.summary, r.text].filter(Boolean);
+          for (const field of textFields) {
+            totalTokens += estimateTokens(field);
+          }
+        }
+
+        // Trim results if over token budget (4000 tokens default)
+        let trimmedInfo;
+        try {
+          trimmedInfo = trimResultsByTokenBudget(ranked, { maxTokens: 4000 });
+        } catch (_) { /* non-fatal — proceed with untrimmed */ }
+
+        // Clean up internal _truncated flag before output
+        for (const r of ranked) {
+          if (r && '_truncated' in r) delete r._truncated;
+        }
+
+        console.log(`[retrieval] ${ranked.length} results, ~${totalTokens} estimated tokens` +
+          (trimmedInfo && trimmedInfo.trimmed ? `, trimmed to 500 chars per result` : ''));
 
         // Format results for MCP response
         const results = ranked.map(hit => ({

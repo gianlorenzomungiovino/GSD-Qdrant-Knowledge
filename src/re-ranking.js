@@ -75,4 +75,67 @@ function applyRecencyBoost(results, optionsOrDays = 30, rawQuery) {
   return results;
 }
 
-module.exports = { applyRecencyBoost };
+/**
+ * Estimate the number of tokens in a text string.
+ * Uses ~4 characters per token — a conservative approximation suitable for code/text mix.
+ * @param {string} text - Text to estimate tokens for
+ * @returns {number} Estimated token count (integer)
+ */
+function estimateTokens(text) {
+  if (!text || typeof text !== 'string') return 0;
+  return Math.ceil(text.length / 4);
+}
+
+/**
+ * Trim results when total estimated tokens exceed a limit.
+ * Keeps top-K results and truncates each result's content to first `maxChars` chars.
+ * Mutates the input array in place (adds trimmed flag, truncates text fields).
+ * @param {Array} results - Array of result objects with at least: score (number), content? (string)
+ * @param {Object} options
+ * @param {number} [options.maxTokens=4000] - Maximum total estimated tokens allowed
+ * @param {number} [options.maxCharsPerResult=500] - Max chars to keep per truncated result
+ * @returns {{ trimmed: boolean, originalCount: number, finalCount: number }} Info about trimming performed
+ */
+function trimResultsByTokenBudget(results, options = {}) {
+  const maxTokens = typeof options.maxTokens === 'number' ? options.maxTokens : 4000;
+  const maxCharsPerResult = typeof options.maxCharsPerResult === 'number' ? options.maxCharsPerResult : 500;
+
+  if (!results || results.length === 0) {
+    return { trimmed: false, originalCount: 0, finalCount: 0 };
+  }
+
+  // Calculate total estimated tokens from content + summary fields
+  let totalTokens = 0;
+  for (const r of results) {
+    if (!r) continue;
+    const textFields = [r.content, r.summary, r.text].filter(Boolean);
+    for (const field of textFields) {
+      totalTokens += estimateTokens(field);
+    }
+  }
+
+  // No trimming needed — stay under budget
+  if (totalTokens <= maxTokens) {
+    return { trimmed: false, originalCount: results.length, finalCount: results.length };
+  }
+
+  const originalCount = results.length;
+
+  // Truncate content/summary fields to maxCharsPerResult and mark as truncated
+  for (const r of results) {
+    if (!r) continue;
+    if (r.content && r.content.length > maxCharsPerResult) {
+      r.content = r.content.slice(0, maxCharsPerResult);
+      r._truncated = true;
+    }
+    // Also truncate text field if present and larger than limit
+    if (r.text && r.text.length > maxCharsPerResult) {
+      r.text = r.text.slice(0, maxCharsPerResult);
+      r._truncated = true;
+    }
+  }
+
+  return { trimmed: true, originalCount, finalCount: results.length };
+}
+
+module.exports = { applyRecencyBoost, estimateTokens, trimResultsByTokenBudget };

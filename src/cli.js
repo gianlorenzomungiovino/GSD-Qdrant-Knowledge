@@ -10,7 +10,7 @@ const fs = require('fs');
 const { existsSync, readFileSync, mkdirSync, writeFileSync, copyFileSync, rmSync, unlinkSync } = fs;
 const { join, dirname, extname, basename } = require('path');
 const readline = require('readline');
-const { applyRecencyBoost } = require('./re-ranking');
+const { applyRecencyBoost, estimateTokens, trimResultsByTokenBudget } = require('./re-ranking');
 
 const PROJECT_ROOT = process.cwd();
 const ROOT_PKG = join(PROJECT_ROOT, 'package.json');
@@ -638,8 +638,33 @@ async function main() {
       .sort((a, b) => b.score - a.score)
       .slice(0, LIMIT);
 
+    // Token estimation: calculate total tokens across all result text fields
+    let totalTokens = 0;
+    for (const r of ranked) {
+      if (!r) continue;
+      const textFields = [r.content, r.summary, r.text].filter(Boolean);
+      for (const field of textFields) {
+        totalTokens += estimateTokens(field);
+      }
+    }
+
+    // Trim results if over token budget (4000 tokens default)
+    let trimmedInfo;
+    try {
+      trimmedInfo = trimResultsByTokenBudget(ranked, { maxTokens: 4000 });
+    } catch (_) { /* non-fatal — proceed with untrimmed */ }
+
     const elapsed = Date.now() - t0;
     console.log(`[qdrant] group_by: groups=${groupCount}, chunks=${totalResults} (threshold=${SCORE_THRESHOLD.toFixed(2)} → ${rankedHits.length} above), in ${elapsed}ms`);
+    if (trimmedInfo && trimmedInfo.trimmed) {
+      const charsPerResult = ranked.filter(r => r._truncated).length;
+      console.log(`[retrieval] %d results, ~%d estimated tokens, trimmed to 500 chars per result`, ranked.length, totalTokens);
+    }
+
+    // Clean up internal _truncated flag before output
+    for (const r of ranked) {
+      if (r && '_truncated' in r) delete r._truncated;
+    }
 
     console.log(JSON.stringify({ query, project_id, results: ranked }, null, 2));
     return;
