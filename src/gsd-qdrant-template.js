@@ -178,15 +178,43 @@ class GSDKnowledgeSync {
   async searchWithContext(query, options = {}) {
     const limit = options.limit || 10;
     const vector = await this.embedText(query);
-    
-    // Search without filter first
-    const hits = await this.client.search(this.collectionName, { 
-      vector: { name: this.vectorName, vector }, 
-      limit,
-      with_payload: true, 
-      with_vector: false
-    });
-    
+
+    // Prefetch-based search: broad candidate gathering then refine with score threshold
+    const t0 = Date.now();
+    const prefetchLimit = Math.max(limit * 3, 20);
+    const SCORE_THRESHOLD = options.scoreThreshold || 0.6;
+
+    let hits = [];
+    try {
+      hits = await this.client.search(this.collectionName, { 
+        vector: { name: this.vectorName, vector },
+        prefetch: {
+          query: { name: this.vectorName, vector },
+          limit: prefetchLimit,
+        },
+        limit: Math.min(limit * 2, prefetchLimit),
+        score_threshold: SCORE_THRESHOLD,
+        with_payload: true, 
+        with_vector: false
+      });
+    } catch (prefetchErr) {
+      // Fallback: plain search if prefetch fails (e.g. version incompatibility)
+      if (process.env.GSD_QDRANT_VERBOSE === '1') {
+        console.warn('[qdrant] prefetch not supported, falling back to search');
+      }
+      hits = await this.client.search(this.collectionName, { 
+        vector: { name: this.vectorName, vector }, 
+        limit,
+        with_payload: true, 
+        with_vector: false
+      });
+    }
+
+    const elapsed = Date.now() - t0;
+    if (process.env.GSD_QDRANT_VERBOSE === '1') {
+      console.log('[qdrant] searchWithContext: %d results in %dms', hits.length, elapsed);
+    }
+
     // Filter results locally
     let filtered = hits;
     if (options.type) {

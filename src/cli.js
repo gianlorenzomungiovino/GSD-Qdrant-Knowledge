@@ -536,12 +536,43 @@ async function main() {
     const sync = new GSDKnowledgeSync();
     await sync.init();
     const vector = await sync.embedText(query);
-    const hits = await sync.client.search(sync.collectionName, {
-      vector: { name: sync.vectorName, vector },
-      limit: 10,
-      with_payload: true,
-      with_vector: false
-    });
+
+    // Prefetch-based query: first do a broad search to gather candidates,
+    // then refine with score threshold for high-relevance results only.
+    const t0 = Date.now();
+    const prefetchLimit = 50;
+    const finalLimit = 10;
+    const SCORE_THRESHOLD = 0.65;
+
+    let hits = [];
+    try {
+      // Prefetch: broad vector search (no filter, wide limit)
+      const prefetchResults = await sync.client.search(sync.collectionName, {
+        vector: { name: sync.vectorName, vector },
+        prefetch: {
+          query: { name: sync.vectorName, vector },
+          limit: prefetchLimit,
+        },
+        limit: finalLimit,
+        score_threshold: SCORE_THRESHOLD,
+        with_payload: true,
+        with_vector: false,
+      });
+      hits = prefetchResults;
+    } catch (prefetchErr) {
+      // Fallback: plain search if prefetch is not supported in this Qdrant version
+      console.warn('[qdrant] prefetch not supported, falling back to search');
+      hits = await sync.client.search(sync.collectionName, {
+        vector: { name: sync.vectorName, vector },
+        limit: finalLimit,
+        score_threshold: SCORE_THRESHOLD,
+        with_payload: true,
+        with_vector: false,
+      });
+    }
+
+    const elapsed = Date.now() - t0;
+    console.log('[qdrant] prefetch: %d results in %dms', hits.length, elapsed);
 
     const ranked = hits.map(hit => ({ ...hit.payload, score: hit.score }));
     console.log(JSON.stringify({ query, project_id, results: ranked }, null, 2));
