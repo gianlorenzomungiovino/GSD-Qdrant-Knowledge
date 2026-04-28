@@ -10,7 +10,7 @@ const fs = require('fs');
 const { existsSync, readFileSync, mkdirSync, writeFileSync, copyFileSync, rmSync, unlinkSync } = fs;
 const { join, dirname, extname, basename } = require('path');
 const readline = require('readline');
-const { applyRecencyBoost, estimateTokens, trimResultsByTokenBudget } = require('./re-ranking');
+const { applyRecencyBoost, applySymbolBoost, extractTokens, estimateTokens, trimResultsByTokenBudget } = require('./re-ranking');
 
 const PROJECT_ROOT = process.cwd();
 const ROOT_PKG = join(PROJECT_ROOT, 'package.json');
@@ -632,6 +632,9 @@ async function main() {
 
     // Apply recency boost and path matching re-ranking
     applyRecencyBoost(rankedResults);
+
+    // Symbol boost: increase scores for results whose symbolNames contain query tokens
+    applySymbolBoost(rankedResults, query);
 
     // Sort by updated score descending and limit to LIMIT results
     const ranked = rankedResults

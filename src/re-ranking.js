@@ -1,10 +1,83 @@
 /**
  * Re-ranking Module
  * 
- * Applies recency boost and path matching to Qdrant search results.
+ * Applies recency boost, path matching, and symbol name boosting to Qdrant search results.
  * Results with recent lastModified timestamps get a +0.05 score boost,
- * and results whose source paths contain query words get an additional +0.15 boost.
+ * results whose source paths contain query words get an additional +0.15 boost,
+ * and results containing exact token matches on symbolNames get a ×1.5 score multiplier.
  */
+
+// Minimal stopwords set for token extraction from queries (subset of full list)
+const QUERY_STOPWORDS = new Set([
+  'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+  'should', 'may', 'might', 'shall', 'can', 'need', 'to', 'of', 'in',
+  'for', 'on', 'with', 'at', 'by', 'from', 'as', 'into', 'through',
+  'during', 'before', 'after', 'above', 'below', 'between', 'out',
+  'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here',
+  'there', 'when', 'where', 'why', 'how', 'all', 'both', 'each', 'few',
+  'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only',
+  'own', 'same', 'so', 'than', 'too', 'very', 'just', 'because', 'but',
+  'and', 'or', 'if', 'while', 'about', 'up'
+]);
+
+/**
+ * Extract meaningful tokens from a query string.
+ * Steps: lowercase → split on whitespace/punctuation/hyphens/underscores → filter stopwords and short tokens.
+ * @param {string} query - Original user query
+ * @returns {string[]} Array of meaningful token strings (length ≥ 2)
+ */
+function extractTokens(query) {
+  if (!query || typeof query !== 'string') return [];
+
+  const normalized = query.toLowerCase().trim();
+  const tokens = normalized.split(/[\s\-_]+/);
+  return tokens.filter(t => t.length >= 2 && !QUERY_STOPWORDS.has(t));
+}
+
+/**
+ * Apply symbol name boost to ranked results.
+ * For each result with a `symbolNames` payload field, checks if any query token
+ * appears as a substring within at least one symbolName. If so, multiplies the score by 1.5.
+ * 
+ * @param {Array} results - Array of result objects (mutated in place)
+ * @param {string} rawQuery - Original user query for token extraction
+ * @returns {Array} The same results array with updated scores
+ */
+function applySymbolBoost(results, rawQuery) {
+  if (!results || results.length === 0 || !rawQuery || typeof rawQuery !== 'string') return results;
+
+  const tokens = extractTokens(rawQuery);
+  if (tokens.length === 0) return results;
+
+  let boostedCount = 0;
+
+  for (const result of results) {
+    if (!result || typeof result.score !== 'number') continue;
+
+    // Check symbolNames field in payload — expect an array of strings
+    const symbols = Array.isArray(result.symbolNames) ? result.symbolNames : [];
+    let matched = false;
+
+    for (const token of tokens) {
+      for (const sym of symbols) {
+        if (typeof sym === 'string' && sym.toLowerCase().includes(token)) {
+          matched = true;
+          break;
+        }
+      }
+      if (matched) break;
+    }
+
+    if (matched) {
+      result.score *= 1.5;
+      boostedCount++;
+    }
+  }
+
+  console.log('[retrieval] symbolBoost: %d results', boostedCount);
+  return results;
+}
 
 /**
  * Apply recency boost and path matching to ranked results.
@@ -138,4 +211,4 @@ function trimResultsByTokenBudget(results, options = {}) {
   return { trimmed: true, originalCount, finalCount: results.length };
 }
 
-module.exports = { applyRecencyBoost, estimateTokens, trimResultsByTokenBudget };
+module.exports = { applyRecencyBoost, applySymbolBoost, extractTokens, estimateTokens, trimResultsByTokenBudget };

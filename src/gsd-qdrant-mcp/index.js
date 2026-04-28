@@ -15,8 +15,8 @@ const { QdrantClient } = require('@qdrant/js-client-rest');
 const path = require('path');
 const fs = require('fs');
 
-// Load re-ranking utilities (estimateTokens, trimResultsByTokenBudget)
-const { estimateTokens, trimResultsByTokenBudget } = require(path.join(__dirname, '..', 're-ranking'));
+// Load re-ranking utilities (applyRecencyBoost, applySymbolBoost, estimateTokens, trimResultsByTokenBudget)
+const { applyRecencyBoost, applySymbolBoost, estimateTokens, trimResultsByTokenBudget } = require(path.join(__dirname, '..', 're-ranking'));
 
 // Load query cache for deduplicating repeated queries
 const { cache: queryCache } = require(path.join(__dirname, '..', 'query-cache'));
@@ -203,6 +203,9 @@ function createMcpServer() {
           const score = hit.score * 0.6 + (1 - recencyScore) * 0.15 + importanceScore * 0.05 + reusableBoost + crossProjectBoost + sameProjectBoost;
           return { ...hit.payload, score };
         }).slice(0, limit);
+
+        // Symbol boost: increase scores for results whose symbolNames contain query tokens
+        applySymbolBoost(ranked, task);
 
         // Token estimation: calculate total tokens across all result text fields
         let totalTokens = 0;
