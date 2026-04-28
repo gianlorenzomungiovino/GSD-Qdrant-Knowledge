@@ -19,7 +19,7 @@ const fs = require('fs');
 const { estimateTokens, trimResultsByTokenBudget } = require(path.join(__dirname, '..', 're-ranking'));
 
 // Load query cache for deduplicating repeated queries
-const queryCache = require(path.join(__dirname, '..', 'query-cache'));
+const { cache: queryCache } = require(path.join(__dirname, '..', 'query-cache'));
 
 // Read version from this package's package.json (single source of truth)
 const MCP_PKG_PATH = path.join(__dirname, 'package.json');
