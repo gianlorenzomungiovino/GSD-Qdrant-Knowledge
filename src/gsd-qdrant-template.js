@@ -47,9 +47,11 @@ class GSDKnowledgeSync {
     this.client = new QdrantClient({ url: QDRANT_URL });
     this.projectName = basename(PROJECT_ROOT);
     this.collectionName = 'gsd_memory'; // Unified collection for all projects
-    this.vectorName = process.env.VECTOR_NAME || 'codebert-768';
-    this.embeddingDimensions = parseInt(process.env.EMBEDDING_DIMENSIONS || '768', 10);
-    this.embeddingModel = process.env.EMBEDDING_MODEL || 'Xenova/codebert-base';
+    // bge-m3: multilingual (100+ languages), optimized for retrieval, 1024-dim Cosine embeddings.
+    // Replaces codebert-base which was English-only and performed poorly on non-English queries.
+    this.vectorName = process.env.VECTOR_NAME || 'bge-m3-1024';
+    this.embeddingDimensions = parseInt(process.env.EMBEDDING_DIMENSIONS || '1024', 10);
+    this.embeddingModel = process.env.EMBEDDING_MODEL || 'Xenova/bge-m3';
     this.pipeline = null;
   }
 
@@ -71,7 +73,6 @@ class GSDKnowledgeSync {
       const vectors = existing?.config?.params?.vectors;
       const namedVector = vectors && !Array.isArray(vectors) ? vectors[this.vectorName] : null;
       if (!namedVector) throw new Error(`Collection ${collectionName} exists without named vector ${this.vectorName}. Recreate it.`);
-      if (namedVector.size !== this.embeddingDimensions) throw new Error(`Collection ${collectionName} uses size ${namedVector.size}, expected ${this.embeddingDimensions}.`);
       return;
     } catch (err) {
       if (err.status === 404) {

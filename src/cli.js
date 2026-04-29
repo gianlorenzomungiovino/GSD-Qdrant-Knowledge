@@ -256,7 +256,7 @@ function ensureToolMcpConfig() {
         env: {
           QDRANT_URL: process.env.QDRANT_URL || 'http://localhost:6333',
           COLLECTION_NAME: process.env.COLLECTION_NAME || 'gsd_memory',
-          VECTOR_NAME: process.env.VECTOR_NAME || 'codebert-768'
+          VECTOR_NAME: process.env.VECTOR_NAME || 'bge-m3-1024'
         }
       }
     }
@@ -282,7 +282,7 @@ function ensureRootMcpRegistration() {
     env: {
       QDRANT_URL: process.env.QDRANT_URL || 'http://localhost:6333',
       COLLECTION_NAME: process.env.COLLECTION_NAME || 'gsd_memory',
-      VECTOR_NAME: process.env.VECTOR_NAME || 'codebert-768'
+      VECTOR_NAME: process.env.VECTOR_NAME || 'bge-m3-1024'
     }
   };
 
