@@ -102,73 +102,43 @@ function createMcpServer() {
         const sync = new GSDKnowledgeSync();
         await sync.init();
 
-        // Generate query embedding and search using prefetch
+        // Generate query embedding and search using prefetch.
+        // A+C approach: LLM extracts meaningful terms (prompted in KNOWLEDGE.md),
+        // but we apply a minimal keyword extraction as fallback for any unfiltered query.
+        const { detectIntent, buildQdrantFilter, extractKeywords } = require(path.join(__dirname, '..', 'intent-detector'));
         const t0 = Date.now();
-        const vector = await sync.embedText(task);
 
-        // Detect search intent and build Qdrant filter from certain filters (must)
-        // vs uncertain ones (should). This ensures language/type/project constraints
-        // are applied as hard must-clauses when the intent is confident.
-        const { detectIntent, buildQdrantFilter } = require(path.join(__dirname, '..', 'intent-detector'));
         const intent = detectIntent(task);
         const qdrantFilter = buildQdrantFilter(intent);
 
-        // Grouped search: return max GROUP_SIZE chunks per source document.
-        const GROUP_SIZE = 2;        // max chunks per source document
-        const LIMIT = 5;             // max results to return
-        const SCORE_THRESHOLD = 0.85;  // minimum score for inclusion
-        const FALLBACK_THRESHOLD = 0.75; // lowered threshold if too few results
+        // Language-agnostic keyword extraction — no stopword lists.
+        // Just heuristic filtering: skip very short/very long tokens, take first 5 meaningful ones.
+        const embeddedQuery = extractKeywords(task) || task;
+
+        const vector = await sync.embedText(embeddedQuery);
+
+        // Flat search — no grouping, so multiple snippets from the same file can appear.
+        const LIMIT = 30;            // max results to return (increased for better re-ranking)
+        const SCORE_THRESHOLD = 0.7; // lowered threshold so re-ranker has more candidates
+        const FALLBACK_THRESHOLD = 0.55; // further lowered if too few results
 
         let hits = [];
-        let groupCount = 0;
         try {
-          const groupConfig = {
+          const searchConfig = {
             vector: { name: VECTOR_NAME, vector },
-            group_by: 'source',
-            group_size: GROUP_SIZE,
-            limit: LIMIT * 3,  // request more groups so we can filter by threshold after
+            limit: LIMIT * 2,  // request extra so threshold filtering still leaves enough
             score_threshold: SCORE_THRESHOLD,
             with_payload: true,
             with_vector: false,
           };
           if (qdrantFilter) {
-            groupConfig.filter = qdrantFilter;
+            searchConfig.filter = qdrantFilter;
           }
-          const groupedResults = await sync.client.searchPointGroups(COLLECTION_NAME, groupConfig);
-          groupCount = groupedResults.groups.length;
+          const rawHits = await sync.client.search(COLLECTION_NAME, searchConfig);
+          hits = rawHits;
 
-          // Flatten groups into a single hits array
-          for (const group of groupedResults.groups) {
-            hits = hits.concat(group.hits);
-          }
-        } catch (groupErr) {
-          // Fallback: plain search with client-side dedup
-          console.warn('[qdrant] searchPointGroups failed, falling back to search');
-          try {
-            const searchConfig = {
-              vector: { name: VECTOR_NAME, vector },
-              limit: LIMIT * 10,
-              score_threshold: SCORE_THRESHOLD,
-              with_payload: true,
-              with_vector: false,
-            };
-            if (qdrantFilter) {
-              searchConfig.filter = qdrantFilter;
-            }
-            const rawHits = await sync.client.search(COLLECTION_NAME, searchConfig);
-
-            // Client-side dedup: max GROUP_SIZE per source document
-            const sourceCounts = {};
-            for (const hit of rawHits) {
-              const src = hit.payload && hit.payload.source;
-              if (!src || (sourceCounts[src] || 0) >= GROUP_SIZE) continue;
-              sourceCounts[src] = (sourceCounts[src] || 0) + 1;
-              hits.push(hit);
-            }
-            groupCount = Object.keys(sourceCounts).length;
-          } catch (searchErr) {
-            console.warn('[qdrant] search also failed, returning empty:', searchErr.message);
-          }
+        } catch (searchErr) {
+          console.warn('[qdrant] search failed:', searchErr.message);
         }
 
         // Log totals before threshold filtering
@@ -178,17 +148,17 @@ function createMcpServer() {
         // Apply score threshold filter
         let rankedHits = hits.filter(hit => hit.score >= SCORE_THRESHOLD);
 
-        // Fallback: if fewer than 2 results above threshold, retry with lowered threshold
+        // Fallback: if fewer than 2 results above threshold and we got some results at all, retry with lowered threshold
         if (rankedHits.length < 2 && totalResults > 0) {
            console.log(`[qdrant] auto_retrieve: fallback: only ${rankedHits.length} results above ${SCORE_THRESHOLD.toFixed(2)}, retrying with ${FALLBACK_THRESHOLD.toFixed(2)}`);
           rankedHits = hits.filter(hit => hit.score >= FALLBACK_THRESHOLD);
         }
 
-        // Sort by Qdrant score descending
+        // Sort by Qdrant score descending (re-ranker will re-score after this)
         const sortedByQdrantScore = rankedHits.sort((a, b) => b.score - a.score);
 
         const elapsed = Date.now() - t0;
-        console.log(`[qdrant] auto_retrieve: groups=${groupCount}, chunks=${totalResults} (threshold=${SCORE_THRESHOLD.toFixed(2)} → ${rankedHits.length} above), in ${elapsed}ms`);
+        console.log(`[qdrant] auto_retrieve: chunks=${totalResults} (threshold=${SCORE_THRESHOLD.toFixed(2)} → ${rankedHits.length} above), in ${elapsed}ms`);
 
         const projectId = PROJECT_ROOT.split(/[/\\]/).pop();
 

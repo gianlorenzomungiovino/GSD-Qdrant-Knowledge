@@ -61,23 +61,44 @@ async function installPostCommitHook(projectRoot) {
 async function ensureProjectCollections(client) {
   console.log(`🗄️ Collection: ${COLLECTION_NAME}`);
   try {
+    let collectionExists = false;
+
     try {
-      await client.getCollection(COLLECTION_NAME);
-      console.log(`ℹ️  Collection ${COLLECTION_NAME} already exists`);
-      return;
+      const existing = await client.getCollection(COLLECTION_NAME);
+      const vectors = existing?.config?.params?.vectors;
+
+      // Check if the named vector matches expected name and dimensions
+      const namedVector = vectors && !Array.isArray(vectors) ? vectors[VECTOR_NAME] : null;
+      if (namedVector && namedVector.size === EMBEDDING_DIMENSIONS) {
+        console.log(`ℹ️  Collection ${COLLECTION_NAME} already exists with correct vector (${VECTOR_NAME}, size=${EMBEDDING_DIMENSIONS})`);
+        collectionExists = true;
+      } else {
+        // Vector name or size mismatch — need to recreate
+        if (namedVector) {
+          console.log(`⚠️  Collection ${COLLECTION_NAME} exists but vector mismatch: found '${VECTOR_NAME}' with size=${namedVector.size}, expected size=${EMBEDDING_DIMENSIONS}. Recreating...`);
+        } else {
+          const existingNames = vectors && !Array.isArray(vectors) ? Object.keys(vectors).join(', ') : 'unnamed';
+          console.log(`⚠️  Collection ${COLLECTION_NAME} exists but missing vector '${VECTOR_NAME}' (has: ${existingNames || 'none'}). Recreating...`);
+        }
+
+        // Delete and recreate with correct config
+        await client.deleteCollection(COLLECTION_NAME);
+      }
     } catch (getErr) {
       if (getErr.status !== 404) throw getErr;
     }
 
-    await client.createCollection(COLLECTION_NAME, {
-      vectors: {
-        [VECTOR_NAME]: {
-          size: EMBEDDING_DIMENSIONS,
-          distance: 'Cosine',
+    if (!collectionExists) {
+      await client.createCollection(COLLECTION_NAME, {
+        vectors: {
+          [VECTOR_NAME]: {
+            size: EMBEDDING_DIMENSIONS,
+            distance: 'Cosine',
+          },
         },
-      },
-    });
-    console.log(`✅ Created collection: ${COLLECTION_NAME} (unified)`);
+      });
+      console.log(`✅ Created collection: ${COLLECTION_NAME} (unified)`);
+    }
   } catch (err) {
     console.warn(`⚠️  Could not create ${COLLECTION_NAME}: ${err.message}`);
   }

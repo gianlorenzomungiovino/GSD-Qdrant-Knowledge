@@ -49,7 +49,15 @@ auto_retrieve(
 )
 \`\`\`
 
-The tool returns relevant context from other GSD projects indexed in Qdrant. Use this context to avoid reinventing solutions and learn from existing patterns.
+### Query formulation — extract key terms first
+Before calling \`auto_retrieve\`, distill your question into **2-4 meaningful keywords** (no filler words). The embedding model scores best when the query is focused on concrete nouns/verbs.
+
+| ❌ Bad | ✅ Good |
+|---|---|
+| "in base alle tue conoscenze, fai una ricerca su come possiamo implementare un carrello per un e commerce?" | "implementazione carrello ecommerce" |
+| "come si usa React useEffect con cleanup function?" | "React useEffect cleanup pattern" |
+
+The system will also extract keywords automatically as a fallback, but explicit extraction gives better results.
 
 ### Notes
 - Results are ranked by semantic relevance + cross-project boost

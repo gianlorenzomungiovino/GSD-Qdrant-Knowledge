@@ -59,13 +59,13 @@ function detectSearchType(query) {
     'contains': /\b(contains|contiene|includes|include)\b/,
     'starts': /\b(starts|inizi|comincia|begin)\b/,
     'fuzzy': /\b(fuzzy|approssimativo|similare|fuzzi)\b/,
-    // Code placement patterns
+    // Code placement patterns — documentation takes priority over config when both match
+    'documentation': /\b(documentation|documentazione|docs|wiki|manuale)\b/,
     'script': /\b(cli|command|script|scripting|esecuzione|esecuzione)\b/,
     'utility': /\b(utility|helper|aiuto|help|funzione|function|libreria|librerias)\b/,
     'component': /\b(component|componente|ui|interface|interfaccia|widget)\b/,
     'test': /\b(test|testing|prove|testare|suite|test suite)\b/,
     'config': /\b(config|configuration|configurazione|configuratione|settings|impostazioni)\b/,
-    'documentation': /\b(documentation|documentazione|docs|wiki|manuale)\b/,
     'snippet': /\b(snippet|pezzo|tratto|porzione)\b/,
     'example': /\b(example|esempio|esempi|sample|campioni|demo)\b/
   };
@@ -273,7 +273,7 @@ function extractPreferences(query) {
 }
 
 /**
- * Extract search terms from query after removing filter keywords
+ * Extract search terms from query after removing filter keywords and stopwords.
  * 
  * @param {string} query - Normalized query string
  * @param {Object} filters - Extracted filters
@@ -308,6 +308,28 @@ function extractSearchTerms(query, filters) {
   terms = terms.replace(/\s+/g, ' ').trim();
   
   return terms;
+}
+
+/**
+ * Minimal keyword extraction — language-agnostic fallback for embedding queries.
+ * No stopword lists: just heuristic filtering (skip very short/very long tokens).
+ * Returns up to 5 meaningful tokens joined as a space-separated string.
+ * 
+ * This is the safety net when the LLM doesn't pre-filter the query.
+ */
+function extractKeywords(query) {
+  if (!query || typeof query !== 'string') return '';
+
+  const normalized = query.toLowerCase().trim();
+  
+  // Split on whitespace, punctuation, hyphens, underscores
+  const tokens = normalized.split(/[\s\-_.,;:!?(){}[\]<>\/\\|@#$%^&*+=~`]+/);
+  
+  // Filter: keep only tokens between 2 and 40 chars (skip noise + URLs/hashes)
+  const meaningful = tokens.filter(t => t.length >= 2 && t.length <= 40);
+  
+  // Take up to 5 most significant tokens (first 5 in order preserves intent priority)
+  return meaningful.slice(0, 5).join(' ');
 }
 
 /**
@@ -351,17 +373,38 @@ function buildQdrantFilter(intent) {
     must.push({ key: 'language', match: { value: qdrantLang } });
   }
 
-  // ── type (certain) ────────────────────────────────────────────────
+  // ── type → soft boost (should, not must) ────────────────────────
+  // Type hints are suggestions to the DB: matching points get a score bump.
+  // They never exclude results — that's what semantic similarity + re-ranking do.
+  const KNOWN_PAYLOAD_TYPES = new Set(['code', 'doc']);
+  const TYPE_MAP = {
+    component: 'code', test: 'code', config: 'code', script: 'code',
+    utility: 'code', helper: 'code', library: 'code', framework: 'code',
+    tool: 'code', snippet: 'code', example: 'code', template: 'code',
+    build: 'code', deploy: 'code', ci: 'code', docker: 'code',
+    database: 'code', api: 'code', frontend: 'code', backend: 'code',
+    devops: 'code', security: 'code', performance: 'code',
+    documentation: 'doc',
+  };
+
   if (intent.filters.type) {
-    must.push({ key: 'type', match: { value: intent.filters.type } });
+    const mappedType = TYPE_MAP[intent.filters.type];
+    if (mappedType && KNOWN_PAYLOAD_TYPES.has(mappedType)) {
+      should.push({ key: 'type', match: { value: mappedType } });
+      console.log('[qdrant] filter: type "%s" → payload "%s" (soft boost)', intent.filters.type, mappedType);
+    } else if (intent.filters.type) {
+      // Unknown search type — no mapping exists. Skip entirely.
+      console.log('[qdrant] filter: unknown type "%s", skipping', intent.filters.type);
+    }
   }
 
-  // ── project_id (certain) ──────────────────────────────────────────
+  // ── project_id → soft boost (should, not must) ──────────────────
   if (intent.filters.project_id) {
-    must.push({ key: 'project_id', match: { value: intent.filters.project_id } });
+    should.push({ key: 'project_id', match: { value: intent.filters.project_id } });
+    console.log('[qdrant] filter: project "%s" (soft boost)', intent.filters.project_id);
   }
 
-  // ── tags (soft boost — should) ────────────────────────────────────
+  // ── tags → soft boost (should) ────────────────────────────────────
   if (intent.filters.tags && intent.filters.tags.length > 0) {
     for (const tag of intent.filters.tags) {
       should.push({ key: 'tags', match: { value: tag } });
@@ -488,6 +531,7 @@ module.exports = {
   extractFilters,
   extractPreferences,
   extractSearchTerms,
+  extractKeywords,
   generateQuery,
   buildQdrantFilter
 };

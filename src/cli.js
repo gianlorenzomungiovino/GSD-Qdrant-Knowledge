@@ -536,13 +536,20 @@ async function main() {
     }
 
     // Detect search intent and build Qdrant filter from certain filters (must)
-    // vs uncertain ones (should)
+    // vs uncertain ones (should). The LLM is responsible for normalizing the query;
+    // we only strip known filter keywords that would otherwise pollute the embedding.
     const intent = intentDetector.detectIntent(query);
     const qdrantFilter = intentDetector.buildQdrantFilter(intent);
 
     const sync = new GSDKnowledgeSync();
     await sync.init();
-    const vector = await sync.embedText(query);
+    
+    // A+C approach: LLM extracts meaningful terms (prompted in KNOWLEDGE.md),
+    // but we apply a minimal keyword extraction as fallback for any unfiltered query.
+    // extractKeywords is language-agnostic — no stopword lists, just heuristic filtering.
+    const embeddedQuery = intentDetector.extractKeywords(query) || query;
+
+    const vector = await sync.embedText(embeddedQuery);
 
     // Prefetch-based query with group_by: return max 2 chunks per source document.
     // Uses searchPointGroups() to deduplicate across source documents.

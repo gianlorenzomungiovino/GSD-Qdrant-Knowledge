@@ -53,6 +53,8 @@
     "src/auto-retrieve-mcp.js",
     "src/knowledge-instructions.js",
     "src/install-gsd-extension.js",
+    "src/re-ranking.js",
+    "src/query-cache.js",
     "src/hooks/post-commit.bat",
     "src/hooks/post-commit.ps1",
     "src/hooks/post-commit.sh",
