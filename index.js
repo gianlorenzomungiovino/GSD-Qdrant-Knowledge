@@ -291,7 +291,8 @@ class GSDKnowledgeSync {
     return scored.slice(0, 5);
   }
   findRelevantDocsForSnippet(relPath, content, docIndex) { const snippetIds = new Set(this.extractGsdIds(relPath, content)); const lowerPath = relPath.toLowerCase(); const contentSlice = content.toLowerCase().slice(0, 4000); const scored = []; for (const doc of docIndex.allDocs) { let score = 0; const reasons = []; if (doc.ids.some((id) => snippetIds.has(id))) { score += 6; reasons.push('shared-gsd-id'); } for (const id of doc.ids) { if (lowerPath.includes(id.toLowerCase())) { score += 4; reasons.push('path-id-match'); break; } } for (const keyword of doc.keywords) { if (keyword.length < 4) continue; if (lowerPath.includes(keyword) || contentSlice.includes(keyword)) { score += 1; reasons.push(`keyword:${keyword}`); if (score >= 10) break; } } if (score > 0) scored.push({ ...doc, score, reason: [...new Set(reasons)].join(',') }); } scored.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path)); return scored.slice(0, 5); }
-  buildDocText(relPath, content, metadata) { return [`project:${this.projectName}`, `path:${relPath}`, metadata.title ? `title:${metadata.title}` : null, content].filter(Boolean).join('\n'); }
+  // Embed title + content only; project/path stay in payload for filtering.
+  buildDocText(relPath, content, metadata) { return [metadata.title ? `# ${metadata.title}` : null, content].filter(Boolean).join('\n'); }
   buildSnippetText(relPath, content, payload) { const contextLine = payload.relatedDocPaths.length ? `related-docs:${payload.relatedDocPaths.join(', ')}` : null; const idsLine = payload.relatedDocIds.length ? `related-ids:${payload.relatedDocIds.join(', ')}` : null; const nameLine = payload.name ? `name:${payload.name}` : null; const symbolLine = payload.symbolNames?.length ? `symbols:${payload.symbolNames.join(', ')}` : null; const exportLine = payload.exports?.length ? `exports:${payload.exports.join(', ')}` : null; return [`project:${this.projectName}`, `path:${relPath}`, `language:${payload.language}`, `scope:${payload.scope}`, `workspace:${payload.workspace}`, `kind-detail:${payload.kindDetail}`, nameLine, symbolLine, exportLine, idsLine, contextLine, content].filter(Boolean).join('\n'); }
   async upsertPoint(collection, point) { await this.client.upsert(collection, { points: [point] }); }
   async deleteMissingPoints(seenIds, syncState) {
@@ -514,28 +515,13 @@ class GSDKnowledgeSync {
   }
 
   buildDocText(relPath, content, metadata) {
-    return [`project:${this.projectName}`, `path:${relPath}`, metadata.title ? `title:${metadata.title}` : null, content].filter(Boolean).join('\n');
+    return [metadata.title ? `# ${metadata.title}` : null, content].filter(Boolean).join('\n');
   }
 
+  // Embed path + project + language + kind as lightweight semantic anchors.
+  // Heavy metadata (signatures, exports list, imports list, symbol names) stays in payload for filtering only — they dilute embedding signal when included inline.
   buildCodeText(relPath, content, payload) {
-    // For code embedding, prepend full file path so CodeBERT gives it highest positional weight
-    const sigText = payload.signatures.join('\n');
-    const exportText = payload.exports ? `exports:${payload.exports.join(', ')}` : null;
-    const importText = payload.imports ? `imports:${payload.imports.join(', ')}` : null;
-    const symbolText = payload.symbolNames ? `symbols:${payload.symbolNames.join(', ')}` : null;
-    const commentText = payload.comments ? `comments:${payload.comments.join(' | ')}` : null;
-    
-    return [
-      relPath,                          // Full path first — highest positional weight for CodeBERT
-      `project:${this.projectName}`,
-      `language:${payload.language}`,
-      `kind:${payload.kindDetail}`,
-      exportText,
-      importText,
-      symbolText,
-      commentText,
-      sigText
-    ].filter(Boolean).join('\n');
+    return [relPath, `project:${this.projectName}`, `language:${payload.language}`, `kind:${payload.kindDetail}`, content].filter(Boolean).join('\n');
   }
   async embedText(text) { if (this.pipeline) { const output = await this.pipeline(text, { pooling: 'mean', normalize: true }); return Array.from(output.data); } return this.generatePlaceholderEmbedding(text); }
   extractMetadata(filePath, content) { const metadata = { relativePath: this.toProjectRelative(filePath) }; const titleMatch = content.match(/^#\s+(.+)$/m); if (titleMatch) metadata.title = titleMatch[1].trim(); const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/); if (frontmatterMatch) { const dateMatch = frontmatterMatch[1].match(/date:\s+(.+)/); if (dateMatch) metadata.date = dateMatch[1].trim(); } return metadata; }

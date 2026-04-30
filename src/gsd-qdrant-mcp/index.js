@@ -88,8 +88,8 @@ function createMcpServer() {
     },
     async ({ task, limit = 3, maxQueries = 2, includeContent = false }) => {
       try {
-        // Build cache key from normalized query + limit (limit affects result set)
-        const cacheKey = `${task}|${limit}`;
+        // Build cache key from normalized query + limit + includeContent (all affect result set)
+        const cacheKey = `${task}|${limit}|${includeContent}`;
 
         // Check cache first — serve repeated queries without hitting Qdrant
         const cachedResult = queryCache.get(cacheKey);
