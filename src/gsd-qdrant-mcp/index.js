@@ -103,17 +103,21 @@ function createMcpServer() {
         await sync.init();
 
         // Generate query embedding and search using prefetch.
-        // A+C approach: LLM extracts meaningful terms (prompted in KNOWLEDGE.md),
-        // but we apply a minimal keyword extraction as fallback for any unfiltered query.
+        // Primary normalization happens via KNOWLEDGE.md instructions to the LLM
+        // (extract 2-4 keywords before calling auto_retrieve). This code is a safety net:
+        // if the LLM passes an unfiltered natural language query, we tokenize it here.
         const { detectIntent, buildQdrantFilter, extractKeywords } = require(path.join(__dirname, '..', 'intent-detector'));
         const t0 = Date.now();
 
         const intent = detectIntent(task);
         const qdrantFilter = buildQdrantFilter(intent);
 
-        // Language-agnostic keyword extraction — no stopword lists.
-        // Just heuristic filtering: skip very short/very long tokens, take first 5 meaningful ones.
+        // Build embedding query: use keyword extraction as fallback for unfiltered queries.
+        // Falls back to the raw task string if no meaningful tokens are found.
         const embeddedQuery = extractKeywords(task) || task;
+
+        console.log(`[qdrant] auto_retrieve: original_query="${task}"`);
+        console.log(`[qdrant] auto_retrieve: embedding_query="${embeddedQuery}"`);
 
         const vector = await sync.embedText(embeddedQuery);
 
@@ -141,9 +145,33 @@ function createMcpServer() {
           console.warn('[qdrant] search failed:', searchErr.message);
         }
 
-        // Log totals before threshold filtering
+        // Diagnostic logging — show raw scores before threshold filtering
         const totalResults = hits.length;
-        console.log('[qdrant] auto_retrieve: results: %d total, %d above threshold', totalResults, hits.filter(h => h.score >= SCORE_THRESHOLD).length);
+        
+        if (totalResults > 0) {
+          // Show top-10 raw scores for debugging retrieval quality
+          const sortedAll = [...hits].sort((a, b) => b.score - a.score);
+          console.log(`[qdrant] auto_retrieve: total hits=${totalResults}, threshold=${SCORE_THRESHOLD.toFixed(2)}, fallback_threshold=${FALLBACK_THRESHOLD.toFixed(2)}`);
+          
+          // Top 10 raw scores with source paths (for diagnosing cutoff issues)
+          const topN = sortedAll.slice(0, Math.min(10, totalResults));
+          console.log(`[qdrant] auto_retrieve: top-${topN.length} raw scores:`);
+          for (const h of topN) {
+            console.log(`  score=${h.score.toFixed(4)} source="${h.payload?.source || '(none)'}" project="${h.payload?.project_id || '(none)'}"`);
+          }
+
+          // Count results at each threshold level to diagnose cutoff behavior
+          const abovePrimary = hits.filter(h => h.score >= SCORE_THRESHOLD).length;
+          const aboveFallback = hits.filter(h => h.score >= FALLBACK_THRESHOLD).length;
+          
+          if (abovePrimary === 0 && totalResults > 0) {
+            console.log(`[qdrant] auto_retrieve: ⚠️ ZERO results at threshold ${SCORE_THRESHOLD.toFixed(2)} — all scores below cutoff`);
+            const maxScore = sortedAll[0]?.score || 0;
+            console.log(`[qdrant] auto_retrieve: highest score is ${maxScore.toFixed(4)}, gap to threshold=${(SCORE_THRESHOLD - maxScore).toFixed(4)}`);
+          } else if (abovePrimary < 2 && totalResults > 0) {
+            console.log(`[qdrant] auto_retrieve: ⚠️ Only ${abovePrimary} results at threshold — will retry with fallback`);
+          }
+        }
 
         // Apply score threshold filter
         let rankedHits = hits.filter(hit => hit.score >= SCORE_THRESHOLD);
@@ -152,6 +180,9 @@ function createMcpServer() {
         if (rankedHits.length < 2 && totalResults > 0) {
            console.log(`[qdrant] auto_retrieve: fallback: only ${rankedHits.length} results above ${SCORE_THRESHOLD.toFixed(2)}, retrying with ${FALLBACK_THRESHOLD.toFixed(2)}`);
           rankedHits = hits.filter(hit => hit.score >= FALLBACK_THRESHOLD);
+
+          // Log how many survived the fallback threshold
+          console.log(`[qdrant] auto_retrieve: after fallback (${FALLBACK_THRESHOLD.toFixed(2)}): ${rankedHits.length} results`);
         }
 
         // Sort by Qdrant score descending (re-ranker will re-score after this)

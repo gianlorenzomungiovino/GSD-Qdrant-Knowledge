@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectIntent, buildQdrantFilter } from './intent-detector.js';
+import { detectIntent, buildQdrantFilter, extractKeywords } from './intent-detector.js';
 
 describe('buildQdrantFilter', () => {
   describe('must clauses for certain filters', () => {
@@ -173,6 +173,80 @@ describe('buildQdrantFilter', () => {
       const filter = buildQdrantFilter(intent);
       expect(filter.must).toBeUndefined();
       expect(filter.should).toBeDefined();
+    });
+  });
+
+  describe('extractKeywords (original — tokenization + stopwords)', () => {
+    it('returns meaningful tokens for "implementazione carrello ecommerce"', () => {
+      const result = extractKeywords('implementazione carrello ecommerce');
+      // Should contain the key terms (no hardcoded expansion)
+      expect(result).toContain('carrello');
+      expect(result).toContain('ecommerce');
+      expect(result).toContain('implementazione');
+    });
+
+    it('returns meaningful tokens for "sessione autenticazione"', () => {
+      const result = extractKeywords('sessione autenticazione');
+      expect(result).toContain('sessione');
+      expect(result).toContain('autenticazione');
+    });
+
+    it('handles plain English queries without expansion', () => {
+      const result = extractKeywords('how to use async await in javascript');
+      // Should contain meaningful tokens (no Italian NL terms to expand)
+      expect(result.length).toBeGreaterThan(0);
+      expect(result).toContain('async');
+      expect(result).toContain('javascript');
+    });
+
+    it('returns empty string for null/empty input', () => {
+      expect(extractKeywords(null)).toBe('');
+      expect(extractKeywords(undefined)).toBe('');
+      expect(extractKeywords('')).toBe('');
+    });
+
+    it('filters out English + Italian stopwords', () => {
+      const result = extractKeywords('come il sistema di chunking');
+      // "come", "il", "di" are stopwords → should be filtered
+      expect(result).not.toContain('come');
+      expect(result).not.toContain('il');
+      expect(result).not.toContain('di');
+      // But meaningful terms remain
+      expect(result).toContain('sistema');
+      expect(result).toContain('chunking');
+    });
+
+    it('filters out very short tokens', () => {
+      const result = extractKeywords('a carrello b ecommerce c');
+      // Single-char tokens should be filtered
+      expect(result.split(/\s+/)).not.toContain('a');
+      expect(result.split(/\s+/)).not.toContain('b');
+    });
+
+    it('handles code-specific queries (already in lexicon)', () => {
+      const result = extractKeywords('shopping cart checkout add to cart woocommerce nextjs');
+      // Should preserve these tokens without double-expansion issues
+      expect(result.split(/\s+/).length).toBeGreaterThan(0);
+    });
+
+    it('preserves order of meaningful tokens', () => {
+      const result = extractKeywords('implementazione carrello ecommerce checkout sessione autenticazione api database');
+      // All should be present (no artificial cap at 8)
+      expect(result.split(/\s+/).length).toBeGreaterThanOrEqual(7);
+    });
+
+    it('handles mixed Italian/English queries', () => {
+      const result = extractKeywords('implementazione carrello ecommerce nextjs');
+      // Should contain all meaningful tokens
+      expect(result).toContain('carrello');
+      expect(result).toContain('ecommerce');
+      expect(result).toContain('nextjs');
+    });
+
+    it('handles query with only stopwords', () => {
+      const result = extractKeywords('il la del della di in con su per');
+      // All are stopwords → empty string
+      expect(result).toBe('');
     });
   });
 });

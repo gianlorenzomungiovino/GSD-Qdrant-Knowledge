@@ -9,7 +9,7 @@ const existsSync = fs.existsSync;
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
 const VECTOR_NAME = process.env.VECTOR_NAME || 'bge-m3-1024';
-const EMBEDDING_DIMENSIONS = parseInt(process.env.EMBEDDING_DIMENSIONS || '768', 10);
+const EMBEDDING_DIMENSIONS = parseInt(process.env.EMBEDDING_DIMENSIONS || '1024', 10);
 const PROJECT_ROOT = process.cwd();
 const PROJECT_NAME = basename(PROJECT_ROOT.replace(/\\/g, '/'));
 const COLLECTION_NAME = 'gsd_memory'; // Unified collection for all projects

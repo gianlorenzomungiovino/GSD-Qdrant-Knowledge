@@ -311,11 +311,11 @@ function extractSearchTerms(query, filters) {
 }
 
 /**
- * Minimal keyword extraction — language-agnostic fallback for embedding queries.
- * No stopword lists: just heuristic filtering (skip very short/very long tokens).
- * Returns up to 5 meaningful tokens joined as a space-separated string.
+ * Keyword extraction for embedding queries.
  * 
- * This is the safety net when the LLM doesn't pre-filter the query.
+ * Simple fallback: tokenize, filter noise (stopwords + short/long tokens).
+ * This is a minimal safety net — the primary normalization should happen via
+ * KNOWLEDGE.md instructions to the LLM before calling auto_retrieve.
  */
 function extractKeywords(query) {
   if (!query || typeof query !== 'string') return '';
@@ -325,11 +325,36 @@ function extractKeywords(query) {
   // Split on whitespace, punctuation, hyphens, underscores
   const tokens = normalized.split(/[\s\-_.,;:!?(){}[\]<>\/\\|@#$%^&*+=~`]+/);
   
-  // Filter: keep only tokens between 2 and 40 chars (skip noise + URLs/hashes)
-  const meaningful = tokens.filter(t => t.length >= 2 && t.length <= 40);
+  // Filter stopwords (English + Italian) and noise tokens
+  const STOPWORDS = new Set([
+    'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+    'should', 'may', 'might', 'shall', 'can', 'need', 'to', 'of', 'in',
+    'for', 'on', 'with', 'at', 'by', 'from', 'as', 'into', 'through',
+    'during', 'before', 'after', 'above', 'below', 'between', 'out',
+    'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here',
+    'there', 'when', 'where', 'why', 'how', 'all', 'both', 'each', 'few',
+    'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only',
+    'own', 'same', 'so', 'than', 'too', 'very', 'just', 'because', 'but',
+    'and', 'or', 'if', 'while', 'about', 'up', 'il', 'lo', 'la', 'i',
+    'gli', 'le', 'un', 'uno', 'una', 'del', 'dello', 'della', 'dei',
+    'degli', 'delle', 'nel', 'nello', 'nella', 'nei', 'negli', 'nelle',
+    'sul', 'sullo', 'sulla', 'sui', 'sugli', 'sulle', 'al', 'allo',
+    'alla', 'ai', 'agli', 'alle', 'di', 'da', 'in', 'con', 'su', 'per',
+    'tra', 'fra', 'che', 'e', 'ed', 'o', 'oppure', 'ma', 'perché',
+    'poiché', 'se', 'quando', 'mentre', 'come'
+  ]);
+
+  const meaningful = tokens.filter(t => 
+    t.length >= 2 && 
+    t.length <= 40 && 
+    !STOPWORDS.has(t)
+  );
   
-  // Take up to 5 most significant tokens (first 5 in order preserves intent priority)
-  return meaningful.slice(0, 5).join(' ');
+  if (meaningful.length === 0) return '';
+
+  // Return all meaningful tokens — no artificial cap. The embedding model handles variable length.
+  return meaningful.join(' ');
 }
 
 /**

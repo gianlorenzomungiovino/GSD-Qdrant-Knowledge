@@ -52,12 +52,15 @@ auto_retrieve(
 ### Query formulation — extract key terms first
 Before calling \`auto_retrieve\`, distill your question into **2-4 meaningful keywords** (no filler words). The embedding model scores best when the query is focused on concrete nouns/verbs.
 
-| ❌ Bad | ✅ Good |
-|---|---|
-| "in base alle tue conoscenze, fai una ricerca su come possiamo implementare un carrello per un e commerce?" | "implementazione carrello ecommerce" |
-| "come si usa React useEffect con cleanup function?" | "React useEffect cleanup pattern" |
+**Method:** Treat your question as a search task, not a conversation. Ask yourself: "If I were searching for this in code documentation, what terms would I type?" Then strip everything that isn't one of those terms.
 
-The system will also extract keywords automatically as a fallback, but explicit extraction gives better results.
+**Algorithm to follow — apply these steps to ANY query you receive:**
+1. Identify the core technical concepts — nouns and verbs that name things or describe actions relevant to finding code
+2. Keep any exact code identifiers as-is (function names, class names, library names, file paths) — they are already optimized for vector matching because they appear in source files exactly like this
+3. Remove all conversational framing: questions markers, polite expressions, filler words, and any word that doesn't carry technical meaning on its own
+4. If your question has multiple distinct topics, include them all but strip connecting/prepositional words between them
+
+**Language note:** The embedding model (bge-m3) is multilingual — extract keywords in whatever language feels most natural to you. Don't translate concepts into English if the code uses terms from another language. Keep technical identifiers exactly as they appear in source files regardless of their original language.
 
 ### Notes
 - Results are ranked by semantic relevance + cross-project boost

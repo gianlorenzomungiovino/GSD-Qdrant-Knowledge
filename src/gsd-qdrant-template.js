@@ -72,6 +72,21 @@ class GSDKnowledgeSync {
       const existing = await this.client.getCollection(collectionName);
       const vectors = existing?.config?.params?.vectors;
       const namedVector = vectors && !Array.isArray(vectors) ? vectors[this.vectorName] : null;
+
+      // Dimension mismatch — model changed (e.g. codebert-768 → bge-m3-1024).
+      if (namedVector && namedVector.size !== this.embeddingDimensions) {
+        console.log(`[qdrant] Vector dimension mismatch: ${this.collectionName} has ${namedVector.size}-dim (${this.vectorName}), need ${this.embeddingDimensions}. Recreating collection...`);
+        await this.client.deleteCollection(collectionName);
+        await this.client.createCollection(collectionName, {
+          vectors: { [this.vectorName]: { size: this.embeddingDimensions, distance: 'Cosine' } },
+        });
+        console.log(`[qdrant] Collection ${collectionName} recreated with ${this.vectorName} (${this.embeddingDimensions}-dim). Full re-index required.`);
+
+        // Reset sync state to force full re-index
+        try { await fs.writeFile(STATE_FILE, JSON.stringify({ lastSync: null, indexed: {} }, null, 2)); } catch (_) {}
+        return;
+      }
+
       if (!namedVector) throw new Error(`Collection ${collectionName} exists without named vector ${this.vectorName}. Recreate it.`);
       return;
     } catch (err) {
@@ -131,6 +146,7 @@ class GSDKnowledgeSync {
     
     const seenIds = new Set();
     let updated = 0;
+    let fileIndex = 0;
     
     // If collection is empty, reset sync state to force re-indexing all files
     const syncState = collectionEmpty ? {} : await this.loadSyncState();
@@ -160,13 +176,19 @@ class GSDKnowledgeSync {
     const CHUNK_OVERLAP_CHARS = parseInt(process.env.QDRANT_CHUNK_OVERLAP || '200', 10);
 
     for (const filePath of codeFiles) {
+      fileIndex += 1;
+      const fileStartedAt = Date.now();
       const content = await fs.readFile(filePath, 'utf8');
       const relPath = this.toProjectRelative(filePath);
+      console.log(`[sync] file ${fileIndex}/${codeFiles.length}: ${relPath}`);
       const fileHash = this.hashContent(content);
       seenIds.add(relPath);
       
       // Check if already indexed — skip entire file if hash unchanged
-      if (syncState[this.indexedFileKey('code', relPath)]?.hash === fileHash) continue;
+      if (syncState[this.indexedFileKey('code', relPath)]?.hash === fileHash) {
+        console.log(`[sync] skip unchanged: ${relPath}`);
+        continue;
+      }
 
       // Delete old chunks for this file before re-indexing with new content
       const parentId = this.makePointId('code', relPath);
@@ -176,6 +198,7 @@ class GSDKnowledgeSync {
       // Qdrant requires integer or UUID IDs — we derive numeric chunk IDs by hashing
       // (parentId, chunkIndex) to ensure uniqueness while keeping traceability.
       const chunks = this.chunkFileContent(content, CHUNK_MAX_CHARS, CHUNK_OVERLAP_CHARS);
+      console.log(`[sync] chunks ${chunks.length} for ${relPath}`);
       
       for (let i = 0; i < chunks.length; i++) {
         const chunkId = this.makeChunkPointId(parentId, i);
@@ -187,10 +210,15 @@ class GSDKnowledgeSync {
         const vector = await this.embedText(this.buildChunkedCodeText(relPath, content, chunkPayload));
 
         await this.client.upsert(this.collectionName, { points: [{ id: chunkId, vector: { [this.vectorName]: vector }, payload: chunkPayload }] });
+
+        if ((i + 1) % 10 === 0 || i === chunks.length - 1) {
+          console.log(`[sync] chunk ${i + 1}/${chunks.length} indexed for ${relPath}`);
+        }
       }
       
       syncState[this.indexedFileKey('code', relPath)] = { path: relPath, type: 'code', hash: fileHash };
       updated += 1; // Count as one "file" updated (even though it creates multiple points)
+      console.log(`[sync] file done in ${Date.now() - fileStartedAt}ms: ${relPath}`);
     }
     
     let deleted = await this.deleteMissingPoints(seenIds, syncState);
@@ -440,11 +468,12 @@ class GSDKnowledgeSync {
     ));
     
     // Scroll points for this project only and find which candidates actually exist
-    let pointsToDelete = [];
-    let hasMore = true;
-    while (hasMore) {
+    const pointsToDelete = [];
+    let offset = null;
+    while (true) {
       const scrollResult = await this.client.scroll(this.collectionName, {
         limit: 200,
+        offset,
         with_payload: ['project_id', 'source', 'type'],
         with_vector: false,
         filter: {
@@ -460,8 +489,9 @@ class GSDKnowledgeSync {
         if (point.payload?.project_id !== this.projectName) continue;
         pointsToDelete.push(point.id);
       }
-      
-      if (scrollResult.points.length < 200) hasMore = false;
+
+      if (!scrollResult.next_page_offset || scrollResult.points.length === 0) break;
+      offset = scrollResult.next_page_offset;
     }
     
     if (pointsToDelete.length > 0) {
@@ -485,10 +515,12 @@ class GSDKnowledgeSync {
     const BATCH_SIZE = 50;
     
     // Scroll only points belonging to this project via Qdrant filter
-    let hasMore = true;
-    while (hasMore) {
+    const allPointsToDelete = [];
+    let offset = null;
+    while (true) {
       const scrollResult = await this.client.scroll(this.collectionName, {
         limit: BATCH_SIZE,
+        offset,
         with_payload: ['project_id', 'source', 'type'],
         with_vector: false,
         filter: {
@@ -502,11 +534,9 @@ class GSDKnowledgeSync {
       });
       
       if (scrollResult.points.length === 0) {
-        hasMore = false;
         break;
       }
       
-      const pointsToDelete = [];
       for (const point of scrollResult.points) {
         // Double-check project_id as a safety net
         if (point.payload?.project_id !== this.projectName) continue;
@@ -518,18 +548,17 @@ class GSDKnowledgeSync {
         // If the file is still on disk, skip it
         if (seenIds.has(relPath)) continue;
         
-        pointsToDelete.push(point.id);
+        allPointsToDelete.push(point.id);
       }
-      
-      if (pointsToDelete.length > 0) {
-        await this.client.delete(this.collectionName, { points: pointsToDelete });
-        deleted += pointsToDelete.length;
-        console.log(`  🗑️  Deleted ${pointsToDelete.length} stale point(s) from project '${this.projectName}'`);
-      }
-      
-      if (scrollResult.points.length < BATCH_SIZE) {
-        hasMore = false;
-      }
+
+      if (!scrollResult.next_page_offset) break;
+      offset = scrollResult.next_page_offset;
+    }
+
+    if (allPointsToDelete.length > 0) {
+      await this.client.delete(this.collectionName, { points: allPointsToDelete });
+      deleted += allPointsToDelete.length;
+      console.log(`  🗑️  Deleted ${allPointsToDelete.length} stale point(s) from project '${this.projectName}'`);
     }
     
     return deleted;
@@ -908,11 +937,13 @@ class GSDKnowledgeSync {
     
     try {
       const BATCH_SIZE = 50;
-      let hasMore = true;
+      const idsToDelete = [];
+      let offset = null;
 
-      while (hasMore) {
+      while (true) {
         const result = await this.client.scroll(this.collectionName, {
           limit: BATCH_SIZE,
+          offset,
           with_payload: false,
           filter: {
             must: [
@@ -924,30 +955,20 @@ class GSDKnowledgeSync {
 
         if (result.points.length === 0) break;
 
-        const idsToDelete = result.points.map(p => p.id);
-        await this.client.delete(this.collectionName, { points: idsToDelete });
-        deleted += idsToDelete.length;
+        idsToDelete.push(...result.points.map(p => p.id));
 
-        hasMore = result.points.length >= BATCH_SIZE;
-      }
-    } catch (err) {
-      // If scroll by filter fails (older Qdrant versions), try brute-force approach
-      console.warn(`[qdrant] chunk cleanup for ${relPath}: ${err.message}`);
-      
-      // Brute force: check known chunk IDs up to a reasonable limit
-      const idsToDelete = [];
-      for (let i = 0; i < 50; i++) {
-        try {
-          const chunkId = this.makeChunkPointId(parentId, i);
-          await this.client.get(this.collectionName, { id: chunkId });
-          idsToDelete.push(chunkId);
-        } catch (_) { /* point doesn't exist — fine */ }
+        if (!result.next_page_offset) break;
+        offset = result.next_page_offset;
       }
 
       if (idsToDelete.length > 0) {
         await this.client.delete(this.collectionName, { points: idsToDelete });
         deleted += idsToDelete.length;
       }
+    } catch (err) {
+      // Scroll by filter should always work with modern Qdrant.
+      // If it fails, log and skip cleanup — stale chunks will be caught by deleteStaleProjectPoints later.
+      console.warn(`[qdrant] chunk cleanup for ${relPath}: ${err.message}`);
     }
 
     return deleted;
@@ -986,6 +1007,9 @@ class GSDKnowledgeSync {
       imports: metadata.imports,
       symbolNames: metadata.symbolNames,
       
+      // Comments — JSDoc and inline comments for semantic context (critical for retrieval)
+      comments: this.extractComments(chunkData.content),
+      
       // Reusable flag (computed from full file content)
       reusable: await this.isReusable(filePath, fullContent),
       timestamp: Date.now(),
@@ -997,16 +1021,21 @@ class GSDKnowledgeSync {
     // For chunks, embed the chunk content itself (not weighted header).
     // Include file-level context as prefix so CodeBERT knows what file this belongs to.
     const lang = payload.language || 'text';
-    
+
     return [
       `project:${this.projectName}`,
       `path:${relPath}`,
       `language:${lang}`,
       `kind:${payload.kindDetail}`,
-      `chunk:${payload.chunkIndex + 1}/${payload.totalChunks}`,
-      // Include file-level exports/imports for context (helps semantic matching)
+      // Symbol names — critical for matching queries that reference specific functions/classes
+      payload.symbolNames?.length ? `symbols: ${payload.symbolNames.join(', ')}` : null,
+      // Comments (JSDoc + inline) — provide semantic context about what the code does
+      payload.comments?.length ? `comments: ${payload.comments.slice(0, 5).join(' | ')}` : null,
+      // Exports/imports — expose module boundaries for semantic matching
       payload.exports?.length ? `exports: ${payload.exports.join(', ')}` : null,
       payload.imports?.length ? `imports: ${payload.imports.slice(0, 5).join(', ')}` : null,
+      // Chunk position within file (helps with multi-chunk files)
+      `chunk:${payload.chunkIndex + 1}/${payload.totalChunks}`,
       // The chunk content itself — this is what gets embedded for semantic search
       payload.content,
     ].filter(Boolean).join('\n');

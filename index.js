@@ -36,9 +36,9 @@ class GSDKnowledgeSync {
     this.client = new QdrantClient({ url: QDRANT_URL });
     this.projectName = basename(PROJECT_ROOT);
     this.collectionName = 'gsd_memory'; // Unified collection for all projects
-    this.vectorName = process.env.VECTOR_NAME || 'codebert-768';
-    this.embeddingDimensions = parseInt(process.env.EMBEDDING_DIMENSIONS || '768', 10);
-    this.embeddingModel = process.env.EMBEDDING_MODEL || 'Xenova/codebert-base';
+    this.vectorName = process.env.VECTOR_NAME || 'bge-m3-1024';
+    this.embeddingDimensions = parseInt(process.env.EMBEDDING_DIMENSIONS || '1024', 10);
+    this.embeddingModel = process.env.EMBEDDING_MODEL || 'Xenova/bge-m3';
     this.pipeline = null;
   }
 
