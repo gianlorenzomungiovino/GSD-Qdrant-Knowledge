@@ -49,9 +49,8 @@ try {
 } catch (npmErr) {
   try {
     // 2. Fallback: relative path from source directory
-    // When running from source: src/gsd-qdrant-mcp/index.js -> ../../index.js (project root)
-    const fallbackPath = path.resolve(__dirname, '..', '..');
-    const indexFile = path.join(fallbackPath, 'index.js');
+    // When running from source: src/gsd-qdrant-mcp/index.js -> ../index.js (src/)
+    const indexFile = path.resolve(__dirname, '..', 'index.js');
     if (fs.existsSync(indexFile)) {
       GSDKnowledgeSync = require(indexFile).GSDKnowledgeSync;
     } else {

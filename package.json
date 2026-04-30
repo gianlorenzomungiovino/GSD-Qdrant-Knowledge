@@ -2,7 +2,7 @@
   "name": "gsd-qdrant-knowledge",
   "version": "2.2.2",
   "description": "CLI per setup automatico GSD + Qdrant in qualsiasi progetto Node.js",
-  "main": "index.js",
+  "main": "src/index.js",
   "bin": {
     "gsd-qdrant-knowledge": "src/cli.js",
     "gsd-qdrant-mcp": "src/gsd-qdrant-mcp/index.js"
@@ -39,7 +39,7 @@
     "node": ">=18"
   },
   "files": [
-    "index.js",
+    "src/index.js",
     "src/cli.js",
     "src/context-analyzer.js",
     "src/gsd-qdrant-mcp/index.js",
