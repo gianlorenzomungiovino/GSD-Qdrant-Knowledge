@@ -30,7 +30,7 @@ GSD-Qdrant is installed in this project. When working on this project, use auto_
 ### When to call auto_retrieve
 
 **Always call \`auto_retrieve\` before or alongside local searches for:**
-- Questions about libraries, frameworks, components, or technologies ("che componenti frontend posso usare?", "come si usa X?", "quali librerie per Y?")
+- Questions about libraries, frameworks, components, or technologies
 - API usage questions (method signatures, configuration options)
 - Design patterns or architectural approaches
 
