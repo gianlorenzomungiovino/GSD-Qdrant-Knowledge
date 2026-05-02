@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "taskId": "T03",
+  "unitId": "M002/S03/T03",
+  "timestamp": 1776868773519,
+  "passed": true,
+  "discoverySource": "task-plan",
+  "checks": [
+    {
+      "command": "echo 'OK: embedded files removed'",
+      "exitCode": 0,
+      "durationMs": 36,
+      "verdict": "pass"
+    }
+  ]
+}

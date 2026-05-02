@@ -1,0 +1,13 @@
+{"ts":"2026-04-14T15:24:24.730Z","flowId":"6031ac1e-7cde-4308-ba08-3f8df4783887","seq":1,"eventType":"iteration-start","data":{"iteration":1}}
+{"ts":"2026-04-14T15:24:25.095Z","flowId":"22f3d044-300c-426c-aa68-e0a42d6c40e6","seq":1,"eventType":"iteration-start","data":{"iteration":2}}
+{"ts":"2026-04-14T15:24:25.239Z","flowId":"22f3d044-300c-426c-aa68-e0a42d6c40e6","seq":2,"eventType":"dispatch-match","rule":"executing → execute-task","data":{"unitType":"execute-task","unitId":"M001/S01/T01"}}
+{"ts":"2026-04-14T15:24:25.281Z","flowId":"22f3d044-300c-426c-aa68-e0a42d6c40e6","seq":3,"eventType":"unit-start","data":{"unitType":"execute-task","unitId":"M001/S01/T01"}}
+{"ts":"2026-04-14T15:24:45.976Z","flowId":"c39413bf-bde3-4c9e-86d6-c8bd3b44e136","seq":1,"eventType":"iteration-start","data":{"iteration":1}}
+{"ts":"2026-04-14T15:24:46.156Z","flowId":"c39413bf-bde3-4c9e-86d6-c8bd3b44e136","seq":2,"eventType":"dispatch-match","rule":"executing → execute-task","data":{"unitType":"execute-task","unitId":"M001/S01/T01"}}
+{"ts":"2026-04-14T15:24:46.193Z","flowId":"c39413bf-bde3-4c9e-86d6-c8bd3b44e136","seq":3,"eventType":"unit-start","data":{"unitType":"execute-task","unitId":"M001/S01/T01"}}
+{"ts":"2026-04-14T16:32:07.811Z","flowId":"824de321-17fd-46d3-8866-4f2fa915a28a","seq":1,"eventType":"iteration-start","data":{"iteration":1}}
+{"ts":"2026-04-14T16:32:07.997Z","flowId":"824de321-17fd-46d3-8866-4f2fa915a28a","seq":2,"eventType":"dispatch-match","rule":"executing → execute-task","data":{"unitType":"execute-task","unitId":"M001/S01/T01"}}
+{"ts":"2026-04-14T16:32:08.038Z","flowId":"824de321-17fd-46d3-8866-4f2fa915a28a","seq":3,"eventType":"unit-start","data":{"unitType":"execute-task","unitId":"M001/S01/T01"}}
+{"ts":"2026-04-14T16:37:20.441Z","flowId":"ea0a23f4-54ec-417d-89c0-7bc29c851b56","seq":1,"eventType":"iteration-start","data":{"iteration":1}}
+{"ts":"2026-04-14T16:37:20.626Z","flowId":"ea0a23f4-54ec-417d-89c0-7bc29c851b56","seq":2,"eventType":"dispatch-match","rule":"executing → execute-task","data":{"unitType":"execute-task","unitId":"M001/S01/T01"}}
+{"ts":"2026-04-14T16:37:20.665Z","flowId":"ea0a23f4-54ec-417d-89c0-7bc29c851b56","seq":3,"eventType":"unit-start","data":{"unitType":"execute-task","unitId":"M001/S01/T01"}}

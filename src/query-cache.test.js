@@ -123,12 +123,13 @@ describe('QueryCache', () => {
     it('uses task|limit as cache key (matching MCP integration)', () => {
       const task = 'buildCodeText';
       const limit = 3;
-      const expectedKey = `${task}|${limit}`;
+      // Cache key includes includeContent since the MCP server uses: `${task}|${limit}|${includeContent}`
+      const expectedKey = `${task}|${limit}|false`;
       Cache.cache.set(expectedKey, { results: [] });
       expect(Cache.cache.get(expectedKey)).toEqual({ results: [] });
 
-      // Different key should miss
-      expect(Cache.cache.get(`${task}|5`)).toBeUndefined();
+      // Different key should miss (different limit)
+      expect(Cache.cache.get(`${task}|5|false`)).toBeUndefined();
     });
   });
 });

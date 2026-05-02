@@ -12,38 +12,39 @@ describe('buildQdrantFilter', () => {
       expect(filter.must[0]).toEqual({ key: 'language', match: { value: 'javascript' } });
     });
 
-    it('converts type filter to must clause (config before example due to pattern order)', () => {
-      // Note: patterns are checked in insertion order; config matches before example
+    it('maps type hint "config" → soft boost in should (not hard must)', () => {
+      // Type hints like config/example/template are suggestions, not hard filters.
+      // They become a `should` clause with the mapped payload value ('code').
       const intent = detectIntent('python config example');
-      expect(intent.filters.language).toBe('python'); // also detected
-      expect(intent.filters.type).toBe('config'); // config is first match
+      expect(intent.filters.language).toBe('python');
+      expect(intent.filters.type).toBe('config');
       const filter = buildQdrantFilter(intent);
       expect(filter).not.toBeNull();
-      // language + type → 2 must clauses
-      expect(filter.must).toHaveLength(2);
-      expect(filter.must.some(m => m.key === 'type' && m.match.value === 'config')).toBe(true);
+      // language → must, type hint 'config' → should (soft boost to payload='code')
+      expect(filter.must.some(m => m.key === 'language')).toBe(true);
+      expect(filter.should?.some(s => s.key === 'type' && s.match.value === 'code')).toBe(true);
     });
 
-    it('converts project_id filter to must clause', () => {
+    it('converts project_id to should (soft boost) when set', () => {
       const intent = detectIntent('golang');
+      // golang → language=go; manually add project_id for this test
+      expect(intent.filters.language).toBe('go');
       intent.filters.project_id = 'my-project';
       const filter = buildQdrantFilter(intent);
       expect(filter).not.toBeNull();
-      const projectIdMust = filter.must.find(m => m.key === 'project_id');
-      expect(projectIdMust).toEqual({ key: 'project_id', match: { value: 'my-project' } });
+      // project_id goes to should (soft boost), not must
+      expect(filter.should.some(s => s.key === 'project_id' && s.match.value === 'my-project')).toBe(true);
     });
 
-    it('combines multiple must clauses (language + type)', () => {
+    it('combines language (must) + type hint (should soft boost)', () => {
       // 'typescript config' → language=typescript, type=config
       const intent = detectIntent('typescript config template');
       expect(intent.filters.language).toBe('typescript');
       expect(intent.filters.type).toBe('config'); // config matches before template
       const filter = buildQdrantFilter(intent);
-      expect(filter.must).toHaveLength(2);
-      const langs = filter.must.filter(m => m.key === 'language');
-      const types = filter.must.filter(m => m.key === 'type');
-      expect(langs).toHaveLength(1);
-      expect(types).toHaveLength(1);
+      // language goes to must; type hint 'config' → should (soft boost)
+      expect(filter.must.some(m => m.key === 'language')).toBe(true);
+      expect(filter.should?.some(s => s.key === 'type' && s.match.value === 'code')).toBe(true);
     });
   });
 
@@ -80,13 +81,11 @@ describe('buildQdrantFilter', () => {
     });
 
     it('returns object with must when language is set', () => {
-      // 'go code' → language=go, type=code → 2 must clauses
+      // 'go code' → language=go (must), type hint 'code' → should soft boost
       const intent = detectIntent('go code');
       expect(intent.filters.language).toBe('go');
       const filter = buildQdrantFilter(intent);
-      expect(filter.must.length >= 1).toBe(true); // at least language
       expect(filter.must.some(m => m.key === 'language' && m.match.value === 'go')).toBe(true);
-      expect(filter.should).toBeUndefined();
     });
 
     it('returns object with only should when only tags are set', () => {
@@ -142,16 +141,15 @@ describe('buildQdrantFilter', () => {
   });
 
   describe('should vs must separation', () => {
-    it('only language/type/project_id go to must, tags go to should', () => {
+    it('only language/project_id go to must, type hints and tags → should', () => {
       const intent = detectIntent('react typescript config example');
       expect(intent.filters.language).toBe('typescript');
       expect(intent.filters.type).toBe('config'); // config matches before example
       expect(intent.filters.tags).toContain('react');
       const filter = buildQdrantFilter(intent);
-      // must: language + type
+      // must: language only (type hint 'config' → should soft boost)
       expect(filter.must.filter(m => m.key === 'language').length).toBe(1);
-      expect(filter.must.filter(m => m.key === 'type').length).toBe(1);
-      // should: react tag
+      // type hint and tags both go to should as soft boosts
       expect(filter.should.some(s => s.key === 'tags' && s.match.value === 'react')).toBe(true);
     });
 

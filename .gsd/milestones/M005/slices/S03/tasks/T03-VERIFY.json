@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "taskId": "T03",
+  "unitId": "M005/S03/T03",
+  "timestamp": 1777307656750,
+  "passed": false,
+  "discoverySource": "task-plan",
+  "checks": [
+    {
+      "command": "node src/cli.js context 'hooks post-commit'",
+      "exitCode": 1,
+      "durationMs": 343,
+      "verdict": "fail"
+    }
+  ],
+  "retryAttempt": 1,
+  "maxRetries": 1
+}
