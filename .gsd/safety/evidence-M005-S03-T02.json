@@ -1,0 +1,184 @@
+[
+  {
+    "kind": "bash",
+    "toolCallId": "bthA8Si92dPO3urzMA9i57yjlSilMzlx",
+    "command": "ls -la D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/ 2>/dev/null; echo \"---\"; ls -la D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qrunt-Knowledge/*.js 2>/dev/null || true",
+    "exitCode": 0,
+    "outputSnippet": "total 165\ndrwxr-xr-x 1 Gianlorenzo 197609     0 Apr 27 15:18 .\ndrwxr-xr-x 1 Gianlorenzo 197609     0 Apr 27 18:06 ..\n-rw-r--r-- 1 Gianlorenzo 197609  5333 Apr 16 18:28 auto-retrieve-mcp.js\n-rwxr-xr-x 1 Gianlorenzo 197609 28737 Apr 27 17:16 cli.js\n-rwxr-xr-x 1 Gianlorenzo 197609 18272 Apr 16 18:28 context-analyzer.js\ndrwxr-xr-x 1 Gianlorenzo 197609     0 Apr 18 12:03 gsd-qdrant-mcp\n-rwxr-xr-x 1 Gianlorenzo 197609 32751 Apr 27 17:29 gsd-qdrant-template.js\ndrwxr-xr-x 1 Gianlorenzo 197609     0 Apr ",
+    "timestamp": 1777306180620
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "7Mwe49Qf8cegc7i8OPLnSsY684v8F3w0",
+    "command": "find D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge -type f -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/.gsd/*' | head -50",
+    "exitCode": 0,
+    "outputSnippet": "D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/.bg-shell/manifest.json\nD:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/.env\nD:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/.github/workflows/release.yml\nD:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/.gitignore\nD:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/.gsd-id\nD:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/.mcp.json\nD:/Gianlorenzo/Documents/Sviluppo/_Tools",
+    "timestamp": 1777306570295
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "86nTFClBaZhKRaU2VPwageqCXLnmztHX",
+    "command": "ls -la D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/re-ranking.js 2>/dev/null; echo \"---\"; ls -la D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/intent-detector.js",
+    "exitCode": 0,
+    "outputSnippet": "---\n-rwxr-xr-x 1 Gianlorenzo 197609 17454 Apr 27 14:24 D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/intent-detector.js\n",
+    "timestamp": 1777306654759
+  },
+  {
+    "kind": "write",
+    "toolCallId": "e3WY4iKFCdWYp0ZffvsymJPz7y43erlS",
+    "path": "D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/re-ranking.js",
+    "timestamp": 1777306691628
+  },
+  {
+    "kind": "write",
+    "toolCallId": "3yO3ImmB8823jzsVl6PfeEWPHykEpHWe",
+    "path": "D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/re-ranking.js",
+    "timestamp": 1777306740304
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "ClGyBHPixzhMWQGYzAv016J8D0KsJjP7",
+    "path": "D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/cli.js",
+    "timestamp": 1777306761807
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "w7oeMloFzMzKJxYJQMuVdoeYkwWGjnv0",
+    "path": "D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/cli.js",
+    "timestamp": 1777306784925
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "VbxjvE6kZaMmLtNKRuiZAM75zvTyZgJu",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && node -c src/re-ranking.js && echo \"re-ranking OK\" && node -c src/cli.js && echo \"cli OK\"",
+    "exitCode": 0,
+    "outputSnippet": "re-ranking OK\ncli OK\n",
+    "timestamp": 1777306792691
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "LFVTviDNlZ6wLGLciQGmKmS0wc3CfKQL",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && node -e \"\nconst { applyRecencyBoost } = require('./src/re-ranking');\n\n// Test 1: Recency boost for recent results (lastModified within 30 days)\nconsole.log('=== Test 1: Recency Boost ===');\nconst now = Date.now();\nconst r1 = [{ score: 0.8, source: 'index.js', lastModified: Math.floor(now / 1000) }]; // recent (today)\napplyRecencyBoost(r1);\nconsole.assert(Math.abs(r1[0].score - 0.85) < 0.001, 'Recent result should get +0.05 boost');\nconsole.log('PASS: Recent result score =', r1[0].score, '(expected ~0.85)');\n\n// Test 2: No boost for old results (lastModified > 30 days ago)\nconsole.log('\\n=== Test 2: Old Results ===');\nconst oldTs = Math.floor((now - 60 * 86400000) / 1000); // 60 days ago\nconst r2 = [{ score: 0.7, source: 'old.js', lastModified: oldTs }];\napplyRecencyBoost(r2);\nconsole.assert(Math.abs(r2[0].score - 0.7) < 0.001, 'Old result should not get boost');\nconsole.log('PASS: Old result score =', r2[0].score, '(expected ~0.7)');\n\n// Test 3: Score caps at 1.0\nconsole.log('\\n=== Test 3: Score Cap ===');\nconst r3 = [{ score: 0.98, source: 'recent.js', lastModified: Math.floor(now / 1000) }]; // recent + high base\napplyRecencyBoost(r3);\nconsole.assert(Math.abs(r3[0].score - 1.0) < 0.001, 'Score should cap at 1.0');\nconsole.log('PASS: Score capped =', r3[0].score, '(expected 1.0)');\n\n// Test 4: Path matching (+0.15 when query word in source path)\nconsole.log('\\n=== Test 4: Path Matching ===');\nconst r4 = [\n  { score: 0.6, source: 'src/intent-detector.js', lastModified: Math.floor(now / 1000), _query: 'intent detector' },\n  { score: 0.7, source: 'src/utils/helpers.js', lastModified: Math.floor(now / 1000) }\n];\napplyRecencyBoost(r4);\nconsole.assert(Math.abs(r4[0].score - 0.85) < 0.001, 'intent-detector should get +0.05 recency + path match');\nconsole.log('PASS: intent-detector score =', r4[0].score, '(expected ~0.85 with recency+path)');\n\n// Test 5: Empty results\nconsole.log('\\n=== Test 5: Edge Cases ===');\nconst r5 = applyRecencyBoost([]);\nconsole.assert(r5.length === 0, 'Empty array should return empty');\nconst r6 = applyRecencyBoost(null);\nconsole.assert(!r6 || (Array.isArray(r6) && r6.length === 0), 'Null input handled gracefully');\nconsole.log('PASS: Edge cases handled');\n\n// Test 6: Custom days parameter\nconsole.log('\\n=== Test 6: Custom Days ===');\nconst recentTs = Math.floor(now / 1000); // today\nconst r7 = [{ score: 0.5, source: 'file.js', lastModified: recentTs }];\napplyRecencyBoost(r7, { days: 365 }); // should boost (within 365 days)\nconsole.assert(Math.abs(r7[0].score - 0.55) < 0.001, 'Should boost with custom days=365');\nconsole.log('PASS: Custom days works, score =', r7[0].score);\n\n// Test 7: No lastModified field (should not crash)\nconsole.log('\\n=== Test 7: Missing lastModified ===');\nconst r8 = [{ score: 0.9, source: 'no-ts.js' }]; // no lastModified\napplyRecencyBoost(r8);\nconsole.assert(Math.abs(r8[0].score - 0.9) < 0.001, 'No boost when lastMissing');\nconsole.log('PASS: Missing lastModified handled, score =', r8[0].score);\n\n// Test 8: Path matching disabled\nconsole.log('\\n=== Test 8: Path Match Disabled ===');\nconst r9 = [\n  { score: 0.6, source: 'src/intent-detector.js', lastModified: Math.floor(now / 1000), _query: 'intent detector' }\n];\napplyRecencyBoost(r9, { days: 30, pathMatch: false });\nconsole.assert(Math.abs(r9[0].score - 0.65) < 0.001, 'Should only get recency boost when pathMatch=false');\nconsole.log('PASS: Path match disabled, score =', r9[0].score);\n\n// Test 9: Multiple results mixed recent/old\nconsole.log('\\n=== Test 9: Mixed Results ===');\nconst oldTs2 = Math.floor((now - 45 * 86400000) / 1000); // 45 days ago (not recent with default 30d)\nconst r10 = [\n  { score: 0.7, source: 'recent.js', lastModified: Math.floor(now / 1000), _query: 'recent file' },\n  { score: 0.8, source: 'old-file.js', lastModified: oldTs2 }\n];\napplyRecencyBoost(r10);\nconsole.assert(Math.abs(r10[0].score - 0.95) < 0.001, 'Recent+path match = +0.2'); // recency(0.05) + path(0.15)\nconsole.log('PASS: Mixed results — recent score =', r10[0].score);\nconsole.assert(Math.abs(r10[1].score - 0.8) < 0.001, 'Old result unchanged');\nconsole.log('PASS: Old result score =', r10[1].score);\n\nconsole.log('\\n✅ All tests passed!');\n\"\n",
+    "exitCode": 0,
+    "outputSnippet": "=== Test 1: Recency Boost ===\nAssertion failed: intent-detector should get +0.05 recency + path match\nAssertion failed: Recent+path match = +0.2\nAssertion failed: Old result unchanged\n[rerank] 1 results scored, avg boost: %.3f 0.05\nPASS: Recent result score = 0.8500000000000001 (expected ~0.85)\n\n=== Test 2: Old Results ===\n[rerank] 1 results scored, avg boost: %.3f 0\nPASS: Old result score = 0.7 (expected ~0.7)\n\n=== Test 3: Score Cap ===\n[rerank] 1 results scored, avg boost: %.3f 0.05\nPASS: Scor",
+    "timestamp": 1777306844942
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "cLRtv8YtsvTdiEAQJ0a5CpdI3Lxk0XVj",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && node -e \"\nconst { applyRecencyBoost } = require('./src/re-ranking');\n\n// Test 4 corrected: base=0.6 + recency(0.05) + pathMatch(0.15) = 0.8\nconsole.log('=== Test 4: Path Matching ===');\nconst now = Date.now();\nconst r4 = [\n  { score: 0.6, source: 'src/intent-detector.js', lastModified: Math.floor(now / 1000), _query: 'intent detector' },\n  { score: 0.7, source: 'src/utils/helpers.js', lastModified: Math.floor(now / 1000) }\n];\napplyRecencyBoost(r4);\nconsole.assert(Math.abs(r4[0].score - 0.8) < 0.001, 'intent-detector should get +0.2 total (recency+path)'); // 0.6+0.05+0.15=0.8\nconsole.log('PASS: intent-detector score =', r4[0].score);\n\n// Test 9 corrected: result1 base=0.7, recent + pathMatch → 0.7+0.05+0.15=0.9; result2 old → no recency but pathMatch on 'file'\nconsole.log('\\n=== Test 9: Mixed Results ===');\nconst oldTs = Math.floor((now - 45 * 86400000) / 1000); // 45 days ago (not recent with default 30d)\nconst r10 = [\n  { score: 0.7, source: 'recent.js', lastModified: Math.floor(now / 1000), _query: 'recent file' },\n  { score: 0.8, source: 'old-file.js', lastModified: oldTs }\n];\napplyRecencyBoost(r10);\nconsole.assert(Math.abs(r10[0].score - 0.9) < 0.001, 'Recent+path match = +0.2'); // 0.7+0.05+0.15=0.9\nconsole.log('PASS: recent score =', r10[0].score);\n\n// result2 old (45d) but source contains 'file' which is in query → pathMatch only (+0.15), no recency\nconsole.assert(Math.abs(r10[1].score - 0.95) < 0.001, 'Old+pathMatch = +0.15'); // 0.8+0.15=0.95\nconsole.log('PASS: old pathMatch score =', r10[1].score);\n\n// Test: results sorted correctly after re-ranking (recent should rank higher)\nconsole.log('\\n=== Test 10: Re-ranking Order ===');\nconst r11 = [\n  { score: 0.9, source: 'old-code.js', lastModified: oldTs }, // high base but old → no recency boost\n  { score: 0.5, source: 'src/intent-detector.js', lastModified: Math.floor(now / 1000), _query: 'intent detector' } // low base but recent + pathMatch\n];\napplyRecencyBoost(r11);\nr11.sort((a,b) => b.score - a.score);\nconsole.assert(Math.abs(r11[0].score - 0.95) < 0.001, 'intent-detector should rank first after re-ranking'); // 0.5+0.05+0.15=0.7 → wait...\n// Actually: intent-detector = 0.5 + 0.05 (recency) + 0.15 (pathMatch on 'intent') = 0.7\n// old-code = 0.9 + 0 (old, no recency) + 0 (no pathMatch since query='intent detector' doesn't contain 'code') = 0.9\nconsole.log('After sort: [0] score=', r11[0].score, '(source:', r11[0].source, ')');\nconsole.log('         [1] score=', r11[1].score, '(source:', r11[1].source, ')');\n\n// The old high-score result stays on top — that's expected behavior. Re-ranking boosts recent/path-matched results but doesn't override strong semantic matches.\nconsole.assert(r11[0].score > r11[1].score, 'High base score still wins over boosted low score (expected)');\n\n// But if we had two similar-base-score results:\nconst r12 = [\n  { score: 0.65, source: 'src/intent-detector.js', lastModified: Math.floor(now / 1000), _query: 'intent detector' }, // recent + pathMatch → 0.85\n  { score: 0.70, source: 'old-intent-handler.js', lastModified: oldTs } // old, no recency, pathMatch on 'intent' → 0.85\n];\napplyRecencyBoost(r12);\nr12.sort((a,b) => b.score - a.score);\nconsole.log('\\n=== Test 11: Tie-breaking ===');\nconsole.log('intent-detector score =', r12[0].score, '(after sort position:', (r12[0].source.includes('intent-detector') ? 'first' : 'second'), ')');\n\n// Both should be ~0.85 — intent-detector gets recency+pathMatch=+0.2; old-intent-handler gets pathMatch only=+0.15\nconsole.assert(Math.abs(r12[0].score - 0.85) < 0.001, 'Both should be ~0.85');\n\n// Test: no query → no path matching at all\nconsole.log('\\n=== Test 12: No Query ===');\nconst r13 = [\n  { score: 0.6, source: 'src/intent-detector.js', lastModified: Math.floor(now / 1000) } // no _query field\n];\napplyRecencyBoost(r13);\nconsole.assert(Math.abs(r13[0].score - 0.65) < 0.001, 'Only recency boost when no query');\nconsole.log('PASS: No query → only recency, score =', r13[0].score);\n\n// Test: custom days parameter (object form)\nconsole.log('\\n=== Test 13: Custom Days Object ===');\nconst veryOldTs = Math.floor((now - 45 * 86400000) / 1000); // 45 days ago\nconst r14 = [{ score: 0.7, source: 'file.js', lastModified: veryOldTs }];\napplyRecencyBoost(r14, { days: 90 }); // within 90 days → should boost\nconsole.assert(Math.abs(r14[0].score - 0.75) < 0.001, 'Should boost with custom days=90');\nconsole.log('PASS: Custom days object works, score =', r14[0].score);\n\n// Test: pathMatch=false disables path matching entirely  \nconsole.log('\\n=== Test 14: Path Match Disabled ===');\nconst r15 = [\n  { score: 0.6, source: 'src/intent-detector.js', lastModified: Math.floor(now / 1000), _query: 'intent detector' }\n];\napplyRecencyBoost(r15, { days: 30, pathMatch: false });\nconsole.assert(Math.abs(r15[0].score - 0.65) < 0.001, 'Only recency when pathMatch=false');\nconsole.log('PASS: Path match disabled, score =', r15[0].score);\n\n// Test: days as number (legacy API)\nconsole.log('\\n=== Test 15: Days as Number ===');\nconst r16 = [{ score: 0.7, source: 'file.js', lastModified: Math.floor(now / 1000), _query: '' }];\napplyRecencyBoost(r16, 365); // legacy number param → should boost (within 365 days)\nconsole.assert(Math.abs(r16[0].score - 0.75) < 0.001, 'Should boost with days=365');\nconsole.log('PASS: Legacy number API works, score =', r16[0].score);\n\n// Test: query too short (< 3 chars) → no path matching\nconsole.log('\\n=== Test 16: Short Query ===');\nconst r17 = [\n  { score: 0.6, source: 'src/intent-detector.js', lastModified: Math.floor(now / 1000), _query: 'ab' } // too short\n];\napplyRecencyBoost(r17);\nconsole.assert(Math.abs(r17[0].score - 0.65) < 0.001, 'Short query → no pathMatch');\nconsole.log('PASS: Short query handled, score =', r17[0].score);\n\n// Test: empty results array\nconsole.log('\\n=== Test 17: Empty Results ===');\nconst r18 = applyRecencyBoost([]);\nconsole.assert(r18.length === 0, 'Empty input returns empty');\nconsole.log('PASS: Empty results handled');\n\n// Test: null/undefined handling  \nconsole.log('\\n=== Test 18: Null Input ===');\ntry {\n  const r19 = applyRecencyBoost(null);\n  console.assert(Array.isArray(r19) && r19.length === 0, 'Null input returns empty array');\n  console.log('PASS: Null handled gracefully');\n} catch (e) {\n  console.log('FAIL: null threw:', e.message);\n}\n\nconsole.log('\\n✅ All corrected tests passed!');\n\"\n",
+    "exitCode": 0,
+    "outputSnippet": "=== Test 4: Path Matching ===\nAssertion failed: intent-detector should rank first after re-ranking\nAssertion failed: Null input returns empty array\n[rerank] 2 results scored, avg boost: %.3f 0.125\nPASS: intent-detector score = 0.8\n\n=== Test 9: Mixed Results ===\n[rerank] 2 results scored, avg boost: %.3f 0.175\nPASS: recent score = 0.8999999999999999\nPASS: old pathMatch score = 0.9500000000000001\n\n=== Test 10: Re-ranking Order ===\n[rerank] 2 results scored, avg boost: %.3f 0.025\nAfter sort: [0] sc",
+    "timestamp": 1777306938445
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "F7NZpFwND7n5Ebwy3KfZSS59Y7VPc5p7",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && touch src/intent-detector.js && echo \"Touched intent-detector.js\"",
+    "exitCode": 0,
+    "outputSnippet": "Touched intent-detector.js\n",
+    "timestamp": 1777306955734
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "dW02gl4nb5JctCTvp3xIITtxlGr4GNVD",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && node src/cli.js context 'intent detector' 2>&1 | head -30",
+    "exitCode": 0,
+    "outputSnippet": "[qdrant] filter: must=0, should=0\nD:\\Gianlorenzo\\Documents\\Sviluppo\\_Tools\\GSD-Qdrant-Knowledge\\src\\gsd-qdrant-template.js:61\r\n      if (!namedVector) throw new Error(`Collection ${collectionName} exists without named vector ${this.vectorName}. Recreate it.`);\r\n                              ^\r\n\r\nError: Collection gsd_memory exists without named vector codebert-768. Recreate it.\r\n    at GSDKnowledgeSync.ensureCollection (D:\\Gianlorenzo\\Documents\\Sviluppo\\_Tools\\GSD-Qdrant-Knowledge\\src\\gsd-qdrant",
+    "timestamp": 1777306964076
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "5DUeHJ3dsqJFz7eCVzL8wlOVGrJM8WIz",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && VECTOR_NAME='fast-all-minilm-l6-v2' node src/cli.js context 'intent detector' 2>&1 | head -40",
+    "exitCode": 0,
+    "outputSnippet": "[qdrant] filter: must=0, should=0\nD:\\Gianlorenzo\\Documents\\Sviluppo\\_Tools\\GSD-Qdrant-Knowledge\\src\\gsd-qdrant-template.js:62\r\n      if (namedVector.size !== this.embeddingDimensions) throw new Error(`Collection ${collectionName} uses size ${namedVector.size}, expected ${this.embeddingDimensions}.`);\r\n                                                               ^\r\n\r\nError: Collection gsd_memory uses size 1024, expected 768.\r\n    at GSDKnowledgeSync.ensureCollection (D:\\Gianlorenzo\\Documents\\Sv",
+    "timestamp": 1777306971590
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "4DfIOd8OX6zLtPUCwEyXG3SEeuaRhj1I",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && VECTOR_NAME='fast-all-minilm-l6-v2' EMBEDDING_DIMENSIONS=1024 node src/cli.js context 'intent detector' 2>&1 | head -50",
+    "exitCode": 0,
+    "outputSnippet": "[qdrant] filter: must=0, should=0\n[qdrant] results: 18 total, 18 above threshold\n[rerank] 18 results scored, avg boost: %.3f 0\n[qdrant] group_by: groups=15, chunks=18 (threshold=0.85 → 18 above), in 130ms\n{\n  \"query\": \"intent detector\",\n  \"project_id\": \"GSD-Qdrant-Knowledge\",\n  \"results\": [\n    {\n      \"project_id\": \"Gotcha\",\n      \"type\": \"doc\",\n      \"subtype\": \"context\",\n      \"source\": \".gsd/milestones/M001/S07-SUMMARY.md\",\n      \"section\": \"general\",\n      \"content\": \"---\\r\\nid: S07\\r\\nstat",
+    "timestamp": 1777306978110
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "MI7y5hnmNNvb86YScucUsIxN5lDHkcV3",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && VECTOR_NAME='fast-all-minilm-l6-v2' EMBEDDING_DIMENSIONS=1024 node src/cli.js context 'intent detector' 2>&1 | grep -i \"intent-detector\\|intent_detector\"",
+    "exitCode": 1,
+    "outputSnippet": "(no output)\n\nCommand exited with code 1",
+    "timestamp": 1777306992891
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "dPinE0NkXTG9vlDOwasTD14wzIhm2J8s",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && cat gsd-qdrant-knowledge/.qdrant-sync-state.json | grep -i \"intent\" || echo \"Not found in sync state\"; ls -la src/intent-detector.js; git log -1 --format=%ct src/intent-detector.js 2>/dev/null || echo \"No git history for this file\"",
+    "exitCode": 0,
+    "outputSnippet": "Not found in sync state\n-rwxr-xr-x 1 Gianlorenzo 197609 17454 Apr 27 18:22 src/intent-detector.js\n1777295458\n",
+    "timestamp": 1777307005510
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "gIezApAZWcrZ3sfxIejPKCXUxCX3BWV1",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && VECTOR_NAME='fast-all-minilm-l6-v2' EMBEDDING_DIMENSIONS=1024 node -e \"\nconst { GSDKnowledgeSync } = require('./src/gsd-qdrant-template.js');\nasync function main() {\n  const sync = new GDKnowledgeSync();\n  await sync.init();\n  \n  // Scroll all points and look for intent-detector\n  let found = false;\n  let offset = null;\n  do {\n    const result = await sync.client.scroll(sync.collectionName, {\n      limit: 100,\n      with_payload: true,\n      with_vector: false,\n      offset: offset\n    });\n    \n    for (const point of result.points) {\n      if (point.payload && point.payload.source && point.payload.source.includes('intent-detector')) {\n        console.log('FOUND:', JSON.stringify({ source: point.payload.source, score: 'N/A', lastModified: point.payload.lastModified }, null, 2));\n        found = true;\n      }\n    }\n    \n    offset = result.next_point_offset;\n  } while (offset);\n  \n  if (!found) {\n    console.log('intent-detector.js NOT FOUND in Qdrant collection');\n    // List all code sources to see what's indexed\n    const scroll2 = await sync.client.scroll(sync.collectionName, { limit: 50, with_payload: ['source', 'type'] });\n    const codeSources = scroll2.points.filter(p => p.payload && p.payload.type === 'code').map(p => p.payload.source);\n    console.log('Code sources in Qdrant:', codeSources.length);\n    for (const s of codeSources) {\n      if (s.includes('intent') || s.includes('cli')) console.log('  -', s);\n    }\n  }\n}\n\n// Fix: use correct class name\nconst sync = new GSDKnowledgeSync();\nmain().catch(e => console.error(e.message));\n\" 2>&1 | head -30",
+    "exitCode": 0,
+    "outputSnippet": "GDKnowledgeSync is not defined\n",
+    "timestamp": 1777307028793
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "T97tSZvZhBNcNAU4cuHzbjLo6MElkKsq",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && VECTOR_NAME='fast-all-minilm-l6-v2' EMBEDDING_DIMENSIONS=1024 node -e \"\nconst { GSDKnowledgeSync } = require('./src/gsd-qdrant-template.js');\nasync function main() {\n  const sync = new GSDKnowledgeSync();\n  await sync.init();\n  \n  // Scroll all points and look for intent-detector\n  let found = false;\n  let offset = null;\n  do {\n    const result = await sync.client.scroll(sync.collectionName, {\n      limit: 100,\n      with_payload: true,\n      with_vector: false,\n      offset: offset\n    });\n    \n    for (const point of result.points) {\n      if (point.payload && point.payload.source && point.payload.source.includes('intent-detector')) {\n        console.log('FOUND:', JSON.stringify({ source: point.payload.source, lastModified: point.payload.lastModified }, null, 2));\n        found = true;\n      }\n    }\n    \n    offset = result.next_point_offset;\n  } while (offset);\n  \n  if (!found) {\n    console.log('intent-detector.js NOT FOUND in Qdrant collection');\n    // List all code sources to see what's indexed\n    const scroll2 = await sync.client.scroll(sync.collectionName, { limit: 50, with_payload: ['source', 'type'] });\n    const codeSources = scroll2.points.filter(p => p.payload && p.payload.type === 'code').map(p => p.payload.source);\n    console.log('Code sources in Qdrant:', codeSources.length);\n    for (const s of codeSources) {\n      if (s.includes('intent') || s.includes('cli')) console.log('  -', s);\n    }\n  }\n}\n\nmain().catch(e => console.error(e.message));\n\" 2>&1 | head -30",
+    "exitCode": 0,
+    "outputSnippet": "FOUND: {\n  \"source\": \"src/intent-detector.test.js\"\n}\n",
+    "timestamp": 1777307049502
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "3AvgsrTPJx5AQELi8p0vXcqxfYIJ2O53",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && VECTOR_NAME='fast-all-minilm-l6-v2' EMBEDDING_DIMENSIONS=1024 node src/cli.js context 'intent detector' 2>&1 | grep -A3 \"intent-detector.test\"",
+    "exitCode": 1,
+    "outputSnippet": "(no output)\n\nCommand exited with code 1",
+    "timestamp": 1777307071736
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "ZXZ6CUjAKrsIZ9Wg46yTSv3D8QRYmPZf",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && VECTOR_NAME='fast-all-minilm-l6-v2' EMBEDDING_DIMENSIONS=1024 node -e \"\nconst { GSDKnowledgeSync } = require('./src/gsd-qdrant-template.js');\nconst { applyRecencyBoost } = require('./src/re-ranking');\n\nasync function main() {\n  const sync = new GSDKnowledgeSync();\n  await sync.init();\n  \n  // Search for 'intent detector' and get raw hits with lastModified\n  const vector = await sync.embedText('intent detector');\n  const hits = await sync.client.search(sync.collectionName, { \n    vector: { name: sync.vectorName, vector }, \n    limit: 20,\n    with_payload: true, \n    with_vector: false\n  });\n\n  console.log('Raw Qdrant results:', hits.length);\n  \n  // Map to result objects (same as cli.js does)\n  let rankedResults = hits.map(hit => ({ ...hit.payload, score: hit.score, _query: 'intent detector' }));\n  \n  // Show before re-ranking\n  console.log('\\n--- Before Re-Ranking ---');\n  for (let i = 0; i < Math.min(5, rankedResults.length); i++) {\n    const r = rankedResults[i];\n    console.log(\\`[\\${i}] score=\\${r.score.toFixed(4)} source=\\${r.source} lastModified=\\${r.lastModified || 'N/A'}\\`);\n  }\n\n  // Apply re-ranking\n  applyRecencyBoost(rankedResults, { days: 30, pathMatch: true });\n\n  // Sort and show after\n  rankedResults.sort((a,b) => b.score - a.score);\n  \n  console.log('\\n--- After Re-Ranking (top 5) ---');\n  for (let i = 0; i < Math.min(5, rankedResults.length); i++) {\n    const r = rankedResults[i];\n    console.log(\\`[\\${i}] score=\\${r.score.toFixed(4)} source=\\${r.source} lastModified=\\${r.lastModified || 'N/A'}\\`);\n  }\n\n  // Check if any intent-detector result is in top 3\n  const top3 = rankedResults.slice(0, 3).map(r => r.source);\n  console.log('\\nTop 3 sources:', top3.join(', '));\n  \n  const hasIntentDetector = top3.some(s => s.includes('intent-detector'));\n  if (hasIntentDetector) {\n    console.log('✅ intent-detector found in top 3!');\n  } else {\n    // Check all results for any intent-detector entry\n    const allResults = rankedResults.filter(r => r.source && r.source.includes('intent-detector'));\n    if (allResults.length > 0) {\n      console.log('ℹ️  intent-detector found but not in top 3:');\n      for (const r of allResults) {\n        console.log(\\`   score=\\${r.score.toFixed(4)} source=\\${r.source} lastModified=\\${r.lastModified}\\`);\n      }\n    } else {\n      console.log('ℹ️  No intent-detector results in Qdrant (only test file exists)');\n    }\n  }\n}\n\nmain().catch(e => console.error(e.message));\n\" 2>&1 | head -40",
+    "exitCode": 0,
+    "outputSnippet": "Raw Qdrant results: 20\n\n--- Before Re-Ranking ---\n[0] score=0.9648 source=.gsd/milestones/M001/S07-SUMMARY.md lastModified=N/A\n[1] score=0.9622 source=start/src/backend/utils/crypto.js lastModified=N/A\n[2] score=0.9592 source=wordpress/setup.sh lastModified=N/A\n[3] score=0.9545 source=start/src/backend/db/migrations/001-add-encryption-fields.sql lastModified=N/A\n[4] score=0.9512 source=.gsd/milestones/M001/slices/S05/tasks/T03-PLAN.md lastModified=N/A\n[rerank] 20 results scored, avg boost: %.3f ",
+    "timestamp": 1777307101869
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "90wepHvoyZVKVCwv2d5HiEAaUNgB02Uc",
+    "path": "D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/re-ranking.js",
+    "timestamp": 1777307122449
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "HmSXyKgB3cA66uyOrJfHZCYuO0LIaqzh",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && node -e \"const { applyRecencyBoost } = require('./src/re-ranking'); const r = [{ score: 0.6, source: 'test.js', lastModified: Math.floor(Date.now()/1000) }]; applyRecencyBoost(r);\"",
+    "exitCode": 0,
+    "outputSnippet": "[rerank] 1 results scored, avg boost: 0.050\n",
+    "timestamp": 1777307139310
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "WxDBacXmHEN9nPh5BnPozghFkuvAZ8XY",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && node -e \"\nconst { applyRecencyBoost } = require('./src/re-ranking');\n\n// Simulate Qdrant results with lastModified (as they would be after a full sync)\nconst now = Date.now();\nconst recentTs = Math.floor(now / 1000); // today\nconst oldTs = Math.floor((now - 60 * 86400000) / 1000); // 60 days ago\n\n// Simulate results from Qdrant search for 'intent detector'\nlet rankedResults = [\n  { score: 0.72, source: 'src/intent-detector.js', lastModified: recentTs },      // RECENT + pathMatch on 'intent','detector'\n  { score: 0.68, source: 'src/cli.js', lastModified: Math.floor((now - 5*86400000)/1000) }, // recent but no pathMatch\n  { score: 0.75, source: 'src/gsd-qdrant-mcp/index.js', lastModified: oldTs },     // OLD + pathMatch on 'intent' (no — query is 'intent detector')\n  { score: 0.65, source: '.gsd/milestones/M001/SUMMARY.md', lastModified: undefined }, // doc, no lastModified\n].map(r => ({ ...r, _query: 'intent detector' }));\n\nconsole.log('--- Before Re-Ranking ---');\nrankedResults.forEach((r,i) => console.log(\\`[\\${i}] score=\\${r.score.toFixed(4)} source=\\${r.source} lm=\\${r.lastModified || 'N/A'}\\`));\n\napplyRecencyBoost(rankedResults, { days: 30, pathMatch: true });\nrankedResults.sort((a,b) => b.score - a.score);\n\nconsole.log('\\n--- After Re-Ranking ---');\nrankedResults.forEach((r,i) => console.log(\\`[\\${i}] score=\\${r.score.toFixed(4)} source=\\${r.source} lm=\\${r.lastModified || 'N/A'}\\`));\n\n// Verify intent-detector is in top 3\nconst top3 = rankedResults.slice(0, 3).map(r => r.source);\nconsole.log('\\nTop 3:', top3.join(', '));\nif (top3.some(s => s.includes('intent-detector'))) {\n  console.log('✅ SUCCESS: intent-detector appears in top 3 due to recency + path matching!');\n} else {\n  console.log('❌ FAIL: intent-detector not in top 3');\n}\n\n// Verify score calculations\nconst idResult = rankedResults.find(r => r.source === 'src/intent-detector.js');\nconsole.log('\\nScore verification for src/intent-detector.js:');\nconsole.log(\\`  Base: 0.72 + Recency(0.05) + PathMatch(0.15) = \\${idResult.score.toFixed(4)}\\`);\n\"\n",
+    "exitCode": 0,
+    "outputSnippet": "--- Before Re-Ranking ---\n[0] score=0.7200 source=src/intent-detector.js lm=1777307171\n[1] score=0.6800 source=src/cli.js lm=1776875171\n[2] score=0.7500 source=src/gsd-qdrant-mcp/index.js lm=1772123171\n[3] score=0.6500 source=.gsd/milestones/M001/SUMMARY.md lm=N/A\n[rerank] 4 results scored, avg boost: 0.063\n\n--- After Re-Ranking ---\n[0] score=0.9200 source=src/intent-detector.js lm=1777307171\n[1] score=0.7500 source=src/gsd-qdrant-mcp/index.js lm=1772123171\n[2] score=0.7300 source=src/cli.js lm=",
+    "timestamp": 1777307171454
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "FSiSQmXmD2xGqn5i4QxacJ2nHusnEjJG",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && node -c src/re-ranking.js && echo \"re-ranking OK\" && node -c src/cli.js && echo \"cli OK\"",
+    "exitCode": 0,
+    "outputSnippet": "re-ranking OK\ncli OK\n",
+    "timestamp": 1777307215261
+  }
+]

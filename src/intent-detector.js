@@ -59,13 +59,13 @@ function detectSearchType(query) {
     'contains': /\b(contains|contiene|includes|include)\b/,
     'starts': /\b(starts|inizi|comincia|begin)\b/,
     'fuzzy': /\b(fuzzy|approssimativo|similare|fuzzi)\b/,
-    // Code placement patterns
+    // Code placement patterns — documentation takes priority over config when both match
+    'documentation': /\b(documentation|documentazione|docs|wiki|manuale)\b/,
     'script': /\b(cli|command|script|scripting|esecuzione|esecuzione)\b/,
     'utility': /\b(utility|helper|aiuto|help|funzione|function|libreria|librerias)\b/,
     'component': /\b(component|componente|ui|interface|interfaccia|widget)\b/,
     'test': /\b(test|testing|prove|testare|suite|test suite)\b/,
     'config': /\b(config|configuration|configurazione|configuratione|settings|impostazioni)\b/,
-    'documentation': /\b(documentation|documentazione|docs|wiki|manuale)\b/,
     'snippet': /\b(snippet|pezzo|tratto|porzione)\b/,
     'example': /\b(example|esempio|esempi|sample|campioni|demo)\b/
   };
@@ -273,7 +273,7 @@ function extractPreferences(query) {
 }
 
 /**
- * Extract search terms from query after removing filter keywords
+ * Extract search terms from query after removing filter keywords and stopwords.
  * 
  * @param {string} query - Normalized query string
  * @param {Object} filters - Extracted filters
@@ -308,6 +308,148 @@ function extractSearchTerms(query, filters) {
   terms = terms.replace(/\s+/g, ' ').trim();
   
   return terms;
+}
+
+/**
+ * Keyword extraction for embedding queries.
+ * 
+ * Simple fallback: tokenize, filter noise (stopwords + short/long tokens).
+ * This is a minimal safety net — the primary normalization should happen via
+ * KNOWLEDGE.md instructions to the LLM before calling auto_retrieve.
+ */
+function extractKeywords(query) {
+  if (!query || typeof query !== 'string') return '';
+
+  const normalized = query.toLowerCase().trim();
+  
+  // Split on whitespace, punctuation, hyphens, underscores
+  const tokens = normalized.split(/[\s\-_.,;:!?(){}[\]<>\/\\|@#$%^&*+=~`]+/);
+  
+  // Filter stopwords (English + Italian) and noise tokens
+  const STOPWORDS = new Set([
+    'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+    'should', 'may', 'might', 'shall', 'can', 'need', 'to', 'of', 'in',
+    'for', 'on', 'with', 'at', 'by', 'from', 'as', 'into', 'through',
+    'during', 'before', 'after', 'above', 'below', 'between', 'out',
+    'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here',
+    'there', 'when', 'where', 'why', 'how', 'all', 'both', 'each', 'few',
+    'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only',
+    'own', 'same', 'so', 'than', 'too', 'very', 'just', 'because', 'but',
+    'and', 'or', 'if', 'while', 'about', 'up', 'il', 'lo', 'la', 'i',
+    'gli', 'le', 'un', 'uno', 'una', 'del', 'dello', 'della', 'dei',
+    'degli', 'delle', 'nel', 'nello', 'nella', 'nei', 'negli', 'nelle',
+    'sul', 'sullo', 'sulla', 'sui', 'sugli', 'sulle', 'al', 'allo',
+    'alla', 'ai', 'agli', 'alle', 'di', 'da', 'in', 'con', 'su', 'per',
+    'tra', 'fra', 'che', 'e', 'ed', 'o', 'oppure', 'ma', 'perché',
+    'poiché', 'se', 'quando', 'mentre', 'come'
+  ]);
+
+  const meaningful = tokens.filter(t => 
+    t.length >= 2 && 
+    t.length <= 40 && 
+    !STOPWORDS.has(t)
+  );
+  
+  if (meaningful.length === 0) return '';
+
+  // Return all meaningful tokens — no artificial cap. The embedding model handles variable length.
+  return meaningful.join(' ');
+}
+
+/**
+ * Build a Qdrant filter payload from structured intent.
+ *
+ * Certain filters (language, type, project_id with confident values) become
+ * `must` clauses — they must match for a point to be returned.
+ * Only low-confidence or absent-filter cases go into `should` as soft boosts.
+ *
+ * @param {Object} intent - The structured search intent
+ * @returns {Object} Qdrant-compatible filter object with must/should clauses
+ */
+function buildQdrantFilter(intent) {
+  const must = [];
+  const should = [];
+
+  // ── language (certain) ────────────────────────────────────────────
+  if (intent.filters.language) {
+    // Map our internal language names to Qdrant stored values
+    const langMap = {
+      javascript: 'javascript',
+      typescript: 'typescript',
+      python: 'python',
+      go: 'go',
+      rust: 'rust',
+      java: 'java',
+      c: 'c',
+      cpp: 'cpp',
+      'c#': 'csharp',
+      ruby: 'ruby',
+      php: 'php',
+      html: 'html',
+      css: 'css',
+      sql: 'sql',
+      json: 'json',
+      yaml: 'yaml',
+      shell: 'shell',
+      docker: 'docker',
+    };
+    const qdrantLang = langMap[intent.filters.language] || intent.filters.language;
+    must.push({ key: 'language', match: { value: qdrantLang } });
+  }
+
+  // ── type → soft boost (should, not must) ────────────────────────
+  // Type hints are suggestions to the DB: matching points get a score bump.
+  // They never exclude results — that's what semantic similarity + re-ranking do.
+  const KNOWN_PAYLOAD_TYPES = new Set(['code', 'doc']);
+  const TYPE_MAP = {
+    component: 'code', test: 'code', config: 'code', script: 'code',
+    utility: 'code', helper: 'code', library: 'code', framework: 'code',
+    tool: 'code', snippet: 'code', example: 'code', template: 'code',
+    build: 'code', deploy: 'code', ci: 'code', docker: 'code',
+    database: 'code', api: 'code', frontend: 'code', backend: 'code',
+    devops: 'code', security: 'code', performance: 'code',
+    documentation: 'doc',
+  };
+
+  if (intent.filters.type) {
+    const mappedType = TYPE_MAP[intent.filters.type];
+    if (mappedType && KNOWN_PAYLOAD_TYPES.has(mappedType)) {
+      should.push({ key: 'type', match: { value: mappedType } });
+      console.log('[qdrant] filter: type "%s" → payload "%s" (soft boost)', intent.filters.type, mappedType);
+    } else if (intent.filters.type) {
+      // Unknown search type — no mapping exists. Skip entirely.
+      console.log('[qdrant] filter: unknown type "%s", skipping', intent.filters.type);
+    }
+  }
+
+  // ── project_id → soft boost (should, not must) ──────────────────
+  if (intent.filters.project_id) {
+    should.push({ key: 'project_id', match: { value: intent.filters.project_id } });
+    console.log('[qdrant] filter: project "%s" (soft boost)', intent.filters.project_id);
+  }
+
+  // ── tags → soft boost (should) ────────────────────────────────────
+  if (intent.filters.tags && intent.filters.tags.length > 0) {
+    for (const tag of intent.filters.tags) {
+      should.push({ key: 'tags', match: { value: tag } });
+    }
+  }
+
+  // ── crossProject scope ────────────────────────────────────────────
+  if (intent.filters.crossProject) {
+    // No filter needed — just means don't exclude other projects.
+    // If crossProject is false, we could add a must for project_id match.
+  }
+
+  const filter = {};
+  if (must.length > 0) filter.must = must;
+  if (should.length > 0) filter.should = should;
+
+  // Log what we built for agent observability
+  console.log('[qdrant] filter: must=%d, should=%d', must.length, should.length);
+
+  return Object.keys(filter).length > 0 ? filter : null;
 }
 
 /**
@@ -394,6 +536,16 @@ function main() {
     console.log('-'.repeat(60));
   });
   
+  // Test buildQdrantFilter
+  console.log('\n--- Qdrant Filter Builder ---');
+  testQueries.forEach(query => {
+    const intent = detectIntent(query);
+    const filter = buildQdrantFilter(intent);
+    console.log(`Query: "${query}"`);
+    console.log(`  filter: ${JSON.stringify(filter)}`);
+    console.log('-'.repeat(60));
+  });
+
   console.log('\n✅ Intent detector module ready!');
 }
 
@@ -404,7 +556,9 @@ module.exports = {
   extractFilters,
   extractPreferences,
   extractSearchTerms,
-  generateQuery
+  extractKeywords,
+  generateQuery,
+  buildQdrantFilter
 };
 
 // Execute if run directly

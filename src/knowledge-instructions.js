@@ -30,7 +30,7 @@ GSD-Qdrant is installed in this project. When working on this project, use auto_
 ### When to call auto_retrieve
 
 **Always call \`auto_retrieve\` before or alongside local searches for:**
-- Questions about libraries, frameworks, components, or technologies ("che componenti frontend posso usare?", "come si usa X?", "quali librerie per Y?")
+- Questions about libraries, frameworks, components, or technologies
 - API usage questions (method signatures, configuration options)
 - Design patterns or architectural approaches
 
@@ -49,7 +49,18 @@ auto_retrieve(
 )
 \`\`\`
 
-The tool returns relevant context from other GSD projects indexed in Qdrant. Use this context to avoid reinventing solutions and learn from existing patterns.
+### Query formulation — extract key terms first
+Before calling \`auto_retrieve\`, distill your question into **2-4 meaningful keywords** (no filler words). The embedding model scores best when the query is focused on concrete nouns/verbs.
+
+**Method:** Treat your question as a search task, not a conversation. Ask yourself: "If I were searching for this in code documentation, what terms would I type?" Then strip everything that isn't one of those terms.
+
+**Algorithm to follow — apply these steps to ANY query you receive:**
+1. Identify the core technical concepts — nouns and verbs that name things or describe actions relevant to finding code
+2. Keep any exact code identifiers as-is (function names, class names, library names, file paths) — they are already optimized for vector matching because they appear in source files exactly like this
+3. Remove all conversational framing: questions markers, polite expressions, filler words, and any word that doesn't carry technical meaning on its own
+4. If your question has multiple distinct topics, include them all but strip connecting/prepositional words between them
+
+**Language note:** The embedding model (bge-m3) is multilingual — extract keywords in whatever language feels most natural to you. Don't translate concepts into English if the code uses terms from another language. Keep technical identifiers exactly as they appear in source files regardless of their original language.
 
 ### Notes
 - Results are ranked by semantic relevance + cross-project boost

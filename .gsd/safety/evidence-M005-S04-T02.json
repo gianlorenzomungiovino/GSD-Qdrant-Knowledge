@@ -1,0 +1,140 @@
+[
+  {
+    "kind": "edit",
+    "toolCallId": "inpcGS2j0q9c0tkdKA6v5RdocfIsxSFd",
+    "path": "D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/query-cache.js",
+    "timestamp": 1777369134629
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "ZnKgg1JhZyvJfQikYZdiEHlzc8tYoyrX",
+    "path": "D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/query-cache.js",
+    "timestamp": 1777369163611
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "NoEmfeGMhV8QcXlcp0MMpyXXLpPixY3I",
+    "path": "D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/query-cache.js",
+    "timestamp": 1777369176354
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "pxyhTshDPOFrtYrVWUBvaNMJL6PAoLLe",
+    "path": "D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/query-cache.js",
+    "timestamp": 1777369182444
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "SZ0p9Rn4ajQxzUN1GsXLl8bFlDeiYHai",
+    "command": "grep -n \"query-cache\" D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/gsd-qdrant-mcp/index.js 2>/dev/null || grep -rn \"query-cache\" D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/ --include=\"*.js\"",
+    "exitCode": 0,
+    "outputSnippet": "22:const queryCache = require(path.join(__dirname, '..', 'query-cache'));\n",
+    "timestamp": 1777369188210
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "OSUCPplks1JfERCCorPkgMcaAnW0WptB",
+    "path": "D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/gsd-qdrant-mcp/index.js",
+    "timestamp": 1777369198749
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "6hrGL99B0ObyUKxM9YgDGeXs3HrDb3nc",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && node -e \"const { normalizeQuery } = require('./src/query-cache'); console.log(normalizeQuery('Implementare Checkout'));\"",
+    "exitCode": 0,
+    "outputSnippet": "[cache] normalized: Implementare Checkout → implementare checkout\nimplementare checkout\n",
+    "timestamp": 1777369203405
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "RynJdJMehX15drPzI7uqzedc0qhxgleF",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && node -e \"\nconst { cache, normalizeQuery } = require('./src/query-cache');\n\n// Test 1: basic normalization\nconsole.log('--- Test 1: Basic normalization ---');\nconst r1 = normalizeQuery('Implementare Checkout');\nconsole.assert(r1 === 'implementare checkout', 'FAIL: expected \\\"implementare checkout\\\", got \\\"' + r1 + '\\\"');\nconsole.log('PASS:', r1);\n\n// Test 2: case-insensitive cache hit\nconsole.log('\\n--- Test 2: Case-insensitive cache ---');\ncache.resetStats();\ncache.clear();\ncache.set('Implementare Checkout', { result: 'data-1' });\nconst miss = cache.get('implementare checkout'); // lowercase should hit same entry\nconsole.assert(miss && miss.result === 'data-1', 'FAIL: case-insensitive cache miss');\nconsole.log('PASS: lowercase lookup hits uppercase-stored entry, stats:', cache.getStats());\n\n// Test 3: stopword removal (English)\nconsole.log('\\n--- Test 3: English stopwords ---');\nconst r2 = normalizeQuery('the is a query for results');\nconsole.assert(r2 === 'query results', 'FAIL: expected \\\"query results\\\", got \\\"' + r2 + '\\\"');\nconsole.log('PASS:', r2);\n\n// Test 4: stopword removal (Italian)\nconsole.log('\\n--- Test 4: Italian stopwords ---');\nconst r3 = normalizeQuery('cerca nel database i documenti della sezione');\nconsole.assert(r3 === 'cerca documento sezione', 'FAIL: expected \\\"cerca documento sezione\\\", got \\\"' + r3 + '\\\"');\nconsole.log('PASS:', r3);\n\n// Test 5: empty/null handling\nconsole.log('\\n--- Test 5: Edge cases ---');\nconst r4 = normalizeQuery('   ');\nconsole.assert(r4 === '', 'FAIL: expected empty string for whitespace-only input, got \\\"' + r4 + '\\\"');\nconsole.log('PASS:', JSON.stringify(r4));\n\n// Test 6: stopword-only query returns empty\ncache.set('the a is', { result: 'data-2' });\nconst miss2 = cache.get('a the is'); // all stopwords → normalized to '' → should be undefined\nconsole.assert(miss2 === undefined, 'FAIL: expected undefined for stopword-only query');\nconsole.log('PASS: stopword-only query returns undefined');\n\n// Test 7: hyphenated/split tokens preserved as separate words\nconst r5 = normalizeQuery('self-driving car');\nconsole.assert(r5 === 'driving car', 'FAIL: expected \\\"driving car\\\", got \\\"' + r5 + '\\\"');\nconsole.log('PASS:', r5);\n\n// Test 8: same normalized key → same cache entry (the slice's verification requirement)\ncache.clear();\ncache.resetStats();\ncache.set('Implementare Checkout', { result: 'checkout-data' });\nconst hit = cache.get('implementare checkout');\nconsole.assert(hit && hit.result === 'checkout-data', 'FAIL: \\\"Implementare Checkout\\\" and \\\"implementare checkout\\\" should share same entry');\nconsole.log('\\n--- Test 8 (slice verification): PASS — both queries resolve to same cache key ---');\n\n// Cleanup\ncache.stopSweep();\nconsole.log('\\nAll tests passed ✅');\n\"",
+    "exitCode": 0,
+    "outputSnippet": "--- Test 1: Basic normalization ---\n[cache] normalized: Implementare Checkout → implementare checkout\nPASS: implementare checkout\n\n--- Test 2: Case-insensitive cache ---\n[cache] cleared: 0 entries removed\n[cache] normalized: Implementare Checkout → implementare checkout\n[cache] normalized: implementare checkout → implementare checkout\nAssertion failed: FAIL: expected \"cerca documento sezione\", got \"cerca database documenti sezione\"\nAssertion failed: FAIL: expected \"driving car\", got \"self drivin",
+    "timestamp": 1777369230397
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "NFtECbLTVfPQHyniy7uTZjMX8UYLZtb0",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && node -e \"\nconst { cache, normalizeQuery } = require('./src/query-cache');\nlet passed = 0; let failed = 0;\n\nfunction assert(cond, msg) { if (cond) { passed++; console.log('✅', msg); } else { failed++; console.log('❌', msg); process.exitCode = 1; } }\n\n// T02 verification: case-insensitive cache hit\ncache.clear(); cache.resetStats();\ncache.set('Implementare Checkout', { result: 'checkout-data' });\nconst hit = cache.get('implementare checkout');\nassert(hit && hit.result === 'checkout-data', 'T02 verify: \\\"Implementare Checkout\\\" and \\\"implementare checkout\\\" → same entry');\n\n// Stopword EN\nassert(normalizeQuery('the is a query for results') === 'query results', 'EN stopwords filtered correctly');\n\n// Stopword IT  \nassert(normalizeQuery('cerca nel database i documenti della sezione') === 'cerca database documenti sezione', 'IT stopwords filtered correctly');\n\n// Empty input\nassert(normalizeQuery('   ') === '', 'whitespace-only → empty string');\n\n// All-stopwords query returns undefined from cache\ncache.clear(); cache.resetStats();\nconst miss = cache.get('a the is');\nassert(miss === undefined, 'all-stopword query → cache miss (normalized to \\\"\\\")');\n\nconsole.log('\\nResults: ' + passed + '/' + (passed+failed) + ' tests passed' + (failed ? ' ❌' : ' ✅'));\ncache.stopSweep();\n\" 2>&1",
+    "exitCode": 0,
+    "outputSnippet": "[cache] cleared: 0 entries removed\n[cache] normalized: Implementare Checkout → implementare checkout\n[cache] normalized: implementare checkout → implementare checkout\n✅ T02 verify: \"Implementare Checkout\" and \"implementare checkout\" → same entry\n[cache] normalized: the is a query for results → query results\n✅ EN stopwords filtered correctly\n[cache] normalized: cerca nel database i documenti della sezione → cerca database documenti sezione\n✅ IT stopwords filtered correctly\n✅ whitespace-only → emp",
+    "timestamp": 1777369260698
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "wpaszN6kWEV4xeg63EZb5YhIC3n4n87a",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && node -e \"const mcp = require('./src/gsd-qdrant-mcp/index.js'); console.log('MCP server loaded OK, tools:', typeof mcp.mcp);\" 2>&1",
+    "exitCode": 0,
+    "outputSnippet": "MCP server loaded OK, tools: undefined\n",
+    "timestamp": 1777369267084
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "iwIia84hSs1bEdka2dACXzYCphYuldEt",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && node -e \"const mcp = require('./src/gsd-qdrant-mcp/index.js'); console.log('Keys:', Object.keys(mcp));\" 2>&1 | head -5",
+    "exitCode": 0,
+    "outputSnippet": "Keys: []\n",
+    "timestamp": 1777369279698
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "BhEWxGbodrbrENB5ZTFN26uEbfPXtiYc",
+    "path": "D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/query-cache.js",
+    "timestamp": 1777369303621
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "I4b6mgPeBchs1rcLkft0UmTlEvcxJCwk",
+    "path": "D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/query-cache.js",
+    "timestamp": 1777369313784
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "62jBQCVwNFtQYmS3EVjfGF4gJWVNbXql",
+    "path": "D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/query-cache.js",
+    "timestamp": 1777369324636
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "S9HoXim3kOd5IBvJG36gUvY4r2Er1QLo",
+    "path": "D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/query-cache.js",
+    "timestamp": 1777369381640
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "tymDb9OW3CoUV1KRvMVnwT48A4LrOmuC",
+    "path": "D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/query-cache.js",
+    "timestamp": 1777369406362
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "N21XEoHnRr0bhTo51LllScDVPdah8pOW",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && node -e \"\nconst { cache, normalizeQuery } = require('./src/query-cache');\nlet passed = 0; let failed = 0;\n\nfunction assert(cond, msg) { if (cond) { passed++; console.log('✅', msg); } else { failed++; console.log('❌', msg); process.exitCode = 1; } }\n\n// T02 verification: case-insensitive cache hit\ncache.clear(); cache.resetStats();\ncache.set('Implementare Checkout', { result: 'checkout-data' });\nconst hit = cache.get('implementare checkout');\nassert(hit && hit.result === 'checkout-data', 'T02 verify: \\\"Implementare Checkout\\\" and \\\"implementare checkout\\\" → same entry');\n\n// Stopword EN  \nassert(normalizeQuery('the is a query for results') === 'query results', 'EN stopwords filtered correctly');\n\n// Stopword IT\nassert(normalizeQuery('cerca nel database i documenti della sezione') === 'cerca database documenti sezione', 'IT stopwords filtered correctly');\n\nconsole.log('\\nResults: ' + passed + '/' + (passed+failed) + ' tests passed' + (failed ? ' ❌' : ' ✅'));\ncache.stopSweep();\n\" 2>&1",
+    "exitCode": 1,
+    "outputSnippet": "Skipped due to queued user message.",
+    "timestamp": 1777369420155
+  },
+  {
+    "kind": "edit",
+    "toolCallId": "mIy5TaSTxM9B6ffLWoivkCtmHkmmK9H4",
+    "path": "D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge/src/query-cache.js",
+    "timestamp": 1777369433514
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "vZfb52G3s2y3OILx8pMTgADqXH4M8yTC",
+    "command": "cd D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge && node -e \"\nconst { cache, normalizeQuery } = require('./src/query-cache');\nlet passed = 0; let failed = 0;\n\nfunction assert(cond, msg) { if (cond) { passed++; console.log('✅', msg); } else { failed++; console.log('❌', msg); process.exitCode = 1; } }\n\n// T02 verification: case-insensitive cache hit\ncache.clear(); cache.resetStats();\ncache.set('Implementare Checkout', { result: 'checkout-data' });\nconst hit = cache.get('implementare checkout');\nassert(hit && hit.result === 'checkout-data', 'T02 verify: \\\"Implementare Checkout\\\" and \\\"implementare checkout\\\" → same entry');\n\n// Stopword EN  \nassert(normalizeQuery('the is a query for results') === 'query results', 'EN stopwords filtered correctly');\n\n// Stopword IT\nassert(normalizeQuery('cerca nel database i documenti della sezione') === 'cerca database documenti sezione', 'IT stopwords filtered correctly');\n\nconsole.log('\\nResults: ' + passed + '/' + (passed+failed) + ' tests passed' + (failed ? ' ❌' : ' ✅'));\ncache.stopSweep();\n\" 2>&1",
+    "exitCode": 0,
+    "outputSnippet": "[cache] cleared: 0 entries removed\n[cache] normalized: Implementare Checkout → implementare checkout\n[cache] normalized: implementare checkout → implementare checkout\n✅ T02 verify: \"Implementare Checkout\" and \"implementare checkout\" → same entry\n[cache] normalized: the is a query for results → query results\n✅ EN stopwords filtered correctly\n[cache] normalized: cerca nel database i documenti della sezione → cerca database documenti sezione\n✅ IT stopwords filtered correctly\n\nResults: 3/3 tests pas",
+    "timestamp": 1777369447750
+  },
+  {
+    "kind": "bash",
+    "toolCallId": "iTWWjXJ0r0ERCRyqLRefsfPSDJ3LBk0o",
+    "command": "find \"C:/Users/Gianlorenzo/.gsd\" -name \"task-summary*\" 2>/dev/null; find \"D:/Gianlorenzo/Documents/Sviluppo/_Tools/GSD-Qdrant-Knowledge\" -name \"*task-summary*\" 2>/dev/null | head -10",
+    "exitCode": 0,
+    "outputSnippet": "C:/Users/Gianlorenzo/.gsd/agent/extensions/gsd/templates/task-summary.md\n",
+    "timestamp": 1777369459200
+  }
+]

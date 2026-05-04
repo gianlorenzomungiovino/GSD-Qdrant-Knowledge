@@ -1,0 +1,7 @@
+storage:
+  storage_path: D:/Gianlorenzo/Documents/Sviluppo/_Template/qdrant-template/.qdrant-data
+  snapshots_path: D:/Gianlorenzo/Documents/Sviluppo/_Template/qdrant-template/.qdrant-data/snapshots
+  temp_path: D:/Gianlorenzo/Documents/Sviluppo/_Template/qdrant-template/.qdrant-data/tmp
+service:
+  disable_telemetry: true
+  http_port: 6333

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "taskId": "T05",
+  "unitId": "M001/S02/T05",
+  "timestamp": 1776248547072,
+  "passed": false,
+  "discoverySource": "package-json",
+  "checks": [
+    {
+      "command": "npm run test",
+      "exitCode": 1,
+      "durationMs": 1217,
+      "verdict": "fail"
+    }
+  ],
+  "retryAttempt": 1,
+  "maxRetries": 2,
+  "runtimeErrors": [
+    {
+      "source": "bg-shell",
+      "severity": "crash",
+      "message": "[Qdrant template dev server] exitCode=1 errors: npm error Missing script: \"dev\"; npm error; npm error To see a list of scripts, run:",
+      "blocking": true
+    }
+  ]
+}

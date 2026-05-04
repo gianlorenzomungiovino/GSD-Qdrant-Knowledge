@@ -50,25 +50,30 @@ Un'agent senza contesto cross-project tende a riscrivere pattern che esistono gi
 | Feature                        | Dettaglio                                                                                                                                                                                |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ⚡ **Auto-retrieve hook**      | **★ Unique** — Iniezione automatica di contesto prima di ogni risposta. Zero query manuali, zero tokens sprecati a reinventare                                                           |
-| 🌐 **Cross-project retrieval** | Collection unificata `gsd_memory` — tutti i progetti condividono la stessa knowledge base                                                                                                |
-| 🔍 **Hybrid matching**         | Vector cosine (semantico) + lexical TF-lite (nomi, pattern) — i risultati più pertinenti arrivano primi                                                                                  |
-| 📊 **Scoring intelligente**    | Boost per contenuti `reusable` (+0.08), cross-project (+0.12), importanza e recency — i match forti superano 0.95                                                                        |
+| 🌐 **Cross-project retrieval** | Collection unificata `gsd_memory` con embedding bge-m3-1024 multilingue — tutti i progetti condividono la stessa knowledge base                                                              |
+| 🔍 **Flat search + re-ranking**| Flat search(LIMIT=30) → threshold filter(≥0.7) → recency/path matching → token truncation; più candidati per il re-ranker, soglie abbassate                     |
+| 📊 **Re-ranking avanzato**     | Recency boost +0.05 (file <30gg), path matching +0.15, symbol boost ×1.5 — flat search LIMIT=30 con soglie 0.7/0.55                              |
 | 🔗 **Doc↔Code linking**        | **★ Unique** — ogni snippet ha `relatedDocPaths` e `relatedDocIds`: il codice sa quali docs gli appartengono, e i docs sanno quali code file citano. Retrieval contestuale bidirezionale |
-| 💻 **Smart code indexing**     | Estrae signatures, JSDoc, comments, exports, imports, GSD IDs, language scope — il codice è indicizzato come lo leggono gli agent                                                        |
+| 💻 **Smart code indexing**     | bge-m3-1024 con path-first (prima linea = percorso file) e weighted header SIGNATURES:/EXPORTS:/IMPORTS: — il codice è indicizzato come lo leggono gli agent                                                        |
 | 🔄 **Auto-sync**               | Hook `post-commit` sincronizza automaticamente. Health check su Qdrant prima di ogni sync. Zero configurazione manuale                                                                   |
 | ⚡ **Zero config**             | Un comando: `gsd-qdrant-knowledge`. Bootstrap, collection, MCP registration, hook — tutto automatico                                                                                     |
 
-## Scoring
+## Scoring (bge-m3 + flat search + re-ranking)
 
 | Range           | Significato                                                        |
 | --------------- | ------------------------------------------------------------------ |
-| **0.95 – 0.99** | Match eccellente — vettoriale forte + boost cross-project/reusable |
-| **0.90 – 0.94** | Match forte — buon embedding + boosting applicato                  |
-| **0.80 – 0.89** | Match buono — rilevante ma boosting limitato                       |
-| **0.70 – 0.79** | Rilevante — contesto utile ma non ottimale                         |
-| **< 0.70**      | Debole — verificare la query                                       |
+| **0.95 – 1.0**  | Match eccellente — vettoriale forte + recency/path boost            |
+| **0.85 – 0.94** | Match forte — buon embedding, boosting applicato                   |
+| **0.70 – 0.84** | Rilevante — contesto utile (soglia primaria `SCORE_THRESHOLD=0.7`)   |
+| **0.55 – 0.69** | Fallback — risultati deboli ma potenzialmente utili                |
+| **< 0.55**      | Ignorato (soglia fallback `FALLBACK_THRESHOLD=0.55`)               |
 
-Il boosting premia contenuti riutilizzabili, cross-project, e documenti ad alta importanza (`STATE.md`, `REQUIREMENTS.md`, `DECISIONS.md`).
+Il re-ranking applica:
+- **+0.05 recency boost** per file modificati negli ultimi 30 giorni
+- **+0.15 path matching** quando parole della query corrispondono al percorso sorgente
+- **Symbol boost ×1.5** (≈+0.2) su match esatto con `symbolNames` nel payload
+
+Soglie: flat search restituisce fino a LIMIT=30 candidati, filtra per SCORE_THRESHOLD=0.7, fallback a FALLBACK_THRESHOLD=0.55 se troppo pochi risultati. Il re-ranking fa il lavoro di filtraggio finale.
 
 ## Esempio di output
 
@@ -91,14 +96,17 @@ Trovati 3 risultati rilevanti:
   Match type: semantic
 ```
 
-## Architettura
+## Architettura (bge-m3 + flat search)
 
 ```
-gsd_memory (single Qdrant collection)
+gsd_memory (single Qdrant collection, bge-m3-1024 vectors)
 ├── type: doc          → .gsd/*.md (STATE.md escluso)
 └── type: code         → src/**/*.js,ts,py,go,...
     ├── signatures, comments, exports, imports
     └── relatedDocPaths → docs collegati (GSD IDs matching)
+
+Pipeline di retrieval: flat search(LIMIT=30) → threshold filter(≥0.7) 
+  → re-ranking(recency + path match) → token estimation/truncation
 ```
 
 **Link bidirezionale docs ↔ code:** durante l'indicizzazione, il tool estrae i GSD IDs (M001, S02, T03…) da ogni file. Se uno snippet di codice cita `M003/S01/` e un doc contiene gli stessi IDs, il link viene creato automaticamente.

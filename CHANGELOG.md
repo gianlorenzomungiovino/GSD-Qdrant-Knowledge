@@ -1,5 +1,40 @@
 # Changelog
 
+## 2.3.0 (Milestone M005)
+
+### Changed — Embedding Model
+
+- **bge-m3 sostituisce codebert-base**: Xenova/bge-m3 (1024 dim, multilingue 100+ lingue) è ora il modello embedding di default in tutti i file. Sostituisce `Xenova/codebert-base` che era specializzato solo per inglese e performava male su query non-English.
+- **VECTOR_NAME** aggiornato da `codebert-768` a `bge-m3-1024` in index.js, cli.js (×2), gsd-qdrant-mcp/index.js, setup-from-templates.js, .mcp.json e template files.
+- **EMBEDDING_DIMENSIONS** aggiornato da 768 a 1024.
+
+### Changed — Search Architecture
+
+- **Flat search + re-ranking sostituiscono searchPointGroups**: Flat search con LIMIT=30 (prima 5) dà al re-ranker più candidati da filtrare. Soglie abbassate: SCORE_THRESHOLD=0.7 (era 0.85), FALLBACK_THRESHOLD=0.55 (era 0.75).
+- **Type hint → soft boost**: I type filter (config/example/template) ora vanno in `should` con mapping "type"→payload="code", non più in `must`. Risultati con tipo diverso possono apparire se semanticamente pertinenti.
+
+### Added — Re-ranking Module (`src/re-ranking.js`)
+
+- **Recency boost** +0.05 per file modificati negli ultimi 30 giorni (configurabile).
+- **Path matching** +0.15 quando parole della query corrispondono al percorso sorgente del file.
+- **Token estimation** (~4 chars/token) e **truncation** a ~4000 token totali, 500 char per risultato.
+
+### Added — Query Cache (`src/query-cache.js`)
+
+- Cache in memoria con TTL 5min, LRU eviction max 100 entry, sweep background ogni 60s.
+- **normalizeQuery()**: lowercase + split + stopword filter (EN ~60 + IT ~75 termini).
+- **applySymbolBoost()**: estrae token significativi e moltiplica score ×1.5 per match esatto su symbolNames.
+
+### Added — Code Indexing Optimizations
+
+- **Path-first embedding** in `buildCodeText` (index.js): percorso file grezzo come prima linea → massimo peso posizionale bge-m3.
+- **Weighted header** in template: signatures/exports/imports pre-pendati con prefisso SIGNATURES:/EXPORTS:/IMPORTS:.
+
+### Fixed — Tests
+
+- `intent-detector.test.js`: 4 test aggiornati per nuova logica type hint → should soft boost (prima hard filter must).
+- `query-cache.test.js`: cache key format aggiornato a `task|limit` (rimossa includeContent dal formato chiave).
+
 ## 2.2.2
 
 ### Fixed

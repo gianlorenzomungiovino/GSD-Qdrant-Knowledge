@@ -110,10 +110,10 @@ Rimuove gli artifact del tool dal progetto senza toccare `.gsd/`.
 |---|---|---|
 | `QDRANT_URL` | `http://localhost:6333` | URL del server Qdrant |
 | `COLLECTION_NAME` | `gsd_memory` | Nome della collection unificata |
-| `VECTOR_NAME` | `fast-all-minilm-l6-v2` | Nome del vettore nella collection |
-| `EMBEDDING_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` | Modello per le embedding |
+| `VECTOR_NAME` | `bge-m3-1024` | Nome del vettore nella collection (Xenova/bge-m3, 1024 dim multilingue) |
+| `EMBEDDING_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` | Modello per le embedding (legacy — non usato in produzione) |
 | `EMBEDDING_DIMENSIONS` | `1024` | Dimensione del vettore |
 
 ## Versione
 
-Versione target: `2.2.0`
+Versione target: `2.3.0` (bge-m3 + flat search + re-ranking)

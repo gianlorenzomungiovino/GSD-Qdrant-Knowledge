@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "milestoneId": "M002",
+  "sliceId": "S02",
+  "timestamp": 1776688618557,
+  "status": "fail",
+  "durationMs": 2,
+  "checks": [
+    {
+      "category": "file",
+      "target": "src/cli.js",
+      "passed": false,
+      "message": "Task T01 reads 'src/cli.js' but it's created by task T02 (sequence violation)",
+      "blocking": true
+    },
+    {
+      "category": "file",
+      "target": "package.json",
+      "passed": false,
+      "message": "Task T01 reads 'package.json' but it's created by task T03 (sequence violation)",
+      "blocking": true
+    }
+  ]
+}

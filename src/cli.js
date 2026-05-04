@@ -10,6 +10,7 @@ const fs = require('fs');
 const { existsSync, readFileSync, mkdirSync, writeFileSync, copyFileSync, rmSync, unlinkSync } = fs;
 const { join, dirname, extname, basename } = require('path');
 const readline = require('readline');
+const { applyRecencyBoost, applySymbolBoost, extractTokens, estimateTokens, trimResultsByTokenBudget } = require('./re-ranking');
 
 const PROJECT_ROOT = process.cwd();
 const ROOT_PKG = join(PROJECT_ROOT, 'package.json');
@@ -255,7 +256,7 @@ function ensureToolMcpConfig() {
         env: {
           QDRANT_URL: process.env.QDRANT_URL || 'http://localhost:6333',
           COLLECTION_NAME: process.env.COLLECTION_NAME || 'gsd_memory',
-          VECTOR_NAME: process.env.VECTOR_NAME || 'fast-all-minilm-l6-v2'
+          VECTOR_NAME: process.env.VECTOR_NAME || 'bge-m3-1024'
         }
       }
     }
@@ -281,7 +282,7 @@ function ensureRootMcpRegistration() {
     env: {
       QDRANT_URL: process.env.QDRANT_URL || 'http://localhost:6333',
       COLLECTION_NAME: process.env.COLLECTION_NAME || 'gsd_memory',
-      VECTOR_NAME: process.env.VECTOR_NAME || 'fast-all-minilm-l6-v2'
+      VECTOR_NAME: process.env.VECTOR_NAME || 'bge-m3-1024'
     }
   };
 
@@ -524,6 +525,7 @@ async function main() {
 
   if (args[0] === 'context') {
     const { GSDKnowledgeSync } = require(findFileInCliRoot('gsd-qdrant-template.js'));
+    const intentDetector = require(findFileInCliRoot('intent-detector.js'));
     const query = args[1] || '';
     const project_id = basename(PROJECT_ROOT);
 
@@ -533,17 +535,147 @@ async function main() {
       process.exit(1);
     }
 
+    // Detect search intent and build Qdrant filter from certain filters (must)
+    // vs uncertain ones (should). The LLM is responsible for normalizing the query;
+    // we only strip known filter keywords that would otherwise pollute the embedding.
+    const intent = intentDetector.detectIntent(query);
+    const qdrantFilter = intentDetector.buildQdrantFilter(intent);
+
     const sync = new GSDKnowledgeSync();
     await sync.init();
-    const vector = await sync.embedText(query);
-    const hits = await sync.client.search(sync.collectionName, {
-      vector: { name: sync.vectorName, vector },
-      limit: 10,
-      with_payload: true,
-      with_vector: false
+    
+    // A+C approach: LLM extracts meaningful terms (prompted in KNOWLEDGE.md),
+    // but we apply a minimal keyword extraction as fallback for any unfiltered query.
+    // extractKeywords is language-agnostic — no stopword lists, just heuristic filtering.
+    const embeddedQuery = intentDetector.extractKeywords(query) || query;
+
+    const vector = await sync.embedText(embeddedQuery);
+
+    // Prefetch-based query with group_by: return max 2 chunks per source document.
+    // Uses searchPointGroups() to deduplicate across source documents.
+    const t0 = Date.now();
+    const PREFETCH_LIMIT = 50; // wider prefetch when must-filter applied
+    const GROUP_SIZE = 2;        // max chunks per source document
+    const LIMIT = 5;             // max results to return
+    const SCORE_THRESHOLD = 0.85;  // minimum score for inclusion
+    const FALLBACK_THRESHOLD = 0.75; // lowered threshold if too few results
+
+    let hits = [];
+    let groupCount = 0;
+    try {
+      // searchPointGroups requires the vector query directly (no prefetch syntax).
+      // We use prefetch inside the query via Qdrant's internal mechanism, but since
+      // searchPointGroups does not support prefetch natively, we fall back to the
+      // simpler grouped search approach. The must-filter narrows candidates before scoring.
+      const groupConfig = {
+        vector: { name: sync.vectorName, vector },
+        group_by: 'source',
+        group_size: GROUP_SIZE,
+        limit: LIMIT * 3,  // request more groups so we can filter by threshold after
+        score_threshold: SCORE_THRESHOLD,
+        with_payload: true,
+        with_vector: false,
+      };
+      if (qdrantFilter) {
+        groupConfig.filter = qdrantFilter;
+      }
+      const groupedResults = await sync.client.searchPointGroups(
+        sync.collectionName,
+        groupConfig
+      );
+      groupCount = groupedResults.groups.length;
+
+      // Flatten groups into a single hits array (preserving score order within each group)
+      for (const group of groupedResults.groups) {
+        hits = hits.concat(group.hits);
+      }
+    } catch (groupErr) {
+      // Fallback: plain search with grouping done client-side if searchPointGroups fails
+      console.warn('[qdrant] searchPointGroups not supported, falling back to search');
+      try {
+        const searchConfig = {
+          vector: { name: sync.vectorName, vector },
+          limit: LIMIT * 10, // wider search for client-side dedup
+          score_threshold: SCORE_THRESHOLD,
+          with_payload: true,
+          with_vector: false,
+        };
+        if (qdrantFilter) {
+          searchConfig.filter = qdrantFilter;
+        }
+        const rawHits = await sync.client.search(sync.collectionName, searchConfig);
+
+        // Client-side dedup: max GROUP_SIZE per source document
+        const sourceCounts = {};
+        for (const hit of rawHits) {
+          const src = hit.payload && hit.payload.source;
+          if (!src || (sourceCounts[src] || 0) >= GROUP_SIZE) continue;
+          sourceCounts[src] = (sourceCounts[src] || 0) + 1;
+          hits.push(hit);
+        }
+        groupCount = Object.keys(sourceCounts).length;
+      } catch (searchErr) {
+        console.warn('[qdrant] search also failed, returning empty:', searchErr.message);
+      }
+    }
+
+    // Log totals before threshold filtering
+    const totalResults = hits.length;
+    console.log('[qdrant] results: %d total, %d above threshold', totalResults, hits.filter(h => h.score >= SCORE_THRESHOLD).length);
+
+    // Apply score threshold filter
+    let rankedHits = hits.filter(hit => hit.score >= SCORE_THRESHOLD);
+
+    // Fallback: if fewer than 2 results above threshold, retry with lowered threshold
+    if (rankedHits.length < 2 && totalResults > 0) {
+      console.log(`[qdrant] fallback: only ${rankedHits.length} results above ${SCORE_THRESHOLD.toFixed(2)}, retrying with ${FALLBACK_THRESHOLD.toFixed(2)}`);
+      rankedHits = hits.filter(hit => hit.score >= FALLBACK_THRESHOLD);
+    }
+
+    // Map hits to result objects (payload + score), attach _query for path matching
+    let rankedResults = rankedHits.map(hit => {
+      return { ...hit.payload, score: hit.score, _query: query };
     });
 
-    const ranked = hits.map(hit => ({ ...hit.payload, score: hit.score }));
+    // Apply recency boost and path matching re-ranking
+    applyRecencyBoost(rankedResults);
+
+    // Symbol boost: increase scores for results whose symbolNames contain query tokens
+    applySymbolBoost(rankedResults, query);
+
+    // Sort by updated score descending and limit to LIMIT results
+    const ranked = rankedResults
+      .sort((a, b) => b.score - a.score)
+      .slice(0, LIMIT);
+
+    // Token estimation: calculate total tokens across all result text fields
+    let totalTokens = 0;
+    for (const r of ranked) {
+      if (!r) continue;
+      const textFields = [r.content, r.summary, r.text].filter(Boolean);
+      for (const field of textFields) {
+        totalTokens += estimateTokens(field);
+      }
+    }
+
+    // Trim results if over token budget (4000 tokens default)
+    let trimmedInfo;
+    try {
+      trimmedInfo = trimResultsByTokenBudget(ranked, { maxTokens: 4000 });
+    } catch (_) { /* non-fatal — proceed with untrimmed */ }
+
+    const elapsed = Date.now() - t0;
+    console.log(`[qdrant] group_by: groups=${groupCount}, chunks=${totalResults} (threshold=${SCORE_THRESHOLD.toFixed(2)} → ${rankedHits.length} above), in ${elapsed}ms`);
+    if (trimmedInfo && trimmedInfo.trimmed) {
+      const charsPerResult = ranked.filter(r => r._truncated).length;
+      console.log(`[retrieval] %d results, ~%d estimated tokens, trimmed to 500 chars per result`, ranked.length, totalTokens);
+    }
+
+    // Clean up internal _truncated flag before output
+    for (const r of ranked) {
+      if (r && '_truncated' in r) delete r._truncated;
+    }
+
     console.log(JSON.stringify({ query, project_id, results: ranked }, null, 2));
     return;
   }
