@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.3.0 (Milestone M005)
+## 2.3.0
 
 ### Changed — Embedding Model
 
