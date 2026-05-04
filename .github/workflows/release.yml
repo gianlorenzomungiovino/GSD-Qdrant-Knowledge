@@ -11,24 +11,31 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       
       - name: Extract changelog for version
         id: changelog
+        shell: bash
         run: |
+          set -euo pipefail
           TAG="${{ github.ref_name }}"
           VERSION="${TAG#v}"
-          
-          # Estrae la sezione tra ## VERSION e il prossimo ## (o EOF)
-          awk -v ver="^## ${VERSION}$" '
-            $0 ~ ver { found=1; next }
-            /^## / && found { exit }
+
+          awk -v ver="${VERSION}" '
+            $0 == "## " ver { found=1; next }
+            found && /^## [0-9]/ { exit }
             found { print }
           ' CHANGELOG.md > release-body.md
+
+          {
+            echo 'body<<EOF'
+            cat release-body.md
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          body_path: release-body.md
+          body: ${{ steps.changelog.outputs.body }}
           draft: false
           prerelease: false
