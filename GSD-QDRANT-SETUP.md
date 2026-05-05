@@ -114,6 +114,42 @@ Rimuove gli artifact del tool dal progetto senza toccare `.gsd/`.
 | `EMBEDDING_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` | Modello per le embedding (legacy — non usato in produzione) |
 | `EMBEDDING_DIMENSIONS` | `1024` | Dimensione del vettore |
 
+## Migration da v2.x a v2.3+
+
+La versione 2.3+ introduce un cambio radicale nella strategia di indicizzazione: **un punto Qdrant per file** invece dei vecchi chunk multipli.
+
+### Cosa è cambiato
+
+| Aspetto | Prima (v2.x) | Dopo (v2.3+) |
+|---|---|---|
+| File code ≤32K | N chunk da 1500 char ciascuno (tipicamente 3-8 punti/file) | **1 punto** con contenuto intero + metadata arricchiti |
+| File >32K | Chunk a 1500 char | Chunk a **8000 char** con header metadata pre-pendato |
+| Metadata | Nessuno nel payload embedding | `signatures`, `exports`, `imports`, `symbolNames`, `comments` pre-pendati per positional weighting |
+| Ricerca | `searchPointGroups` con deduplica client-side | Flat search + re-ranking (PREFETCH_LIMIT=50, SCORE_THRESHOLD=0.85) |
+
+### Variabili ambiente rimosse
+
+Le seguenti variabili non sono più usate e possono essere rimosse dal proprio `.env`:
+
+- ~~`CHUNK_MAX`~~ — Non serve più: i file piccoli vengono indicizzati interi
+- ~~`CHUNK_OVERLAP`~~ — Non serve più: nessun chunking per file ≤32K
+
+Le variabili ancora supportate sono elencate nella tabella [Variabili ambiente](#variabili-ambiente) sopra.
+
+### Re-index completo (obbligatorio dopo upgrade)
+
+Poiché la struttura dei punti Qdrant è cambiata, i dati indicizzati con v2.x **non sono compatibili** con v2.3+. Per migrare:
+
+```bash
+node src/sync-knowledge.js --force-reindex
+```
+
+Questo comando:
+1. Cancella tutti i punti esistenti per il progetto corrente dalla collection `gsd_memory`
+2. Re-indicizza ogni file come un singolo punto (o chunk a 8000 se >32K) con la nuova struttura payload
+
+> **Nota:** Il re-index può richiedere alcuni minuti su progetti grandi. La progressione viene stampata in console.
+
 ## Versione
 
 Versione target: `2.3.0` (bge-m3 + flat search + re-ranking)
