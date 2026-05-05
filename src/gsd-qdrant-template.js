@@ -175,16 +175,14 @@ class GSDKnowledgeSync {
 
     for (const filePath of codeFiles) {
       fileIndex += 1;
-      const fileStartedAt = Date.now();
       const content = await fs.readFile(filePath, 'utf8');
       const relPath = this.toProjectRelative(filePath);
-      console.log(`[sync] file ${fileIndex}/${codeFiles.length}: ${relPath}`);
       const fileHash = this.hashContent(content);
       seenIds.add(relPath);
 
       // Check if already indexed — skip entire file if hash unchanged
       if (syncState[this.indexedFileKey('code', relPath)]?.hash === fileHash) {
-        console.log(`[sync] skip unchanged: ${relPath}`);
+        console.log(`[sync] ${relPath} ⏭️  unchanged`);
         continue;
       }
 
@@ -193,13 +191,14 @@ class GSDKnowledgeSync {
       // Build payload and embedding text for the entire file as one point.
       const codePayload = await this.buildCodePayload(filePath, content, relPath, docIndex);
       const vectorText = this.buildCodeText(relPath, content, codePayload);
+      const t0 = Date.now();
       const vector = await this.embedText(vectorText.slice(0, 8192)); // Cap text for embedding
 
       await this.client.upsert(this.collectionName, { points: [{ id: fileId, vector: { [this.vectorName]: vector }, payload: codePayload }] });
 
       syncState[this.indexedFileKey('code', relPath)] = { path: relPath, type: 'code', hash: fileHash };
       updated += 1; // Count as one "file" updated (one point per file)
-      console.log(`[sync] file done in ${Date.now() - fileStartedAt}ms: ${relPath}`);
+      console.log(`[sync] ${relPath} ✅ indicizzato (${Date.now() - t0}ms)`);
     }
     
     let deleted = await this.deleteMissingPoints(seenIds, syncState);
