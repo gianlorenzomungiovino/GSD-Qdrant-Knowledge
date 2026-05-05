@@ -181,6 +181,10 @@ class GSDKnowledgeSync {
       // Check if already indexed — skip entire file if hash unchanged (for small files)
       // For large-file chunks, check the first chunk's hash as a proxy for full-file change.
       const codeStateKey = this.indexedFileKey('code', relPath);
+      // Large-file threshold: bge-m3 context window ≈ 8192 tokens (~32K chars).
+      // Files exceeding this are chunked at 8000 chars with enriched metadata.
+      // In THIS project (as of M006): only src/gsd-qdrant-template.js (46K) qualifies as 'large'.
+      // cli.js (30.5K) is close but stays under threshold — single-point indexed.
       const isLargeFile = content.length > 32000;
 
       if (!isLargeFile && syncState[codeStateKey]?.hash === fileHash) {
