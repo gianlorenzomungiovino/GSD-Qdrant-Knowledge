@@ -170,10 +170,8 @@ class GSDKnowledgeSync {
       updated += 1;
     }
     
-    // Index code files — chunk into multiple points per file for better semantic granularity.
-    // Each chunk gets its own Qdrant point with parentId linking back to the source file.
-    const CHUNK_MAX_CHARS = parseInt(process.env.QDRANT_CHUNK_MAX || '1500', 10);
-    const CHUNK_OVERLAP_CHARS = parseInt(process.env.QDRANT_CHUNK_OVERLAP || '200', 10);
+    // Index code files — one point per entire file for clean file-level retrieval.
+    // Each file gets a single Qdrant point with full content + metadata in the payload.
 
     for (const filePath of codeFiles) {
       fileIndex += 1;
@@ -183,41 +181,24 @@ class GSDKnowledgeSync {
       console.log(`[sync] file ${fileIndex}/${codeFiles.length}: ${relPath}`);
       const fileHash = this.hashContent(content);
       seenIds.add(relPath);
-      
+
       // Check if already indexed — skip entire file if hash unchanged
       if (syncState[this.indexedFileKey('code', relPath)]?.hash === fileHash) {
         console.log(`[sync] skip unchanged: ${relPath}`);
         continue;
       }
 
-      // Delete old chunks for this file before re-indexing with new content
-      const parentId = this.makePointId('code', relPath);
-      await this.deleteOldChunks(parentId, relPath);
+      const fileId = this.makePointId('code', relPath);
 
-      // Chunk the file and index each chunk as a separate point.
-      // Qdrant requires integer or UUID IDs — we derive numeric chunk IDs by hashing
-      // (parentId, chunkIndex) to ensure uniqueness while keeping traceability.
-      const chunks = this.chunkFileContent(content, CHUNK_MAX_CHARS, CHUNK_OVERLAP_CHARS);
-      console.log(`[sync] chunks ${chunks.length} for ${relPath}`);
-      
-      for (let i = 0; i < chunks.length; i++) {
-        const chunkId = this.makeChunkPointId(parentId, i);
-        
-        // Build embedding text from the chunk content + file-level metadata
-        const chunkPayload = await this.buildChunkedCodePayload(
-          filePath, content, relPath, docIndex, i, chunks.length, chunks[i]
-        );
-        const vector = await this.embedText(this.buildChunkedCodeText(relPath, content, chunkPayload));
+      // Build payload and embedding text for the entire file as one point.
+      const codePayload = await this.buildCodePayload(filePath, content, relPath, docIndex);
+      const vectorText = this.buildCodeText(relPath, content, codePayload);
+      const vector = await this.embedText(vectorText.slice(0, 8192)); // Cap text for embedding
 
-        await this.client.upsert(this.collectionName, { points: [{ id: chunkId, vector: { [this.vectorName]: vector }, payload: chunkPayload }] });
+      await this.client.upsert(this.collectionName, { points: [{ id: fileId, vector: { [this.vectorName]: vector }, payload: codePayload }] });
 
-        if ((i + 1) % 10 === 0 || i === chunks.length - 1) {
-          console.log(`[sync] chunk ${i + 1}/${chunks.length} indexed for ${relPath}`);
-        }
-      }
-      
       syncState[this.indexedFileKey('code', relPath)] = { path: relPath, type: 'code', hash: fileHash };
-      updated += 1; // Count as one "file" updated (even though it creates multiple points)
+      updated += 1; // Count as one "file" updated (one point per file)
       console.log(`[sync] file done in ${Date.now() - fileStartedAt}ms: ${relPath}`);
     }
     
@@ -283,6 +264,17 @@ class GSDKnowledgeSync {
     }
     
     return filtered.map((hit) => ({ score: hit.score, ...hit.payload }));
+  }
+
+  /**
+   * Clear ALL points belonging to this project from the collection.
+   * Convenience wrapper around deleteAllProjectPoints().
+   * Used by --force-reindex to wipe before a fresh sync pass.
+   */
+  async clearAllProjectPoints() {
+    const deleted = await this.deleteAllProjectPoints();
+    console.log(`[clear] Deleted ${deleted} point(s) for project '${this.projectName}'`);
+    return deleted;
   }
 
   /**
@@ -781,265 +773,6 @@ class GSDKnowledgeSync {
     return header + '\n' + body;
   }
 
-  /**
-   * Split file content into overlapping chunks for better semantic granularity.
-   * 
-   * Strategy: try to split at logical boundaries (function/class declarations) first.
-   * If no good boundary is found within range, hard-cut at maxChars.
-   * Overlap preserves context between adjacent chunks (e.g., a function calling another).
-   */
-  chunkFileContent(content, maxChars = 1500, overlapChars = 200) {
-    const chunks = [];
-
-    // Small files: no need to split
-    if (content.length <= maxChars) {
-      return [{ content, startLine: 1, endLine: this.countLines(content), fullContent: true }];
-    }
-
-    // Find logical boundaries — positions where functions/classes/methods begin.
-    // We look for lines that start with function/class/const=arrow/export patterns.
-    const boundaryPositions = [];
-    const lines = content.split('\n');
-    
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      // Match: export async function, class Name, const name = (... =>, method(
-      if (/^(export\s+)?(?:async\s+)?function\b/.test(line) ||
-          /^class\b[A-Za-z_$]/.test(line) ||
-          /^(const|let|var)\s+[A-Za-z_]\w*\s*=\s*(?:async\s+)?\(/.test(line)) {
-        boundaryPositions.push({ lineIndex: i, charPos: this.charPositionAtLine(lines, i), text: line });
-      }
-    }
-
-    // Build chunks by splitting at boundaries when possible
-    let pos = 0;       // current character position in content
-    let chunkIdx = 0;
-    
-    while (pos < content.length) {
-      const remaining = content.slice(pos);
-      
-      if (remaining.length <= maxChars) {
-        // Last chunk — take everything left
-        chunks.push({ 
-          content: remaining, 
-          startLine: this.lineNumberAtChar(content, pos),
-          endLine: this.countLines(remaining),
-          fullContent: false 
-        });
-        break;
-      }
-
-      // Try to find a good boundary within the next maxChars range.
-      // Look for boundaries between 50% and 90% of current chunk size to avoid tiny chunks.
-      const searchStart = Math.floor(pos + maxChars * 0.4);
-      const searchEnd = Math.min(pos + Math.floor(maxChars * 0.85), content.length - overlapChars);
-
-      let bestBoundaryIdx = null;
-      let bestBoundaryDist = Infinity;
-      
-      for (const bp of boundaryPositions) {
-        if (bp.charPos < searchStart || bp.charPos > searchEnd) continue;
-        
-        // Prefer boundaries that are close to the middle of our range
-        const midPoint = Math.floor((searchStart + searchEnd) / 2);
-        const distFromMid = Math.abs(bp.charPos - midPoint);
-        
-        if (distFromMid < bestBoundaryDist) {
-          bestBoundaryIdx = bp;
-          bestBoundaryDist = distFromMid;
-        }
-      }
-
-      let splitAt;
-      
-      if (bestBoundaryIdx !== null && bestBoundaryDist <= maxChars * 0.35) {
-        // Use the boundary — but include a few lines before it for context
-        const ctxLinesBefore = Math.min(2, bestBoundaryIdx.lineIndex);
-        splitAt = this.charPositionAtLine(lines, bestBoundaryIdx.lineIndex - ctxLinesBefore);
-      } else if (bestBoundaryIdx !== null) {
-        // Boundary found but too far — use it anyway rather than hard-cutting mid-function
-        const ctxLinesBefore = Math.min(2, bestBoundaryIdx.lineIndex);
-        splitAt = this.charPositionAtLine(lines, bestBoundaryIdx.lineIndex - ctxLinesBefore);
-      } else {
-        // No boundary found in range — hard cut at maxChars * 0.85 to leave room for overlap
-        splitAt = pos + Math.floor(maxChars * 0.85);
-        
-        // Try to break at a newline near the cut point (prefer line boundaries)
-        const afterCut = content.slice(splitAt, splitAt + 100);
-        const newLineIdx = afterCut.indexOf('\n');
-        if (newLineIdx > 0 && newLineIdx < 50) {
-          splitAt += newLineIdx; // Move cut to end of current line
-        } else {
-          // Find previous newline going backwards from the hard-cut point
-          const prevNewline = content.lastIndexOf('\n', splitAt - 1);
-          if (prevNewline > pos + maxChars * 0.5) {
-            splitAt = prevNewline; // Cut at end of line instead of mid-line
-          }
-        }
-      }
-
-      const chunkContent = content.slice(pos, splitAt).trimEnd();
-      
-      chunks.push({ 
-        content: chunkContent, 
-        startLine: this.lineNumberAtChar(content, pos),
-        endLine: this.lineNumberAtChar(content, Math.min(splitAt - 1, content.length)),
-        fullContent: false 
-      });
-
-      // Move to next position with overlap
-      const overlapStart = splitAt - overlapChars;
-      pos = Math.max(overlapStart, splitAt); // Ensure forward progress even if overlap is large
-    }
-
-    return chunks;
-  }
-
-  /** Get character position at the start of a given line index */
-  charPositionAtLine(lines, lineIndex) {
-    let pos = 0;
-    for (let i = 0; i < Math.min(lineIndex, lines.length - 1); i++) {
-      pos += lines[i].length + 1; // +1 for newline character
-    }
-    return pos;
-  }
-
-  /** Get line number (1-based) at a given character position */
-  lineNumberAtChar(content, charPos) {
-    let line = 1;
-    for (let i = 0; i < Math.min(charPos, content.length); i++) {
-      if (content[i] === '\n') line++;
-    }
-    return line;
-  }
-
-  /** Count lines in a string */
-  countLines(text) {
-    const nlCount = (text.match(/\n/g) || []).length;
-    // If text doesn't end with newline, the last "line" still counts
-    if (text.length > 0 && !text.endsWith('\n')) return nlCount + 1;
-    return Math.max(nlCount, 1);
-  }
-
-  /** Generate a unique numeric Qdrant point ID for a chunk of a file */
-  makeChunkPointId(parentFileId, chunkIndex) {
-    // Hash (parent_file_id, chunk_index) to produce a deterministic integer ID.
-    // This avoids string IDs which Qdrant v1.x rejects as invalid.
-    const hash = crypto.createHash('md5').update(`${parentFileId}\x01${chunkIndex}`).digest('hex');
-    return parseInt(hash.substring(0, 8), 16);
-  }
-
-  /** Delete old chunk points for a file before re-indexing */
-  async deleteOldChunks(parentId, relPath) {
-    // Find all existing chunks for this parent ID and delete them.
-    // We scroll by project_id + source to find matching points efficiently.
-    let deleted = 0;
-    
-    try {
-      const BATCH_SIZE = 50;
-      const idsToDelete = [];
-      let offset = null;
-
-      while (true) {
-        const result = await this.client.scroll(this.collectionName, {
-          limit: BATCH_SIZE,
-          offset,
-          with_payload: false,
-          filter: {
-            must: [
-              { key: 'project_id', match: { value: this.projectName } },
-              { key: '_parent_file', match: { value: relPath } }
-            ]
-          }
-        });
-
-        if (result.points.length === 0) break;
-
-        idsToDelete.push(...result.points.map(p => p.id));
-
-        if (!result.next_page_offset) break;
-        offset = result.next_page_offset;
-      }
-
-      if (idsToDelete.length > 0) {
-        await this.client.delete(this.collectionName, { points: idsToDelete });
-        deleted += idsToDelete.length;
-      }
-    } catch (err) {
-      // Scroll by filter should always work with modern Qdrant.
-      // If it fails, log and skip cleanup — stale chunks will be caught by deleteStaleProjectPoints later.
-      console.warn(`[qdrant] chunk cleanup for ${relPath}: ${err.message}`);
-    }
-
-    return deleted;
-  }
-
-  /** Build payload for a single chunked point */
-  async buildChunkedCodePayload(filePath, fullContent, relPath, docIndex, chunkIdx, totalChunks, chunkData) {
-    const metadata = this.extractCodeMetadata(filePath, fullContent, relPath);
-    const lang = this.detectLanguage(filePath);
-
-    return {
-      project_id: this.projectName,
-      type: 'code',
-      language: lang,
-      source: relPath,           // Original file path (for grouping)
-      _parent_file: relPath,     // Internal field for chunk cleanup queries
-      
-      // Chunk metadata — enables multi-snippet-per-file results in search
-      parentId: this.makePointId('code', relPath),  // Base ID of the parent file point
-      chunkIndex: chunkIdx,
-      totalChunks: totalChunks,
-      
-      // Line range within original file
-      startLine: chunkData.startLine,
-      endLine: chunkData.endLine,
-      
-      // Content — only this chunk's content (not full file)
-      content: chunkData.content,
-      
-      // File-level metadata (shared across all chunks of the same file)
-      summary: metadata.name || basename(filePath),
-      kindDetail: metadata.kindDetail,
-      scope: metadata.scope,
-      workspace: metadata.workspace,
-      exports: metadata.exports,
-      imports: metadata.imports,
-      symbolNames: metadata.symbolNames,
-      
-      // Comments — JSDoc and inline comments for semantic context (critical for retrieval)
-      comments: this.extractComments(chunkData.content),
-      
-      // Reusable flag (computed from full file content)
-      reusable: await this.isReusable(filePath, fullContent),
-      timestamp: Date.now(),
-    };
-  }
-
-  /** Build embedding text for a single chunked point */
-  buildChunkedCodeText(relPath, fullContent, payload) {
-    // For chunks, embed the chunk content itself (not weighted header).
-    // Include file-level context as prefix so CodeBERT knows what file this belongs to.
-    const lang = payload.language || 'text';
-
-    return [
-      `project:${this.projectName}`,
-      `path:${relPath}`,
-      `language:${lang}`,
-      `kind:${payload.kindDetail}`,
-      // Symbol names — critical for matching queries that reference specific functions/classes
-      payload.symbolNames?.length ? `symbols: ${payload.symbolNames.join(', ')}` : null,
-      // Comments (JSDoc + inline) — provide semantic context about what the code does
-      payload.comments?.length ? `comments: ${payload.comments.slice(0, 5).join(' | ')}` : null,
-      // Exports/imports — expose module boundaries for semantic matching
-      payload.exports?.length ? `exports: ${payload.exports.join(', ')}` : null,
-      payload.imports?.length ? `imports: ${payload.imports.slice(0, 5).join(', ')}` : null,
-      // Chunk position within file (helps with multi-chunk files)
-      `chunk:${payload.chunkIndex + 1}/${payload.totalChunks}`,
-      // The chunk content itself — this is what gets embedded for semantic search
-      payload.content,
-    ].filter(Boolean).join('\n');
-  }
   async embedText(text) { if (this.pipeline) { const output = await this.pipeline(text, { pooling: 'mean', normalize: true }); return Array.from(output.data); } return this.generatePlaceholderEmbedding(text); }
   extractMetadata(filePath, content) { const metadata = { relativePath: this.toProjectRelative(filePath) }; const titleMatch = content.match(/^#\s+(.+)$/m); if (titleMatch) metadata.title = titleMatch[1].trim(); const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/); if (frontmatterMatch) { const dateMatch = frontmatterMatch[1].match(/date:\s+(.+)/); if (dateMatch) metadata.date = dateMatch[1].trim(); } return metadata; }
   extractGsdIds(relPath, content) { const matches = new Set(); for (const source of [relPath, content]) { const found = source.match(/\b(M\d{3}|S\d{2}|T\d{2}|R\d{3}|D\d{3})\b/g) || []; found.forEach((m) => matches.add(m)); } return [...matches]; }
