@@ -244,6 +244,12 @@ class GSDKnowledgeSync {
           
           const codePayload = await this.buildLargeFileChunkPayload(filePath, chunkInfo.text, relPath, docIndex, chunkInfo, fullFileContext);
           const vectorText = this.buildLargeFileChunkText(relPath, lang || 'javascript', chunkInfo, chunkInfo.text, codePayload);
+          
+          // Defensive: warn if a large-file chunk unexpectedly exceeds limits
+          if (vectorText.length > 16000) {
+            console.warn(`[embed-warn] ${relPath} chunk-${chunkInfo.index}: embedding text is ${vectorText.length} chars — unusually large for an 8K chunk.`);
+          }
+
           const vector = await this.embedText(vectorText.slice(0, 8192));
 
           await this.client.upsert(this.collectionName, { points: [{ id: chunkId, vector: { [this.vectorName]: vector }, payload: codePayload }] });
@@ -268,6 +274,14 @@ class GSDKnowledgeSync {
 
         const codePayload = await this.buildCodePayload(filePath, content, relPath, docIndex);
         const vectorText = this.buildFullFileCodeText(relPath, content, codePayload);
+        
+        // Warn if embedding text approaches the 32K limit (bge-m3 token budget)
+        if (vectorText.length > 30000) {
+          console.warn(`[embed-warn] ${relPath}: embedding text is ${vectorText.length} chars (${Math.round(vectorText.length/320)}% of 32K limit). Content was truncated to fit.`);
+        } else if (vectorText.length > 25600) {
+          console.log(`[embed-info] ${relPath}: embedding text is ${vectorText.length} chars (${Math.round(vectorText.length/320)}% of 32K limit).`);
+        }
+
         const t0 = Date.now();
         const vector = await this.embedText(vectorText.slice(0, 8192)); // Cap text for embedding
 
