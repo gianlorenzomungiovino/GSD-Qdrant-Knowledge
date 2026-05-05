@@ -170,9 +170,7 @@ class GSDKnowledgeSync {
       updated += 1;
     }
     
-    // Index code files — one point per entire file for clean file-level retrieval.
-    // Each file gets a single Qdrant point with full content + metadata in the payload.
-
+    // Index code files — large files (>32K chars) get chunked, small files stay whole.
     for (const filePath of codeFiles) {
       fileIndex += 1;
       const content = await fs.readFile(filePath, 'utf8');
@@ -180,25 +178,101 @@ class GSDKnowledgeSync {
       const fileHash = this.hashContent(content);
       seenIds.add(relPath);
 
-      // Check if already indexed — skip entire file if hash unchanged
-      if (syncState[this.indexedFileKey('code', relPath)]?.hash === fileHash) {
+      // Check if already indexed — skip entire file if hash unchanged (for small files)
+      // For large-file chunks, check the first chunk's hash as a proxy for full-file change.
+      const codeStateKey = this.indexedFileKey('code', relPath);
+      const isLargeFile = content.length > 32000;
+
+      if (!isLargeFile && syncState[codeStateKey]?.hash === fileHash) {
         console.log(`[sync] ${relPath} ⏭️  unchanged`);
         continue;
       }
 
-      const fileId = this.makePointId('code', relPath);
+      // For large files, also check chunk-level hashes to detect partial changes.
+      if (isLargeFile) {
+        const lang = this.detectLanguage(filePath);
+        const existingChunks = syncState[codeStateKey]?.chunks || [];
+        const newChunks = this.chunkLargeFileContent(content, 8000);
+        
+        let allChunksUnchanged = true;
+        for (let i = 0; i < newChunks.length; i++) {
+          if (!existingChunks[i] || existingChunks[i].hash !== this.hashContent(newChunks[i].text)) {
+            allChunksUnchanged = false;
+            break;
+          }
+        }
+        
+        // If chunk count changed or any chunk is different, we need to re-index.
+        if (allChunksUnchanged && newChunks.length === existingChunks.length) {
+          console.log(`[sync] ${relPath} ⏭️  unchanged (${newChunks.length} chunks)`);
+          continue;
+        }
 
-      // Build payload and embedding text for the entire file as one point.
-      const codePayload = await this.buildCodePayload(filePath, content, relPath, docIndex);
-      const vectorText = this.buildCodeText(relPath, content, codePayload);
-      const t0 = Date.now();
-      const vector = await this.embedText(vectorText.slice(0, 8192)); // Cap text for embedding
+        // Delete old large-file chunk points before inserting updated ones.
+        const oldChunkIds = (existingChunks || []).map((c, idx) => 
+          this.makePointId('large-file-chunk', `${relPath}\x02chunk-${idx}`)
+        );
+        if (oldChunkIds.length > 0) {
+          try { await this.client.delete(this.collectionName, { points: oldChunkIds }); } catch (_) {}
+        }
 
-      await this.client.upsert(this.collectionName, { points: [{ id: fileId, vector: { [this.vectorName]: vector }, payload: codePayload }] });
+        // Extract file-level metadata once (for richer per-chunk payloads)
+        const allSignatures = this.extractSignatures(content).slice(0, 50);
+        const allComments = this.extractComments(content).slice(0, 30);
+        const codeMetaForFile = this.extractCodeMetadata(filePath, content, relPath);
+        const allSnippetIds = this.extractGsdIds(relPath, content);
 
-      syncState[this.indexedFileKey('code', relPath)] = { path: relPath, type: 'code', hash: fileHash };
-      updated += 1; // Count as one "file" updated (one point per file)
-      console.log(`[sync] ${relPath} ✅ indicizzato (${Date.now() - t0}ms)`);
+        // Index each chunk as a separate point.
+        const t0 = Date.now();
+        for (const chunkInfo of newChunks) {
+          const chunkId = this.makePointId('large-file-chunk', `${relPath}\x02chunk-${chunkInfo.index}`);
+          
+          // Build enriched payload with file-level context + per-chunk data
+          const fullFileContext = {
+            allSignatures,
+            allComments,
+            allExports: codeMetaForFile.exports || [],
+            allImports: codeMetaForFile.imports || [],
+            allSymbolNames: codeMetaForFile.symbolNames || [],
+            allSnippetIds,
+            fullContent: content // for related doc matching
+          };
+          
+          const codePayload = await this.buildLargeFileChunkPayload(filePath, chunkInfo.text, relPath, docIndex, chunkInfo, fullFileContext);
+          const vectorText = this.buildLargeFileChunkText(relPath, lang || 'javascript', chunkInfo, chunkInfo.text, codePayload);
+          const vector = await this.embedText(vectorText.slice(0, 8192));
+
+          await this.client.upsert(this.collectionName, { points: [{ id: chunkId, vector: { [this.vectorName]: vector }, payload: codePayload }] });
+        }
+
+        // Update sync state with new chunk hashes.
+        const updatedChunks = newChunks.map((c) => ({ path: relPath, type: 'code', hash: this.hashContent(c.text), index: c.index }));
+        syncState[codeStateKey] = { 
+          path: relPath, 
+          type: isLargeFile ? 'large-file-chunk' : 'code', 
+          hash: fileHash,
+          chunks: updatedChunks,
+          totalChunks: newChunks.length
+        };
+
+        const elapsed = Date.now() - t0;
+        console.log(`[large-file] ${relPath} indicizzato in ${newChunks.length} chunk (8000 max) (${elapsed}ms)`);
+        updated += 1; // Count as one "file" processed
+      } else {
+        // Small file: single point, same logic as before.
+        const fileId = this.makePointId('code', relPath);
+
+        const codePayload = await this.buildCodePayload(filePath, content, relPath, docIndex);
+        const vectorText = this.buildCodeText(relPath, content, codePayload);
+        const t0 = Date.now();
+        const vector = await this.embedText(vectorText.slice(0, 8192)); // Cap text for embedding
+
+        await this.client.upsert(this.collectionName, { points: [{ id: fileId, vector: { [this.vectorName]: vector }, payload: codePayload }] });
+
+        syncState[codeStateKey] = { path: relPath, type: 'code', hash: fileHash };
+        updated += 1; // Count as one "file" updated (one point per file)
+        console.log(`[sync] ${relPath} ✅ indicizzato (${Date.now() - t0}ms)`);
+      }
     }
     
     let deleted = await this.deleteMissingPoints(seenIds, syncState);
@@ -770,6 +844,130 @@ class GSDKnowledgeSync {
     }
     
     return header + '\n' + body;
+  }
+
+  /**
+   * Split large file content into fixed-size chunks for embedding.
+   * Used when a file exceeds the ~32K char limit (bge-m3 token budget).
+   * Chunks are non-overlapping, each gets type='large-file-chunk' in payload.
+   * @param {string} content - Full file content to chunk
+   * @param {number} maxChars - Maximum characters per chunk (default 8000)
+   * @returns {{ text: string, index: number, totalChunks: number }[]} Array of chunks with metadata
+   */
+  chunkLargeFileContent(content, maxChars = 8000) {
+    const chunks = [];
+    let offset = 0;
+    while (offset < content.length) {
+      const slice = content.slice(offset, offset + maxChars);
+      // Try to break at a line boundary if not at the very end
+      let breakPoint = slice.length;
+      if (breakPoint === maxChars && offset + maxChars < content.length) {
+        const lastNewline = slice.lastIndexOf('\n');
+        if (lastNewline > maxChars * 0.5) { // Only break at newline if we're past halfway
+          breakPoint = lastNewline + 1; // Include the newline
+        }
+      }
+      chunks.push({ text: content.slice(offset, offset + breakPoint), index: chunks.length });
+      offset += breakPoint;
+    }
+    return chunks.map((chunk) => ({ ...chunk, totalChunks: chunks.length }));
+  }
+
+  /**
+   * Build payload for a large-file chunk (type='large-file-chunk').
+   * Enriched with file-level metadata (signatures, exports, imports, GSD IDs) plus per-chunk info.
+   * Similar to buildCodePayload but includes chunk position metadata.
+   */
+  async buildLargeFileChunkPayload(filePath, content, relPath, docIndex = null, chunkInfo, fullFileContext = {}) {
+    const lang = this.detectLanguage(filePath);
+    
+    // Per-chunk signatures (from the actual slice) + file-level signatures (for broader context)
+    const perChunkSignatures = this.extractSignatures(content).slice(0, 20);
+    const allSignatures = fullFileContext.allSignatures || [];
+    const combinedSignatures = [...new Set([...allSignatures.slice(0, 30), ...perChunkSignatures])].slice(0, 50);
+
+    // Per-chunk comments + file-level comments for context
+    const perChunkComments = this.extractComments(content).slice(0, 10);
+    const allComments = fullFileContext.allComments || [];
+    const combinedComments = [...new Set([...allComments.slice(0, 5), ...perChunkComments])].slice(0, 20);
+
+    // Extract GSD IDs from both chunk and full file context
+    const snippetIds = this.extractGsdIds(relPath, content);
+    const allSnippetIds = fullFileContext.allSnippetIds || [];
+    const combinedIds = [...new Set([...allSnippetIds, ...snippetIds])];
+
+    // Find related documentation files based on shared GSD IDs (from docIndex)
+    let relatedDocPaths = [];
+    let relatedDocIds = [];
+    if (docIndex && docIndex.length > 0) {
+      const codeContentForMatching = fullFileContext.fullContent || content;
+      const docMatches = this.findRelatedDocsForCode(relPath, codeContentForMatching, docIndex);
+      relatedDocPaths = docMatches.map(d => d.path);
+      relatedDocIds = docMatches.flatMap(d => d.ids);
+    }
+
+    return {
+      project_id: this.projectName,
+      type: 'large-file-chunk',
+      subtype: 'file-chunk',
+      language: lang,
+      source: relPath,
+      chunkIndex: chunkInfo.index,
+      totalChunks: chunkInfo.totalChunks,
+      summary: `${basename(filePath)} (chunk ${chunkInfo.index + 1}/${chunkInfo.totalChunks})`,
+      content: content, // Chunk slice only — full file in related context
+      signatures: combinedSignatures, // Combined per-chunk + file-level for richer embedding
+      exports: fullFileContext.allExports || [],
+      imports: fullFileContext.allImports || [],
+      symbolNames: fullFileContext.allSymbolNames || [],
+      comments: combinedComments,
+      relatedDocPaths: relatedDocPaths,
+      relatedDocIds: relatedDocIds,
+      gsdIds: combinedIds, // GSD IDs for cross-reference with docs
+      timestamp: Date.now(),
+      hash: this.hashContent(content)
+    };
+  }
+
+  /**
+   * Build embedding text for a large-file chunk.
+   * Prepends file-level metadata with weighted header (signatures/exports/imports) + chunk position before the content slice.
+   * Similar structure to buildCodeText but includes chunk context.
+   */
+  buildLargeFileChunkText(relPath, lang, chunkInfo, contentSlice, payload = {}) {
+    const MAX_WEIGHTED_HEADER = 1500; // chars for signatures + exports + imports (smaller than full file)
+    
+    // --- Weighted header: structural elements first (for better embedding quality) ---
+    const sigText = payload.signatures?.join(' | ') || '';
+    const exportText = payload.exports?.length ? `EXPORTS:${payload.exports.join(', ')}` : '';
+    const importText = payload.imports?.length ? `IMPORTS:${payload.imports.join(', ')}` : '';
+    
+    let headerParts = [sigText, exportText, importText].filter(Boolean);
+    let header = '';
+    if (headerParts.length > 0) {
+      header = 'SIGNATURES:' +
+        (sigText ? `\nsignatures: ${sigText}` : '') +
+        (exportText ? `\nexports: ${exportText.replace('EXPORTS:', '')}` : '') +
+        (importText ? `\nimports: ${importText.replace('IMPORTS:', '')}` : '');
+      
+      // Truncate header to budget
+      if (header.length > MAX_WEIGHTED_HEADER) {
+        header = header.slice(0, MAX_WEIGHTED_HEADER);
+      }
+    }
+
+    // --- Body: file-level metadata + chunk position + content slice ---
+    const bodyParts = [
+      `project:${this.projectName}`,
+      `path:${relPath}`,
+      `language:${lang}`,
+      `chunk:${chunkInfo.index + 1}/${chunkInfo.totalChunks}`,
+      payload.gsdIds?.length ? `gsd-ids:${payload.gsdIds.join(', ')}` : null,
+    ].filter(Boolean);
+
+    let body = bodyParts.join('\n');
+    
+    return header + '\n' + body + '\n\n' + contentSlice;
   }
 
   async embedText(text) { if (this.pipeline) { const output = await this.pipeline(text, { pooling: 'mean', normalize: true }); return Array.from(output.data); } return this.generatePlaceholderEmbedding(text); }

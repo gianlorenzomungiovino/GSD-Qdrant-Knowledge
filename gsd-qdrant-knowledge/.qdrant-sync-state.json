@@ -1,5 +1,5 @@
 {
-  "lastSync": "2026-05-05T12:33:06.644Z",
+  "lastSync": "2026-05-05T14:22:18.452Z",
   "indexed_code\u0001src/auto-retrieve-mcp.js": {
     "path": "src/auto-retrieve-mcp.js",
     "type": "code",
@@ -23,7 +23,7 @@
   "indexed_code\u0001src/gsd-qdrant-template.js": {
     "path": "src/gsd-qdrant-template.js",
     "type": "code",
-    "hash": "75c015b06ba535dfe0b744ede2f5a427"
+    "hash": "20146f9104c88647771d5311e1f22dc0"
   },
   "indexed_code\u0001src/hooks/post-commit.ps1": {
     "path": "src/hooks/post-commit.ps1",
@@ -99,5 +99,15 @@
     "path": "vitest.config.ts",
     "type": "code",
     "hash": "6eaec33d7e55c90d72a14334745bac9c"
+  },
+  "indexed_code\u0001src/sync-cleanup.test.js": {
+    "path": "src/sync-cleanup.test.js",
+    "type": "code",
+    "hash": "f5e5009baf4d3f6139c343f2676109b3"
+  },
+  "indexed_code\u0001src/large-file-chunk.test.js": {
+    "path": "src/large-file-chunk.test.js",
+    "type": "code",
+    "hash": "1c7d89c3889ce56148c95d7c5bd99fae"
   }
 }
