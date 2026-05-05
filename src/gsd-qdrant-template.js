@@ -851,6 +851,67 @@ class GSDKnowledgeSync {
   }
 
   /**
+   * Build full-file embedding text with enriched metadata prepended.
+   * All extracted metadata (project, path, language, kind, exports, imports, symbols, comments)
+   * is placed BEFORE the file content to leverage positional weighting of bge-m3 — early tokens
+   * receive higher attention in the transformer encoder.
+   * Total length strictly capped at 32K chars; if exceeded, body content is trimmed from the end.
+   * Comments are truncated to first-line summaries (max ~100 chars each) so they don't eat into
+   * the content budget — full JSDoc blocks can be hundreds of characters long.
+   * @param {string} relPath - Relative path of the file within the project
+   * @param {string} content - Full raw file content
+   * @param {object} payload - Payload object (from buildCodePayload or extractCodeMetadata) containing exports, imports, symbolNames, comments, etc.
+   * @returns {string} Embedding text with metadata header + full content (≤32K chars guaranteed)
+   */
+  buildFullFileCodeText(relPath, content, payload = {}) {
+    const MAX_TOTAL_CHARS = 32000;
+
+    // --- Helper: truncate comment to first meaningful line (~100 chars max) ---
+    const shortComment = (c) => {
+      if (!c || typeof c !== 'string') return '';
+      let cleaned = c.replace(/\/\*\*?|\*\/|\*/g, '').trim();
+      const nlIdx = cleaned.indexOf('\n');
+      if (nlIdx > 0) cleaned = cleaned.slice(0, nlIdx).trim();
+      return cleaned.length > 100 ? cleaned.slice(0, 97) + '...' : cleaned;
+    };
+
+    // --- Metadata header: all structural elements prepended for positional weighting ---
+    const commentText = payload.comments?.length
+      ? `comments:${payload.comments.map(shortComment).slice(0, 8).join(' | ')}`
+      : null;
+
+    const headerParts = [
+      `project:${this.projectName}`,
+      `path:${relPath}`,
+      `language:${payload.language || this.detectLanguage(relPath)}`,
+      `kind:${payload.kindDetail || 'code'}`,
+      payload.exports?.length ? `exports:${payload.exports.slice(0, 10).join(', ')}` : null,
+      payload.imports?.length ? `imports:${payload.imports.slice(0, 5).join(', ')}` : null,
+      payload.symbolNames?.length ? `symbols:${payload.symbolNames.join(', ')}` : null,
+      commentText,
+    ].filter(Boolean);
+
+    const metadataHeader = headerParts.join('\n');
+
+    // --- Full content appended after metadata ---
+    let fullText = metadataHeader + '\n\n' + content;
+
+    // --- Hard cap: ensure total never exceeds MAX_TOTAL_CHARS ---
+    if (fullText.length > MAX_TOTAL_CHARS) {
+      const availableForContent = Math.max(0, MAX_TOTAL_CHARS - metadataHeader.length - 2);
+      fullText = metadataHeader + '\n\n' + content.slice(0, availableForContent);
+
+      // Add truncation marker only if there's room (≤3 chars overhead)
+      if (content.length > availableForContent && fullText.length <= MAX_TOTAL_CHARS - 65) {
+        fullText += `\n/* ... truncated (${content.length - availableForContent} omitted) */`;
+      }
+    }
+
+    // Final safety: trim to exactly MAX_TOTAL_CHARS if still over (should never happen, but defensive)
+    return fullText.slice(0, MAX_TOTAL_CHARS);
+  }
+
+  /**
    * Split large file content into fixed-size chunks for embedding.
    * Used when a file exceeds the ~32K char limit (bge-m3 token budget).
    * Chunks are non-overlapping, each gets type='large-file-chunk' in payload.

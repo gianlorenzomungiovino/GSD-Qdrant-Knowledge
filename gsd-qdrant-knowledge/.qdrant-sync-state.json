@@ -1,5 +1,5 @@
 {
-  "lastSync": "2026-05-05T14:22:18.452Z",
+  "lastSync": "2026-05-05T14:29:02.268Z",
   "indexed_code\u0001src/auto-retrieve-mcp.js": {
     "path": "src/auto-retrieve-mcp.js",
     "type": "code",
@@ -23,7 +23,7 @@
   "indexed_code\u0001src/gsd-qdrant-template.js": {
     "path": "src/gsd-qdrant-template.js",
     "type": "code",
-    "hash": "20146f9104c88647771d5311e1f22dc0"
+    "hash": "9dc28a4e460100785f40924134ce2f0d"
   },
   "indexed_code\u0001src/hooks/post-commit.ps1": {
     "path": "src/hooks/post-commit.ps1",
