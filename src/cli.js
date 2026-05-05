@@ -574,62 +574,66 @@ async function main() {
 
       // Log totals before threshold filtering
       const totalResults = hits.length;
-    console.log('[qdrant] results: %d total, %d above threshold', totalResults, hits.filter(h => h.score >= SCORE_THRESHOLD).length);
+      console.log('[qdrant] results: %d total, %d above threshold', totalResults, hits.filter(h => h.score >= SCORE_THRESHOLD).length);
 
-    // Apply score threshold filter
-    let rankedHits = hits.filter(hit => hit.score >= SCORE_THRESHOLD);
+      // Apply score threshold filter
+      let rankedHits = hits.filter(hit => hit.score >= SCORE_THRESHOLD);
 
-    // Fallback: if fewer than 2 results above threshold, retry with lowered threshold
-    if (rankedHits.length < 2 && totalResults > 0) {
-      console.log(`[qdrant] fallback: only ${rankedHits.length} results above ${SCORE_THRESHOLD.toFixed(2)}, retrying with ${FALLBACK_THRESHOLD.toFixed(2)}`);
-      rankedHits = hits.filter(hit => hit.score >= FALLBACK_THRESHOLD);
-    }
-
-    // Map hits to result objects (payload + score), attach _query for path matching
-    let rankedResults = rankedHits.map(hit => {
-      return { ...hit.payload, score: hit.score, _query: query };
-    });
-
-    // Apply recency boost and path matching re-ranking
-    applyRecencyBoost(rankedResults);
-
-    // Symbol boost: increase scores for results whose symbolNames contain query tokens
-    applySymbolBoost(rankedResults, query);
-
-    // Sort by updated score descending and limit to LIMIT results
-    const ranked = rankedResults
-      .sort((a, b) => b.score - a.score)
-      .slice(0, LIMIT);
-
-    // Token estimation: calculate total tokens across all result text fields
-    let totalTokens = 0;
-    for (const r of ranked) {
-      if (!r) continue;
-      const textFields = [r.content, r.summary, r.text].filter(Boolean);
-      for (const field of textFields) {
-        totalTokens += estimateTokens(field);
+      // Fallback: if fewer than 2 results above threshold, retry with lowered threshold
+      if (rankedHits.length < 2 && totalResults > 0) {
+        console.log(`[qdrant] fallback: only ${rankedHits.length} results above ${SCORE_THRESHOLD.toFixed(2)}, retrying with ${FALLBACK_THRESHOLD.toFixed(2)}`);
+        rankedHits = hits.filter(hit => hit.score >= FALLBACK_THRESHOLD);
       }
+
+      // Map hits to result objects (payload + score), attach _query for path matching
+      let rankedResults = rankedHits.map(hit => {
+        return { ...hit.payload, score: hit.score, _query: query };
+      });
+
+      // Apply recency boost and path matching re-ranking
+      applyRecencyBoost(rankedResults);
+
+      // Symbol boost: increase scores for results whose symbolNames contain query tokens
+      applySymbolBoost(rankedResults, query);
+
+      // Sort by updated score descending and limit to LIMIT results
+      const ranked = rankedResults
+        .sort((a, b) => b.score - a.score)
+        .slice(0, LIMIT);
+
+      // Token estimation: calculate total tokens across all result text fields
+      let totalTokens = 0;
+      for (const r of ranked) {
+        if (!r) continue;
+        const textFields = [r.content, r.summary, r.text].filter(Boolean);
+        for (const field of textFields) {
+          totalTokens += estimateTokens(field);
+        }
+      }
+
+      // Trim results if over token budget (4000 tokens default)
+      let trimmedInfo;
+      try {
+        trimmedInfo = trimResultsByTokenBudget(ranked, { maxTokens: 4000 });
+      } catch (_) { /* non-fatal — proceed with untrimmed */ }
+
+      const elapsed = Date.now() - t0;
+      console.log(`[qdrant] results in ${elapsed}ms (threshold=${SCORE_THRESHOLD.toFixed(2)} → ${rankedHits.length} above)`);
+      if (trimmedInfo && trimmedInfo.trimmed) {
+        const charsPerResult = ranked.filter(r => r._truncated).length;
+        console.log(`[retrieval] %d results, ~%d estimated tokens, trimmed to 500 chars per result`, ranked.length, totalTokens);
+      }
+
+      // Clean up internal _truncated flag before output
+      for (const r of ranked) {
+        if (r && '_truncated' in r) delete r._truncated;
+      }
+
+      console.log(JSON.stringify({ query, project_id, results: ranked }, null, 2));
+    } catch (err) {
+      console.error('[qdrant] search failed:', err.message);
+      process.exit(1);
     }
-
-    // Trim results if over token budget (4000 tokens default)
-    let trimmedInfo;
-    try {
-      trimmedInfo = trimResultsByTokenBudget(ranked, { maxTokens: 4000 });
-    } catch (_) { /* non-fatal — proceed with untrimmed */ }
-
-    const elapsed = Date.now() - t0;
-    console.log(`[qdrant] group_by: groups=${groupCount}, chunks=${totalResults} (threshold=${SCORE_THRESHOLD.toFixed(2)} → ${rankedHits.length} above), in ${elapsed}ms`);
-    if (trimmedInfo && trimmedInfo.trimmed) {
-      const charsPerResult = ranked.filter(r => r._truncated).length;
-      console.log(`[retrieval] %d results, ~%d estimated tokens, trimmed to 500 chars per result`, ranked.length, totalTokens);
-    }
-
-    // Clean up internal _truncated flag before output
-    for (const r of ranked) {
-      if (r && '_truncated' in r) delete r._truncated;
-    }
-
-    console.log(JSON.stringify({ query, project_id, results: ranked }, null, 2));
     return;
   }
 
