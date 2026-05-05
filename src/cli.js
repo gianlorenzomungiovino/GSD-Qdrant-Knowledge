@@ -551,76 +551,29 @@ async function main() {
 
     const vector = await sync.embedText(embeddedQuery);
 
-    // Prefetch-based query with group_by: return max 2 chunks per source document.
-    // Uses searchPointGroups() to deduplicate across source documents.
+    // Direct semantic search — single-point-per-file means no grouping needed.
+    // Each file produces exactly 1 Qdrant point, so deduplication is implicit.
     const t0 = Date.now();
-    const PREFETCH_LIMIT = 50; // wider prefetch when must-filter applied
-    const GROUP_SIZE = 2;        // max chunks per source document
     const LIMIT = 5;             // max results to return
     const SCORE_THRESHOLD = 0.85;  // minimum score for inclusion
     const FALLBACK_THRESHOLD = 0.75; // lowered threshold if too few results
 
     let hits = [];
-    let groupCount = 0;
     try {
-      // searchPointGroups requires the vector query directly (no prefetch syntax).
-      // We use prefetch inside the query via Qdrant's internal mechanism, but since
-      // searchPointGroups does not support prefetch natively, we fall back to the
-      // simpler grouped search approach. The must-filter narrows candidates before scoring.
-      const groupConfig = {
+      const searchConfig = {
         vector: { name: sync.vectorName, vector },
-        group_by: 'source',
-        group_size: GROUP_SIZE,
-        limit: LIMIT * 3,  // request more groups so we can filter by threshold after
+        limit: LIMIT * 10,         // wider initial search for threshold filtering
         score_threshold: SCORE_THRESHOLD,
         with_payload: true,
         with_vector: false,
       };
       if (qdrantFilter) {
-        groupConfig.filter = qdrantFilter;
+        searchConfig.filter = qdrantFilter;
       }
-      const groupedResults = await sync.client.searchPointGroups(
-        sync.collectionName,
-        groupConfig
-      );
-      groupCount = groupedResults.groups.length;
+      hits = await sync.client.search(sync.collectionName, searchConfig);
 
-      // Flatten groups into a single hits array (preserving score order within each group)
-      for (const group of groupedResults.groups) {
-        hits = hits.concat(group.hits);
-      }
-    } catch (groupErr) {
-      // Fallback: plain search with grouping done client-side if searchPointGroups fails
-      console.warn('[qdrant] searchPointGroups not supported, falling back to search');
-      try {
-        const searchConfig = {
-          vector: { name: sync.vectorName, vector },
-          limit: LIMIT * 10, // wider search for client-side dedup
-          score_threshold: SCORE_THRESHOLD,
-          with_payload: true,
-          with_vector: false,
-        };
-        if (qdrantFilter) {
-          searchConfig.filter = qdrantFilter;
-        }
-        const rawHits = await sync.client.search(sync.collectionName, searchConfig);
-
-        // Client-side dedup: max GROUP_SIZE per source document
-        const sourceCounts = {};
-        for (const hit of rawHits) {
-          const src = hit.payload && hit.payload.source;
-          if (!src || (sourceCounts[src] || 0) >= GROUP_SIZE) continue;
-          sourceCounts[src] = (sourceCounts[src] || 0) + 1;
-          hits.push(hit);
-        }
-        groupCount = Object.keys(sourceCounts).length;
-      } catch (searchErr) {
-        console.warn('[qdrant] search also failed, returning empty:', searchErr.message);
-      }
-    }
-
-    // Log totals before threshold filtering
-    const totalResults = hits.length;
+      // Log totals before threshold filtering
+      const totalResults = hits.length;
     console.log('[qdrant] results: %d total, %d above threshold', totalResults, hits.filter(h => h.score >= SCORE_THRESHOLD).length);
 
     // Apply score threshold filter

@@ -6,8 +6,8 @@ let Cache;
 
 beforeEach(() => {
   // Clear require cache so each test gets a fresh instance
-  delete require.cache[require.resolve('./query-cache.js')];
-  Cache = require('./query-cache.js');
+  delete require.cache[require.resolve('../src/query-cache.js')];
+  Cache = require('../src/query-cache.js');
 });
 
 describe('QueryCache', () => {

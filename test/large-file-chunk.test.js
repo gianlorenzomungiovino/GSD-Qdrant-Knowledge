@@ -4,7 +4,7 @@ describe('chunkLargeFileContent — fixed-size chunking for large files', () => 
   let instance;
 
   beforeEach(() => {
-    instance = Object.create(require('./gsd-qdrant-template.js').GSDKnowledgeSync.prototype);
+    instance = Object.create(require('../src/gsd-qdrant-template.js').GSDKnowledgeSync.prototype);
     instance.projectName = 'test-project';
   });
 
@@ -112,7 +112,7 @@ describe('buildLargeFileChunkPayload — payload for large-file chunks', () => {
   let instance;
 
   beforeEach(() => {
-    instance = Object.create(require('./gsd-qdrant-template.js').GSDKnowledgeSync.prototype);
+    instance = Object.create(require('../src/gsd-qdrant-template.js').GSDKnowledgeSync.prototype);
     instance.projectName = 'test-project';
   });
 
@@ -218,7 +218,7 @@ describe('buildLargeFileChunkText — enriched embedding text with weighted head
   let instance;
 
   beforeEach(() => {
-    instance = Object.create(require('./gsd-qdrant-template.js').GSDKnowledgeSync.prototype);
+    instance = Object.create(require('../src/gsd-qdrant-template.js').GSDKnowledgeSync.prototype);
     instance.projectName = 'my-project';
   });
 
@@ -310,7 +310,7 @@ describe('buildLargeFileChunkText — embedding text for large-file chunks', () 
   let instance;
 
   beforeEach(() => {
-    instance = Object.create(require('./gsd-qdrant-template.js').GSDKnowledgeSync.prototype);
+    instance = Object.create(require('../src/gsd-qdrant-template.js').GSDKnowledgeSync.prototype);
     instance.projectName = 'my-project';
   });
 

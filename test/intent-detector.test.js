@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectIntent, buildQdrantFilter, extractKeywords } from './intent-detector.js';
+import { detectIntent, buildQdrantFilter, extractKeywords } from '../src/intent-detector.js';
 
 describe('buildQdrantFilter', () => {
   describe('must clauses for certain filters', () => {

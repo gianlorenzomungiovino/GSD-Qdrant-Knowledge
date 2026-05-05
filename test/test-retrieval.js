@@ -6,10 +6,11 @@
 const { QdrantClient } = require('@qdrant/js-client-rest');
 const path = require('path');
 
-// Load modules from current project
-const templatePath = path.join(__dirname, 'src', 'gsd-qdrant-template.js');
-const intentDetector = require(path.join(__dirname, 'src', 'intent-detector'));
-const { applyRecencyBoost, applySymbolBoost } = require('./src/re-ranking');
+// Load modules from parent project directory
+const PROJECT_ROOT = path.resolve(__dirname, '..');
+const templatePath = path.join(PROJECT_ROOT, 'src', 'gsd-qdrant-template.js');
+const intentDetector = require(path.join(PROJECT_ROOT, 'src', 'intent-detector'));
+const { applyRecencyBoost, applySymbolBoost } = require('../src/re-ranking');
 
 async function test() {
   const client = new QdrantClient({ url: process.env.QDRANT_URL || 'http://localhost:6333' });
@@ -293,7 +294,7 @@ async function test() {
         process.env.QDRANT_URL ? 'node' : 'node',
         ['src/cli.js', 'context', query],
         { 
-          cwd: __dirname,
+          cwd: PROJECT_ROOT,
           env: { ...process.env, QDRANT_URL: 'http://localhost:6333', COLLECTION_NAME: 'gsd_memory', VECTOR_NAME: 'codebert-768' },
           timeout: 120000,
           encoding: 'utf8'

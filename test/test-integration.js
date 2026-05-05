@@ -16,7 +16,7 @@ const { execSync } = require('child_process');
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
 const COLLECTION_NAME = process.env.COLLECTION_NAME || 'gsd_memory';
 const VECTOR_NAME = process.env.VECTOR_NAME || 'bge-m3-1024';
-const PROJECT_ROOT = __dirname;
+const PROJECT_ROOT = path.resolve(__dirname, '..');
 
 // Small files only (under 5KB) — avoids the large-file chunking path in gsd-qdrant-template.js
 const SMALL_FILE_LIMIT = 5 * 1024; // 5 KB

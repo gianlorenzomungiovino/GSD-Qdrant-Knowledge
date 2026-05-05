@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-const { applySymbolBoost, extractTokens, estimateTokens, trimResultsByTokenBudget } = require('./re-ranking');
+const { applySymbolBoost, extractTokens, estimateTokens, trimResultsByTokenBudget } = require('../src/re-ranking');
 
 describe('extractTokens', () => {
   it('estrae token da query multi-parola filtrando stopwords', () => {

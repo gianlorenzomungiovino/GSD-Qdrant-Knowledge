@@ -818,52 +818,6 @@ class GSDKnowledgeSync {
     return [`project:${this.projectName}`, `path:${relPath}`, metadata.title ? `title:${metadata.title}` : null, content].filter(Boolean).join('\n');
   }
 
-  buildCodeText(relPath, content, payload) {
-    // Weighted code text: structural elements (signatures/exports/imports) prepended
-    // so CodeBERT gives them more attention — early tokens receive higher positional weight.
-    const MAX_WEIGHTED_HEADER = 2000;   // chars for signatures + exports + imports
-    const MAX_BODY = 4000;              // chars reserved for main content
-    
-    // --- Weighted header: structural elements first ---
-    const sigText = payload.signatures?.join(' | ') || '';
-    const exportText = payload.exports?.length ? `EXPORTS:${payload.exports.join(', ')}` : '';
-    const importText = payload.imports?.length ? `IMPORTS:${payload.imports.join(', ')}` : '';
-    
-    let headerParts = [sigText, exportText, importText].filter(Boolean);
-    
-    // Only build header if there are structural elements to weight
-    let header = '';
-    if (headerParts.length > 0) {
-      header = 'SIGNATURES:' +
-        (sigText ? `\nsignatures: ${sigText}` : '') +
-        (exportText ? `\nexports: ${exportText.replace('EXPORTS:', '')}` : '') +
-        (importText ? `\nimports: ${importText.replace('IMPORTS:', '')}` : '');
-      
-      // Truncate header to budget
-      if (header.length > MAX_WEIGHTED_HEADER) {
-        header = header.slice(0, MAX_WEIGHTED_HEADER);
-      }
-    }
-    
-    // --- Body: metadata + content summary ---
-    const bodyParts = [
-      `project:${this.projectName}`,
-      `path:${relPath}`,
-      `language:${payload.language}`,
-      `kind:${payload.kindDetail}`,
-      payload.symbolNames?.length ? `symbols:${payload.symbolNames.join(', ')}` : null,
-      payload.comments?.length ? `comments:${payload.comments.slice(0, 10).join(' | ')}` : null,
-    ].filter(Boolean);
-    
-    // Truncate body to budget
-    let body = bodyParts.join('\n');
-    if (body.length > MAX_BODY) {
-      body = body.slice(0, MAX_BODY);
-    }
-    
-    return header + '\n' + body;
-  }
-
   /**
    * Build full-file embedding text with enriched metadata prepended.
    * All extracted metadata (project, path, language, kind, exports, imports, symbols, comments)
@@ -1011,7 +965,7 @@ class GSDKnowledgeSync {
   /**
    * Build embedding text for a large-file chunk.
    * Prepends file-level metadata with weighted header (signatures/exports/imports) + chunk position before the content slice.
-   * Similar structure to buildCodeText but includes chunk context.
+   * Similar structure to buildFullFileCodeText but includes chunk context and smaller header budget.
    */
   buildLargeFileChunkText(relPath, lang, chunkInfo, contentSlice, payload = {}) {
     const MAX_WEIGHTED_HEADER = 1500; // chars for signatures + exports + imports (smaller than full file)

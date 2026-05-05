@@ -14,7 +14,7 @@ describe('deleteStaleProjectPoints — orphan cleanup for file-level points', ()
       scroll: vi.fn(),
       delete: vi.fn().mockResolvedValue({ result: {} }),
     };
-    instance = Object.create(require('./gsd-qdrant-template.js').GSDKnowledgeSync.prototype);
+    instance = Object.create(require('../src/gsd-qdrant-template.js').GSDKnowledgeSync.prototype);
     instance.client = mockClient;
     instance.projectName = projectName;
     instance.collectionName = 'test_collection';
@@ -141,7 +141,7 @@ describe('deleteMissingPoints — syncState-based cleanup for file-level points'
       scroll: vi.fn(),
       delete: vi.fn().mockResolvedValue({ result: {} }),
     };
-    instance = Object.create(require('./gsd-qdrant-template.js').GSDKnowledgeSync.prototype);
+    instance = Object.create(require('../src/gsd-qdrant-template.js').GSDKnowledgeSync.prototype);
     instance.client = mockClient;
     instance.projectName = projectName;
     instance.collectionName = 'test_collection';
@@ -217,7 +217,7 @@ describe('indexedFileKey — unique key format for file-level points', () => {
   let instance;
 
   beforeEach(() => {
-    instance = Object.create(require('./gsd-qdrant-template.js').GSDKnowledgeSync.prototype);
+    instance = Object.create(require('../src/gsd-qdrant-template.js').GSDKnowledgeSync.prototype);
   });
 
   it('produces a delimiter-separated key with type and path', () => {
