@@ -263,11 +263,11 @@ class GSDKnowledgeSync {
         console.log(`[large-file] ${relPath} indicizzato in ${newChunks.length} chunk (8000 max) (${elapsed}ms)`);
         updated += 1; // Count as one "file" processed
       } else {
-        // Small file: single point, same logic as before.
+        // Small file: single point with full-file embedding text (metadata header + content).
         const fileId = this.makePointId('code', relPath);
 
         const codePayload = await this.buildCodePayload(filePath, content, relPath, docIndex);
-        const vectorText = this.buildCodeText(relPath, content, codePayload);
+        const vectorText = this.buildFullFileCodeText(relPath, content, codePayload);
         const t0 = Date.now();
         const vector = await this.embedText(vectorText.slice(0, 8192)); // Cap text for embedding
 
