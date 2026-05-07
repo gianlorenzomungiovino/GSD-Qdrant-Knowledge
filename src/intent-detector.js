@@ -320,10 +320,12 @@ function extractSearchTerms(query, filters) {
 function extractKeywords(query) {
   if (!query || typeof query !== 'string') return '';
 
-  const normalized = query.toLowerCase().trim();
+  const raw = query.trim();
+  const normalized = raw.toLowerCase();
   
   // Split on whitespace, punctuation, hyphens, underscores
-  const tokens = normalized.split(/[\s\-_.,;:!?(){}[\]<>\/\\|@#$%^&*+=~`]+/);
+  const rawTokens = raw.split(/[\s\-_.,;:!?(){}[\]<>\/\\|@#$%^&*+=~`]+/);
+  const normalizedTokens = normalized.split(/[\s\-_.,;:!?(){}[\]<>\/\\|@#$%^&*+=~`]+/);
   
   // Filter stopwords (English + Italian) and noise tokens
   const STOPWORDS = new Set([
@@ -345,11 +347,12 @@ function extractKeywords(query) {
     'poiché', 'se', 'quando', 'mentre', 'come'
   ]);
 
-  const meaningful = tokens.filter(t => 
-    t.length >= 2 && 
-    t.length <= 40 && 
-    !STOPWORDS.has(t)
-  );
+  const meaningful = rawTokens.filter((token, idx) => {
+    const normalizedToken = normalizedTokens[idx] || token.toLowerCase();
+    return token.length >= 2 && 
+      token.length <= 40 && 
+      !STOPWORDS.has(normalizedToken);
+  });
   
   if (meaningful.length === 0) return '';
 

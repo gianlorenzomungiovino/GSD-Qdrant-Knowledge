@@ -702,7 +702,8 @@ class GSDKnowledgeSync {
     // For code files: consider reusable if the file exports something
     const ext = extname(filePath).toLowerCase();
     if (CODE_EXTENSIONS.has(ext)) {
-      const hasExport = /export\s+(default\s+)?(?:async\s+)?(?:function|class|const|let|var)/.test(content);
+      // Match: export default ComponentName, export function/class/const/var, async functions/classes
+      const hasExport = /export\s+(?:default\s+[A-Za-z_$][\w$]*|(?:async\s+)?(?:function|class|const|let|var)\s+[A-Za-z_$][\w$]*)/.test(content);
       const hasModuleExports = /module\.exports\s*=/.test(content);
       const hasExports = /exports\.[A-Za-z_]/.test(content);
       
@@ -1051,7 +1052,7 @@ class GSDKnowledgeSync {
     ...exportMatches,
     ...commonJsExports,
     ...[...content.matchAll(/(?:function|class|const)\s+([A-Za-z_][\w$]*)/g)].slice(0, 20).map((m) => m[1]),
-  ])]; const scope = this.detectScope(relPath); const workspace = relPath.split('/')[0] || '.'; const name = symbolNames[0] || baseName; let kindDetail = scope; if (/\.tsx?$/.test(filePath) && /<[A-Z][A-Za-z0-9]*/.test(content)) kindDetail = 'react-component'; else if (scope === 'api') kindDetail = 'api-module'; else if (scope === 'script') kindDetail = 'script'; else if (/use[A-Z]/.test(name)) kindDetail = 'hook'; return { name, symbolNames, exports: [...new Set([...exportMatches, ...commonJsExports])], imports: [...new Set(importMatches)].slice(0, 50), workspace, kindDetail }; }
+  ])]; const scope = this.detectScope(relPath); const workspace = relPath.split('/')[0] || '.'; const name = symbolNames[0] || baseName; let kindDetail = scope; if (/\.(jsx|tsx)$/.test(filePath) && /<[A-Z][A-Za-z0-9]*/.test(content)) kindDetail = 'react-component'; else if (scope === 'api') kindDetail = 'api-module'; else if (scope === 'script') kindDetail = 'script'; else if (/use[A-Z]/.test(name)) kindDetail = 'hook'; return { name, symbolNames, exports: [...new Set([...exportMatches, ...commonJsExports])], imports: [...new Set(importMatches)].slice(0, 50), workspace, kindDetail }; }
   generatePlaceholderEmbedding(content) { const hash = crypto.createHash('md5').update(content).digest('hex'); const vector = new Array(this.embeddingDimensions).fill(0); for (let i = 0; i < this.embeddingDimensions; i++) { const startIdx = (i * 4) % hash.length; const hashPart = hash.substring(startIdx, startIdx + 4) || hash.substring(0, 4); vector[i] = parseInt(hashPart, 16) / 0xffff; } const norm = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0)); if (norm > 0 && !Number.isNaN(norm)) for (let i = 0; i < this.embeddingDimensions; i++) vector[i] /= norm; return vector; }
   makePointId(kind, relPath) { return parseInt(crypto.createHash('md5').update(`${this.projectName}\x01${kind}:${relPath}`).digest('hex').substring(0, 8), 16); }
   hashContent(content) { return crypto.createHash('md5').update(content).digest('hex'); }

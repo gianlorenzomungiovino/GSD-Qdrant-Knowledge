@@ -557,8 +557,8 @@ async function main() {
     const PREFETCH_LIMIT = 50; // wider prefetch when must-filter applied
     const GROUP_SIZE = 2;        // max chunks per source document
     const LIMIT = 5;             // max results to return
-    const SCORE_THRESHOLD = 0.85;  // minimum score for inclusion
-    const FALLBACK_THRESHOLD = 0.75; // lowered threshold if too few results
+    const SCORE_THRESHOLD = 0.78;  // calibrated for bge-m3 mean pooling — balanced precision/recall (2.3.1 was too noisy)
+    const FALLBACK_THRESHOLD = 0.55; // lowered threshold if too few results
 
     let hits = [];
     let groupCount = 0;
@@ -572,7 +572,6 @@ async function main() {
         group_by: 'source',
         group_size: GROUP_SIZE,
         limit: LIMIT * 3,  // request more groups so we can filter by threshold after
-        score_threshold: SCORE_THRESHOLD,
         with_payload: true,
         with_vector: false,
       };
@@ -596,7 +595,6 @@ async function main() {
         const searchConfig = {
           vector: { name: sync.vectorName, vector },
           limit: LIMIT * 10, // wider search for client-side dedup
-          score_threshold: SCORE_THRESHOLD,
           with_payload: true,
           with_vector: false,
         };
@@ -631,6 +629,31 @@ async function main() {
       console.log(`[qdrant] fallback: only ${rankedHits.length} results above ${SCORE_THRESHOLD.toFixed(2)}, retrying with ${FALLBACK_THRESHOLD.toFixed(2)}`);
       rankedHits = hits.filter(hit => hit.score >= FALLBACK_THRESHOLD);
     }
+
+    // Sort chunks within each file by their position in the source file.
+    // Qdrant returns hits ordered by score, not by line number — this ensures
+    // multi-chunk files are presented to the agent in correct reading order.
+    const sortChunksByPosition = (hits) => {
+      return [...hits].sort((a, b) => {
+        const parentIdA = a.payload?._parent_file || '';
+        const parentIdB = b.payload?._parent_file || '';
+
+        // Different files: keep score order (descending by score)
+        if (parentIdA !== parentIdB) return b.score - a.score;
+
+        // Same file: sort by startLine ascending, then chunkIndex as tiebreaker
+        const lineA = a.payload?.startLine ?? 0;
+        const lineB = b.payload?.startLine ?? 0;
+        if (lineA !== lineB) return lineA - lineB;
+
+        // Fallback to chunkIndex for same-line chunks
+        const idxA = a.payload?.chunkIndex ?? 0;
+        const idxB = b.payload?.chunkIndex ?? 0;
+        return idxA - idxB;
+      });
+    };
+
+    rankedHits = sortChunksByPosition(rankedHits);
 
     // Map hits to result objects (payload + score), attach _query for path matching
     let rankedResults = rankedHits.map(hit => {
