@@ -1,6 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
-const { applySymbolBoost, extractTokens, estimateTokens, trimResultsByTokenBudget } = require('./re-ranking');
+const {
+  applySymbolBoost,
+  extractTokens,
+  sourceToTokens,
+  calculateSourceTokenOverlapScore,
+  calculateLexicalSignal,
+  estimateTokens,
+  trimResultsByTokenBudget
+} = require('./re-ranking');
 
 describe('extractTokens', () => {
   it('estrae token da query multi-parola filtrando stopwords', () => {
@@ -13,7 +21,6 @@ describe('extractTokens', () => {
     expect(tokens).toContain('query');
     expect(tokens).toContain('results');
     expect(tokens).toContain('database');
-    // Stopwords filtrate
     expect(tokens).not.toContain('the');
     expect(tokens).not.toContain('is');
     expect(tokens).not.toContain('for');
@@ -36,22 +43,23 @@ describe('extractTokens', () => {
     expect(tokens).toContain('checkout');
   });
 
-  it('split su hyphen e underscore', () => {
-    const tokens = extractTokens('build-code-text_and_more');
-    // Split su [-_] → ['build', 'code', 'textand', 'more'] → tutti token validi (≥2 char)
+  it('split su hyphen, underscore e punti', () => {
+    const tokens = extractTokens('build-code-text_and_more.jsx');
     expect(tokens).toContain('build');
     expect(tokens).toContain('code');
+    expect(tokens).toContain('jsx');
+  });
+
+  it('splitta CamelCase in token separati', () => {
+    const tokens = extractTokens('ProjectCard ReactCard');
+    expect(tokens).toContain('project');
+    expect(tokens).toContain('card');
+    expect(tokens).toContain('react');
   });
 
   it('query con solo stopwords → array vuoto', () => {
     const tokens = extractTokens('the is a of in for on with');
     expect(tokens).toEqual([]);
-  });
-
-  it('token singolo parola lunga passa come unico token', () => {
-    const tokens = extractTokens('buildCodeText');
-    // buildcodetext è una sola parola senza separatori → passa come token unico
-    expect(tokens).toContain('buildcodetext');
   });
 });
 
@@ -64,8 +72,8 @@ describe('applySymbolBoost', () => {
 
     applySymbolBoost(results, 'implementare build');
 
-    expect(results[0].score).toBeCloseTo(0.75); // 0.5 * 1.5 = 0.75
-    expect(results[1].score).toBeCloseTo(0.7);   // nessun match → invariato
+    expect(results[0].score).toBeCloseTo(0.75);
+    expect(results[1].score).toBeCloseTo(0.7);
   });
 
   it('boosta con match esatto del token intero', () => {
@@ -75,7 +83,7 @@ describe('applySymbolBoost', () => {
 
     applySymbolBoost(results, 'token extraction');
 
-    expect(results[0].score).toBeCloseTo(0.9); // 0.6 * 1.5 = 0.9
+    expect(results[0].score).toBeCloseTo(0.9);
   });
 
   it('non modifica risultati senza symbolNames', () => {
@@ -127,9 +135,9 @@ describe('applySymbolBoost', () => {
 
     applySymbolBoost(results, 'implementare build extract');
 
-    expect(results[0].score).toBeCloseTo(0.6); // 0.4 * 1.5 = 0.6
-    expect(results[1].score).toBeCloseTo(0.9); // 0.6 * 1.5 = 0.9
-    expect(results[2].score).toBeCloseTo(0.8); // nessun match → invariato
+    expect(results[0].score).toBeCloseTo(0.6);
+    expect(results[1].score).toBeCloseTo(0.9);
+    expect(results[2].score).toBeCloseTo(0.8);
   });
 
   it('è case insensitive', () => {
@@ -139,7 +147,7 @@ describe('applySymbolBoost', () => {
 
     applySymbolBoost(results, 'IMPLEMENTARE BUILDCODETEXT');
 
-    expect(results[0].score).toBeCloseTo(0.75); // match case insensitive
+    expect(results[0].score).toBeCloseTo(0.75);
   });
 
   it('non boosta quando la query contiene solo stopwords', () => {
@@ -149,7 +157,7 @@ describe('applySymbolBoost', () => {
 
     applySymbolBoost(results, 'the is a of in for on with');
 
-    expect(results[0].score).toBeCloseTo(0.5); // nessun token significativo → nessun boost
+    expect(results[0].score).toBeCloseTo(0.5);
   });
 
   it('ritorna results invariato se input vuoto', () => {
@@ -158,7 +166,7 @@ describe('applySymbolBoost', () => {
     const r = [{ score: 0.5 }];
     applySymbolBoost(r, '');
     expect(r[0].score).toBeCloseTo(0.5);
-    applySymbolBoost([{ score: 0.5 }], null); // non crasha
+    applySymbolBoost([{ score: 0.5 }], null);
   });
 
   it('boost delta ≈ +0.2 nel range [0,1] (×1.5 multiplier)', () => {
@@ -166,29 +174,103 @@ describe('applySymbolBoost', () => {
 
     applySymbolBoost(results, 'implementare build');
 
-    // 0.4 * 1.5 = 0.6 → delta = +0.2 esatto (vicino al requisito +0.2)
     const delta = results[0].score - 0.4;
-    expect(delta).toBeCloseTo(0.2, 1); // arrotondato a 1 decimale ≈ +0.2
+    expect(delta).toBeCloseTo(0.2, 1);
   });
 
   it('muta l\'array in place (stesso riferimento)', () => {
     const results = [{ score: 0.5, symbolNames: ['test'] }];
     const returned = applySymbolBoost(results, 'implementare test');
 
-    expect(returned).toBe(results); // stesso oggetto
+    expect(returned).toBe(results);
+  });
+
+  it('aggiunge boost sul source path quando il basename corrisponde ai token query', () => {
+    const results = [
+      { score: 0.52, source: 'apps/web/src/components/ProjectCard.jsx', symbolNames: [] },
+      { score: 0.7, source: 'apps/web/src/components/Layout.jsx', symbolNames: [] }
+    ];
+
+    applySymbolBoost(results, 'react card');
+
+    expect(results[0].score).toBeCloseTo(0.6, 5);
+    expect(results[1].score).toBeCloseTo(0.7, 5);
+  });
+
+  it('combina symbol boost e source boost sul componente giusto', () => {
+    const results = [
+      { score: 0.5, source: 'apps/web/src/components/ProjectCard.jsx', symbolNames: ['ProjectCard'] }
+    ];
+
+    applySymbolBoost(results, 'project card');
+
+    expect(results[0].score).toBeCloseTo(0.95, 5);
   });
 
   it('logga il numero di risultati boostati', () => {
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const results = [
-      { score: 0.5, symbolNames: ['buildCodeText'] },
-      { score: 0.6, symbolNames: ['extractTokens'] }
+      { score: 0.5, source: 'apps/web/src/components/buildCodeText.js', symbolNames: ['buildCodeText'] },
+      { score: 0.6, source: 'apps/web/src/utils/extractTokens.js', symbolNames: ['extractTokens'] }
     ];
 
     applySymbolBoost(results, 'implementare build extract');
 
-    expect(consoleSpy).toHaveBeenCalledWith('[retrieval] symbolBoost: %d results', 2);
+    expect(consoleSpy).toHaveBeenCalledWith('[retrieval] symbolBoost: %d results, sourceBoost: %d results', 2, 2);
     consoleSpy.mockRestore();
+  });
+});
+
+describe('calculateLexicalSignal', () => {
+  it('espone il segnale lessicale utile per rescue pre-threshold', () => {
+    const signal = calculateLexicalSignal(
+      {
+        score: 0.41,
+        source: 'apps/web/src/components/ProjectCard.jsx',
+        symbolNames: ['ProjectCard']
+      },
+      'project card react'
+    );
+
+    expect(signal.symbolMultiplier).toBe(1.5);
+    expect(signal.sourceBoost).toBeCloseTo(0.16, 5);
+    expect(signal.matchedSymbols).toBe(2);
+    expect(signal.matchedSourceTokens).toBe(2);
+  });
+
+  it('non segnala rescue quando non c\'è match utile', () => {
+    const signal = calculateLexicalSignal(
+      {
+        score: 0.41,
+        source: 'apps/web/src/components/Layout.jsx',
+        symbolNames: ['Layout']
+      },
+      'react card'
+    );
+
+    expect(signal.symbolMultiplier).toBe(1);
+    expect(signal.sourceBoost).toBe(0);
+    expect(signal.matchedSymbols).toBe(0);
+    expect(signal.matchedSourceTokens).toBe(0);
+  });
+});
+
+describe('sourceToTokens / calculateSourceTokenOverlapScore', () => {
+  it('estrae token semantici dal source path con CamelCase', () => {
+    const tokens = sourceToTokens('apps/web/src/components/ProjectCard.jsx');
+    expect(tokens).toContain('project');
+    expect(tokens).toContain('card');
+    expect(tokens).toContain('components');
+  });
+
+  it('assegna boost parziale quando solo parte dei token query è nel path', () => {
+    const boost = calculateSourceTokenOverlapScore('apps/web/src/components/ProjectCard.jsx', ['react', 'card']);
+    expect(boost).toBeCloseTo(0.08, 5);
+  });
+
+  it('assegna boost maggiore quando tutti i token presenti nel path combaciano', () => {
+    const boost = calculateSourceTokenOverlapScore('apps/web/src/components/ReactCard.jsx', ['react', 'card']);
+    expect(boost).toBeCloseTo(0.2, 5);
   });
 });
 
@@ -221,13 +303,13 @@ describe('trimResultsByTokenBudget', () => {
   });
 
   it('tronca content e text se supera il budget', () => {
-    const longContent = 'x'.repeat(1000); // ~250 tokens stimati
+    const longContent = 'x'.repeat(1000);
     const results = [
       { score: 0.8, content: longContent },
       { score: 0.6, summary: longContent }
     ];
 
-    const info = trimResultsByTokenBudget(results, { maxTokens: 100 }); // budget molto basso per triggerare trimming
+    const info = trimResultsByTokenBudget(results, { maxTokens: 100 });
 
     expect(info.trimmed).toBe(true);
     for (const r of results) {
@@ -246,7 +328,7 @@ describe('trimResultsByTokenBudget', () => {
   it('ignora risultati null nell\'array', () => {
     const results = [null, { score: 0.8, content: 'test' }, null];
     const info = trimResultsByTokenBudget(results, { maxTokens: 4000 });
-    expect(info.finalCount).toBe(3); // array non modificato in lunghezza
+    expect(info.finalCount).toBe(3);
   });
 
   it('aggiunge flag _truncated ai campi troncati', () => {

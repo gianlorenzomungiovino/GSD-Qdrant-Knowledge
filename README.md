@@ -51,8 +51,8 @@ Un'agent senza contesto cross-project tende a riscrivere pattern che esistono gi
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ⚡ **Auto-retrieve hook**      | **★ Unique** — Iniezione automatica di contesto prima di ogni risposta. Zero query manuali, zero tokens sprecati a reinventare                                                           |
 | 🌐 **Cross-project retrieval** | Collection unificata `gsd_memory` con embedding bge-m3-1024 multilingue — tutti i progetti condividono la stessa knowledge base                                                              |
-| 🔍 **Flat search + re-ranking**| Flat search(LIMIT=30) → threshold filter(≥0.7) → recency/path matching → token truncation; più candidati per il re-ranker, soglie abbassate                     |
-| 📊 **Re-ranking avanzato**     | Recency boost +0.05 (file <30gg), path matching +0.15, symbol boost ×1.5 — flat search LIMIT=30 con soglie 0.7/0.55                              |
+| 🔍 **Flat search + re-ranking**| Flat search(LIMIT=30) → lexical rescue pre-threshold → threshold filter(≥0.78 CLI / ≥0.70 MCP) → recency/path matching → token truncation; più candidati per il re-ranker, soglie abbassate |
+| 📊 **Re-ranking avanzato**     | Recency boost +0.05 (file <30gg), path matching +0.15, symbol boost ×1.5, source path overlap fino a +0.20 — flat search LIMIT=30 con soglie 0.78/0.55 CLI e 0.70/0.48 MCP |
 | 🔗 **Doc↔Code linking**        | **★ Unique** — ogni snippet ha `relatedDocPaths` e `relatedDocIds`: il codice sa quali docs gli appartengono, e i docs sanno quali code file citano. Retrieval contestuale bidirezionale |
 | 💻 **Smart code indexing**     | bge-m3-1024 con path-first (prima linea = percorso file) e weighted header SIGNATURES:/EXPORTS:/IMPORTS: — il codice è indicizzato come lo leggono gli agent                                                        |
 | 🔄 **Auto-sync**               | Hook `post-commit` sincronizza automaticamente. Health check su Qdrant prima di ogni sync. Zero configurazione manuale                                                                   |
@@ -62,18 +62,34 @@ Un'agent senza contesto cross-project tende a riscrivere pattern che esistono gi
 
 | Range           | Significato                                                        |
 | --------------- | ------------------------------------------------------------------ |
-| **0.95 – 1.0**  | Match eccellente — vettoriale forte + recency/path boost            |
+| **0.95 – 1.0**  | Match eccellente — vettoriale forte + recency/path/symbol boost      |
 | **0.85 – 0.94** | Match forte — buon embedding, boosting applicato                   |
-| **0.70 – 0.84** | Rilevante — contesto utile (soglia primaria `SCORE_THRESHOLD=0.7`)   |
-| **0.55 – 0.69** | Fallback — risultati deboli ma potenzialmente utili                |
-| **< 0.55**      | Ignorato (soglia fallback `FALLBACK_THRESHOLD=0.55`)               |
+| **0.78 – 0.94** | Rilevante CLI / ≥0.70 MCP — contesto utile (soglia primaria `SCORE_THRESHOLD`) |
+| **0.55 – 0.77** | Fallback CLI / ≥0.48 MCP — risultati deboli ma potenzialmente utili                |
+| **< 0.48**      | Ignorato (sotto entrambe le soglie fallback)               |
 
 Il re-ranking applica:
 - **+0.05 recency boost** per file modificati negli ultimi 30 giorni
 - **+0.15 path matching** quando parole della query corrispondono al percorso sorgente
-- **Symbol boost ×1.5** (≈+0.2) su match esatto con `symbolNames` nel payload
+- **Symbol boost ×1.5** (≈+0.2) su match con `symbolNames` nel payload
+- **Source path overlap fino a +0.20** — il basename del file (`ProjectCard.jsx`) viene tokenizzato e confrontato con i token della query
 
-Soglie: flat search restituisce fino a LIMIT=30 candidati, filtra per SCORE_THRESHOLD=0.7, fallback a FALLBACK_THRESHOLD=0.55 se troppo pochi risultati. Il re-ranking fa il lavoro di filtraggio finale.
+Soglie: flat search restituisce fino a LIMIT=30 candidati, filtra per SCORE_THRESHOLD (CLI 0.78 / MCP 0.70), fallback a FALLBACK_THRESHOLD (CLI 0.55 / MCP 0.48) se troppo pochi risultati. Il re-ranking fa il lavoro di filtraggio finale.
+
+## Pipeline di retrieval (dettaglio)
+
+```
+flat search(LIMIT=30, bge-m3-1024)
+    → lexical rescue pre-threshold (+symbol match ×1.5, +source overlap fino a 0.12)
+    → threshold filter(≥0.78 CLI / ≥0.70 MCP)
+    → fallback se <2 risultati (≥0.55 CLI / ≥0.48 MCP)
+    → sortChunksByPosition() (ordinamento per startLine)
+    → sibling file expansion (.css ↔ .jsx stesso stem)
+    → re-ranking(recency + path match + symbol boost ×1.5 + source overlap fino a 0.20)
+    → token estimation/truncation(4000 max, 500 char per risultato)
+```
+
+Il **lexical rescue pre-threshold** è il passo chiave che permette ai file con nomi significativi (`ProjectCard.jsx`, `AuthMiddleware.ts`) di sopravvivere al cutoff anche quando l'embedding semantico da solo non basta. Senza questo step, un punteggio vettoriale borderline (es. 0.41) veniva eliminato prima che il re-ranking potesse applicare i boost lessicali.
 
 ## Esempio di output
 
@@ -105,11 +121,12 @@ gsd_memory (single Qdrant collection, bge-m3-1024 vectors)
     ├── signatures, comments, exports, imports
     └── relatedDocPaths → docs collegati (GSD IDs matching)
 
-Pipeline di retrieval: flat search(LIMIT=30) → threshold filter(≥0.7) 
-  → re-ranking(recency + path match) → token estimation/truncation
+Pipeline di retrieval: flat search(LIMIT=30) → lexical rescue pre-threshold → threshold filter(≥0.78 CLI / ≥0.70 MCP) → fallback se <2 risultati (≥0.55 CLI / ≥0.48 MCP) → sortChunksByPosition() → sibling expansion → re-ranking(recency + path match + symbol boost ×1.5 + source overlap fino a 0.20) → token estimation/truncation
 ```
 
 **Link bidirezionale docs ↔ code:** durante l'indicizzazione, il tool estrae i GSD IDs (M001, S02, T03…) da ogni file. Se uno snippet di codice cita `M003/S01/` e un doc contiene gli stessi IDs, il link viene creato automaticamente.
+
+**Sibling expansion:** quando una query trova `ProjectCard.jsx`, il sistema cerca anche `ProjectCard.css`, `ProjectCard.test.js` nello stesso path — lo stem del file funziona da chiave per recuperare tutti i file correlati senza bisogno che la query li menzioni esplicitamente.
 
 - **GSD = source of truth** — i file `.gsd/` del progetto corrente restano gestiti localmente
 - **Qdrant = enhancer** — memoria condivisa tra progetti, non sostituzione del contesto locale

@@ -1,5 +1,32 @@
 # Changelog
 
+## 2.3.1
+
+### Changed — Retrieval Threshold Calibration (bge-m3 mean pooling)
+
+- **CLI thresholds**: `SCORE_THRESHOLD` a **0.78**, `FALLBACK_THRESHOLD` a **0.55**. Soglie più strette per il CLI che è usato in modo interattivo e beneficia di maggiore precisione.
+- **MCP thresholds**: primary threshold a **0.70**, fallback a **0.48**. Leggermente più aperte del CLI perché l'agent può tollerare un po' più rumore e filtrare dopo con il re-ranking.
+
+### Added — Chunk Positional Ordering (`sortChunksByPosition`)
+
+- **Ordinamento chunks per posizione nel file sorgente**: I multi-chunk files ora vengono restituiti in ordine sequenziale corretto (linea crescente) invece che ordinati solo per score Qdrant, che poteva presentare codice invertito all'agente.
+- Implementato come funzione runtime `sortChunksByPosition()` applicata **prima** del re-ranking e token trimming — zero modifiche allo schema Qdrant o al pipeline di chunking.
+- Sfrutta i payload esistenti: `_parent_file` (raggruppamento), `startLine` (ordinamento primario), `chunkIndex` (tiebreaker). Preserva l'ordine score-based tra file diversi.
+- Applicato in entrambi gli entry-point: `src/cli.js` e `src/gsd-qdrant-mcp/index.js`.
+
+### Fixed — Lexical Rescue Pre-Threshold & Improved Tokenization
+
+- **Lexical rescue pre-threshold nel server MCP**: prima della soglia di cutoff, i risultati con forte segnale lessicale (`symbolNames`, basename del file) ricevono un boost (+0.08 per symbol match ×1.5, +0.08–+0.12 per source path overlap). Questo evita che chunk come `ProjectCard.jsx` vengano eliminati dal threshold quando il punteggio semantico è borderline (es. 0.41 → 0.49 con rescue), permettendo al re-ranking finale di lavorarci sopra.
+- **Token extraction migliorata**: `extractTokens()` ora split su CamelCase (`ProjectCard` → `project`, `card`), su `/`, `.`, `_`. Le query nominali corte come `"react card"` generano token semantici precisi invece di una stringa unica e troppo generica.
+- **Source path boosting nel re-ranking**: nuova funzione `sourceToTokens()` + `calculateSourceTokenOverlapScore()`. Il basename del file (`ProjectCard.jsx`) viene tokenizzato e confrontato con i token della query: match parziale → +0.08/token, match completo su tutti i token → +0.20 flat.
+- **`calculateLexicalSignal()`**: helper unificato che espone il segnale lessicale (symbol multiplier, source boost, matched counts) per uso sia nel pre-threshold rescue che nel re-ranking finale — single source of truth.
+
+### Fixed — M006 Dead Branch Cleanup
+
+- Rimossa directory `.gsd/milestones/M006/` (branch mai applicato).
+- Puliti riferimenti a M006 da `.gsd/STATE.md` e `.gsd/PROJECT.md`.
+- Eliminato file di test temporaneo `test-retrieval.js` dalla root del progetto.
+
 ## 2.3.0
 
 ### Changed — Embedding Model

@@ -15,8 +15,23 @@ const { QdrantClient } = require('@qdrant/js-client-rest');
 const path = require('path');
 const fs = require('fs');
 
+function getSiblingStem(source) {
+  if (!source || typeof source !== 'string') return null;
+  const normalized = source.replace(/\\/g, '/');
+  const ext = path.extname(normalized);
+  const dir = path.posix.dirname(normalized);
+  const stem = path.posix.basename(normalized, ext);
+  return { dir, stem, ext, key: `${dir}/${stem}` };
+}
+
 // Load re-ranking utilities (applyRecencyBoost, applySymbolBoost, estimateTokens, trimResultsByTokenBudget)
-const { applyRecencyBoost, applySymbolBoost, estimateTokens, trimResultsByTokenBudget } = require(path.join(__dirname, '..', 're-ranking'));
+const {
+  applyRecencyBoost,
+  applySymbolBoost,
+  calculateLexicalSignal,
+  estimateTokens,
+  trimResultsByTokenBudget
+} = require(path.join(__dirname, '..', 're-ranking'));
 
 // Load query cache for deduplicating repeated queries
 const { cache: queryCache } = require(path.join(__dirname, '..', 'query-cache'));
@@ -122,15 +137,14 @@ function createMcpServer() {
 
         // Flat search — no grouping, so multiple snippets from the same file can appear.
         const LIMIT = 30;            // max results to return (increased for better re-ranking)
-        const SCORE_THRESHOLD = 0.7; // lowered threshold so re-ranker has more candidates
-        const FALLBACK_THRESHOLD = 0.55; // further lowered if too few results
+        const SCORE_THRESHOLD = 0.70; // calibrated for bge-m3 mean pooling — balanced precision/recall (2.3.1 was too noisy)
+        const FALLBACK_THRESHOLD = 0.48; // lowered threshold if too few results
 
         let hits = [];
         try {
           const searchConfig = {
             vector: { name: VECTOR_NAME, vector },
-            limit: LIMIT * 2,  // request extra so threshold filtering still leaves enough
-            score_threshold: SCORE_THRESHOLD,
+            limit: LIMIT * 2,  // request extra so local threshold filtering still leaves enough
             with_payload: true,
             with_vector: false,
           };
@@ -144,12 +158,41 @@ function createMcpServer() {
           console.warn('[qdrant] search failed:', searchErr.message);
         }
 
+        // Apply lexical rescue before thresholding so basename/symbol matches do not die below cutoff.
+        // This is intentionally narrower than final reranking: it only nudges borderline semantic hits.
+        const rescuedHits = hits.map(hit => {
+          if (!hit || typeof hit.score !== 'number') return hit;
+
+          const payload = hit.payload || {};
+          const signal = calculateLexicalSignal({
+            score: hit.score,
+            source: payload.source,
+            symbolNames: payload.symbolNames,
+          }, task);
+
+          let lexicalBoost = 0;
+          if (signal.symbolMultiplier > 1) lexicalBoost += 0.08;
+          lexicalBoost += Math.min(signal.sourceBoost, 0.12);
+
+          if (lexicalBoost <= 0) return hit;
+
+          return {
+            ...hit,
+            score: Math.min(1.0, hit.score + lexicalBoost),
+            _lexicalRescue: {
+              lexicalBoost,
+              matchedSymbols: signal.matchedSymbols,
+              matchedSourceTokens: signal.matchedSourceTokens,
+            }
+          };
+        });
+
         // Diagnostic logging — show raw scores before threshold filtering
-        const totalResults = hits.length;
+        const totalResults = rescuedHits.length;
         
         if (totalResults > 0) {
           // Show top-10 raw scores for debugging retrieval quality
-          const sortedAll = [...hits].sort((a, b) => b.score - a.score);
+          const sortedAll = [...rescuedHits].sort((a, b) => b.score - a.score);
           console.log(`[qdrant] auto_retrieve: total hits=${totalResults}, threshold=${SCORE_THRESHOLD.toFixed(2)}, fallback_threshold=${FALLBACK_THRESHOLD.toFixed(2)}`);
           
           // Top 10 raw scores with source paths (for diagnosing cutoff issues)
@@ -160,8 +203,8 @@ function createMcpServer() {
           }
 
           // Count results at each threshold level to diagnose cutoff behavior
-          const abovePrimary = hits.filter(h => h.score >= SCORE_THRESHOLD).length;
-          const aboveFallback = hits.filter(h => h.score >= FALLBACK_THRESHOLD).length;
+          const abovePrimary = rescuedHits.filter(h => h.score >= SCORE_THRESHOLD).length;
+          const aboveFallback = rescuedHits.filter(h => h.score >= FALLBACK_THRESHOLD).length;
           
           if (abovePrimary === 0 && totalResults > 0) {
             console.log(`[qdrant] auto_retrieve: ⚠️ ZERO results at threshold ${SCORE_THRESHOLD.toFixed(2)} — all scores below cutoff`);
@@ -173,19 +216,93 @@ function createMcpServer() {
         }
 
         // Apply score threshold filter
-        let rankedHits = hits.filter(hit => hit.score >= SCORE_THRESHOLD);
+        let rankedHits = rescuedHits.filter(hit => hit.score >= SCORE_THRESHOLD);
 
         // Fallback: if fewer than 2 results above threshold and we got some results at all, retry with lowered threshold
         if (rankedHits.length < 2 && totalResults > 0) {
            console.log(`[qdrant] auto_retrieve: fallback: only ${rankedHits.length} results above ${SCORE_THRESHOLD.toFixed(2)}, retrying with ${FALLBACK_THRESHOLD.toFixed(2)}`);
-          rankedHits = hits.filter(hit => hit.score >= FALLBACK_THRESHOLD);
+          rankedHits = rescuedHits.filter(hit => hit.score >= FALLBACK_THRESHOLD);
 
           // Log how many survived the fallback threshold
           console.log(`[qdrant] auto_retrieve: after fallback (${FALLBACK_THRESHOLD.toFixed(2)}): ${rankedHits.length} results`);
         }
 
-        // Sort by Qdrant score descending (re-ranker will re-score after this)
-        const sortedByQdrantScore = rankedHits.sort((a, b) => b.score - a.score);
+        // Sort chunks within each file by their position in the source file.
+        // Qdrant returns hits ordered by score, not by line number — this ensures
+        // multi-chunk files are presented to the agent in correct reading order.
+        const sortChunksByPosition = (hits) => {
+          return [...hits].sort((a, b) => {
+            const parentIdA = a.payload?._parent_file || '';
+            const parentIdB = b.payload?._parent_file || '';
+
+            // Different files: keep score order (descending by score)
+            if (parentIdA !== parentIdB) return b.score - a.score;
+
+            // Same file: sort by startLine ascending, then chunkIndex as tiebreaker
+            const lineA = a.payload?.startLine ?? 0;
+            const lineB = b.payload?.startLine ?? 0;
+            if (lineA !== lineB) return lineA - lineB;
+
+            // Fallback to chunkIndex for same-line chunks
+            const idxA = a.payload?.chunkIndex ?? 0;
+            const idxB = b.payload?.chunkIndex ?? 0;
+            return idxA - idxB;
+          });
+        };
+
+        rankedHits = sortChunksByPosition(rankedHits);
+
+        // Expand with sibling files that share the same basename in the same directory
+        // (e.g. ProjectCard.css ↔ ProjectCard.jsx). This helps the agent recover the
+        // correlated implementation file even when only CSS or usage sites match semantically.
+        const seenSources = new Set(rankedHits.map(hit => `${hit.payload?.project_id || ''}::${hit.payload?.source || ''}`));
+        const siblingKeys = new Map();
+        for (const hit of rankedHits.slice(0, Math.min(5, rankedHits.length))) {
+          const info = getSiblingStem(hit.payload?.source);
+          if (!info) continue;
+          const projectId = hit.payload?.project_id;
+          if (!projectId) continue;
+          siblingKeys.set(`${projectId}::${info.key}`, {
+            projectId,
+            dir: info.dir,
+            stem: info.stem,
+            baseScore: hit.score,
+          });
+        }
+
+        for (const { projectId, dir, stem, baseScore } of siblingKeys.values()) {
+          let offset = null;
+          while (true) {
+            const scroll = await sync.client.scroll(COLLECTION_NAME, {
+              limit: 200,
+              offset,
+              with_payload: true,
+              with_vector: false,
+              filter: {
+                must: [
+                  { key: 'project_id', match: { value: projectId } },
+                  { key: 'type', match: { value: 'code' } }
+                ]
+              }
+            });
+
+            for (const point of scroll.points) {
+              const source = point.payload?.source;
+              const info = getSiblingStem(source);
+              if (!info) continue;
+              if (info.dir !== dir || info.stem !== stem) continue;
+              const key = `${projectId}::${source}`;
+              if (seenSources.has(key)) continue;
+              seenSources.add(key);
+              rankedHits.push({ ...point, score: Math.max(point.score || 0, baseScore - 0.015) });
+            }
+
+            if (!scroll.next_page_offset) break;
+            offset = scroll.next_page_offset;
+          }
+        }
+
+        rankedHits = sortChunksByPosition(rankedHits);
 
         const elapsed = Date.now() - t0;
         console.log(`[qdrant] auto_retrieve: chunks=${totalResults} (threshold=${SCORE_THRESHOLD.toFixed(2)} → ${rankedHits.length} above), in ${elapsed}ms`);
@@ -193,8 +310,8 @@ function createMcpServer() {
         const projectId = PROJECT_ROOT.split(/[/\\]/).pop();
 
         // Rank results prioritizing cross-project reuse without excluding current project results.
-        // Use threshold-filtered hits (sortedByQdrantScore) instead of raw hits.
-        const ranked = sortedByQdrantScore.map(hit => {
+        // Use threshold-filtered hits already sorted by position (chunks within same file ordered by line number, files ranked by Qdrant score).
+        const ranked = rankedHits.map(hit => {
           const recencyScore = Math.min(1, (Date.now() - hit.payload.timestamp) / (30 * 24 * 60 * 60 * 1000));
           const importanceScore = (hit.payload.importance || 1) / 5;
           const reusableBoost = hit.payload.reusable ? 0.08 : 0;
