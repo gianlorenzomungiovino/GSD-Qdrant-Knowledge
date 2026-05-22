@@ -48,3 +48,6 @@ PRE-PUBLISH-CHECKLIST.md
 
 
 
+
+# Build artifacts
+*.tgz
