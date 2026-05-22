@@ -112,17 +112,29 @@ Trovati 3 risultati rilevanti:
   Match type: semantic
 ```
 
-## Architettura (bge-m3 + flat search)
+## Architettura (v2.3.2 — zero file copying)
 
 ```
+Sistema (installato una volta via npm):
+├── gsd-qdrant-knowledge  (CLI — bin entry)
+└── gsd-qdrant-mcp        (MCP server — bin entry, accetta --project)
+
+Progetto (config minimi, zero JS):
+├── .mcp.json             (configurazione MCP)
+├── .git/hooks/post-commit (hook auto-sync)
+└── .gsd/
+    ├── KNOWLEDGE.md       (istruzioni agent)
+    └── .qdrant-sync-state.json (stato sync)
+
 gsd_memory (single Qdrant collection, bge-m3-1024 vectors)
 ├── type: doc          → .gsd/*.md (STATE.md escluso)
 └── type: code         → src/**/*.js,ts,py,go,...
     ├── signatures, comments, exports, imports
     └── relatedDocPaths → docs collegati (GSD IDs matching)
-
-Pipeline di retrieval: flat search(LIMIT=30) → lexical rescue pre-threshold → threshold filter(≥0.78 CLI / ≥0.70 MCP) → fallback se <2 risultati (≥0.55 CLI / ≥0.48 MCP) → sortChunksByPosition() → sibling expansion → re-ranking(recency + path match + symbol boost ×1.5 + source overlap fino a 0.20) → token estimation/truncation
 ```
+
+**Prima (v2.3.1):** il tool copiava file JS dentro `gsd-qdrant-knowledge/` nel progetto → tokens sprecati, duplicazione.
+**Ora (v2.3.2):** installazione una volta sola, setup crea solo config. Zero file JS nel progetto.
 
 **Link bidirezionale docs ↔ code:** durante l'indicizzazione, il tool estrae i GSD IDs (M001, S02, T03…) da ogni file. Se uno snippet di codice cita `M003/S01/` e un doc contiene gli stessi IDs, il link viene creato automaticamente.
 
@@ -135,12 +147,14 @@ Pipeline di retrieval: flat search(LIMIT=30) → lexical rescue pre-threshold �
 ## CLI
 
 ```bash
-gsd-qdrant-knowledge                        # Bootstrap completo
-gsd-qdrant-knowledge context "query"        # Query manuale
+gsd-qdrant-knowledge setup                  # Setup progetto (config minimi + sync)
+gsd-qdrant-knowledge migrate                # Migra da v2.3.1 (rimuove vecchia cartella)
+gsd-qdrant-knowledge sync                   # Sincronizzazione manuale
+gsd-qdrant-knowledge context "query"        # Query semantica manuale
 gsd-qdrant-knowledge uninstall              # Rimuove gli artifact
 ```
 
-Installazione completa: **[GSD-QDRANT-SETUP.md](GSD-QDRANT-SETUP.md)**
+Installazione completa: **[SETUP.md](SETUP.md)**
 
 ## Integrazione
 
@@ -150,4 +164,4 @@ Durante il bootstrap, il progetto registra automaticamente il server in `.mcp.js
 
 ---
 
-**Link utili:** [Setup completo](GSD-QDRANT-SETUP.md) · [Changelog](CHANGELOG.md)
+**Link utili:** [Setup completo](SETUP.md) · [Changelog](CHANGELOG.md)
