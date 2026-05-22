@@ -9,8 +9,7 @@ const http = require('http');
 const fs = require('fs');
 const { existsSync, readFileSync, mkdirSync, writeFileSync, copyFileSync, rmSync, unlinkSync } = fs;
 const { join, dirname, extname, basename } = require('path');
-const readline = require('readline');
-const { applyRecencyBoost, applySymbolBoost, extractTokens, estimateTokens, trimResultsByTokenBudget } = require('./re-ranking');
+const { applyRecencyBoost, applySymbolBoost, extractTokens, estimateTokens, trimResultsByTokenBudget, sortChunksByPosition, formatResultsForOutput } = require('./re-ranking');
 
 const PROJECT_ROOT = process.cwd();
 const ROOT_PKG = join(PROJECT_ROOT, 'package.json');
@@ -475,7 +474,6 @@ async function bootstrapProject() {
 
   console.log(`📁 Project: ${basename(PROJECT_ROOT)}`);
   installDependencies(pkgPath);
-  run('node', [findFileInCliRoot('setup-from-templates.js')], { cwd: PROJECT_ROOT });
 
   // Install post-commit hook for automatic knowledge sync
   installPostCommitHook();
@@ -485,16 +483,17 @@ async function bootstrapProject() {
   // Ensure QDrant is running before sync
   const qdrantResult = await ensureQdrantRunning();
 
-  // Run sync with the correct QDRANT_URL in env
-  const syncScript = findFileInCliRoot('sync-knowledge.js');
-  const syncResult = spawnSync('node', [syncScript], {
-    cwd: PROJECT_ROOT,
-    stdio: 'inherit',
-    env: { ...process.env },
-  });
-  if (syncResult.status !== 0) {
+  // Run initial sync directly (integrated, no subprocess needed)
+  try {
+    const { GSDKnowledgeSync } = require(findFileInCliRoot('gsd-qdrant-template.js'));
+    const sync = new GSDKnowledgeSync();
+    await sync.init();
+    const summary = await sync.syncToGsdMemory();
+    console.log(`🔄 Initial sync complete! Indexed: ${summary.total}`);
+  } catch (syncErr) {
     console.error('\n❌ Initial knowledge sync failed. Collections may be empty.');
-    process.exit(syncResult.status || 1);
+    console.error('   Error:', syncErr.message);
+    process.exit(1);
   }
 
   console.log('\n✅ Ready');
@@ -515,6 +514,21 @@ async function main() {
     uninstallProjectArtifacts();
     await removeFromGitignore(PROJECT_ROOT, `${TOOL_DIR_NAME}/`);
     console.log('\n✅ Uninstall complete');
+    return;
+  }
+
+  if (args[0] === 'sync') {
+    // Lightweight sync — used by post-commit hooks and manual sync
+    try {
+      const { GSDKnowledgeSync } = require(findFileInCliRoot('gsd-qdrant-template.js'));
+      const sync = new GSDKnowledgeSync();
+      await sync.init();
+      const summary = await sync.syncToGsdMemory();
+      console.log(`✅ Sync complete: ${summary.total} indexed, ${summary.deleted || 0} orphans deleted`);
+    } catch (err) {
+      console.error('❌ Sync failed:', err.message);
+      process.exit(1);
+    }
     return;
   }
 
@@ -633,26 +647,6 @@ async function main() {
     // Sort chunks within each file by their position in the source file.
     // Qdrant returns hits ordered by score, not by line number — this ensures
     // multi-chunk files are presented to the agent in correct reading order.
-    const sortChunksByPosition = (hits) => {
-      return [...hits].sort((a, b) => {
-        const parentIdA = a.payload?._parent_file || '';
-        const parentIdB = b.payload?._parent_file || '';
-
-        // Different files: keep score order (descending by score)
-        if (parentIdA !== parentIdB) return b.score - a.score;
-
-        // Same file: sort by startLine ascending, then chunkIndex as tiebreaker
-        const lineA = a.payload?.startLine ?? 0;
-        const lineB = b.payload?.startLine ?? 0;
-        if (lineA !== lineB) return lineA - lineB;
-
-        // Fallback to chunkIndex for same-line chunks
-        const idxA = a.payload?.chunkIndex ?? 0;
-        const idxB = b.payload?.chunkIndex ?? 0;
-        return idxA - idxB;
-      });
-    };
-
     rankedHits = sortChunksByPosition(rankedHits);
 
     // Map hits to result objects (payload + score), attach _query for path matching
@@ -671,183 +665,22 @@ async function main() {
       .sort((a, b) => b.score - a.score)
       .slice(0, LIMIT);
 
-    // Token estimation: calculate total tokens across all result text fields
-    let totalTokens = 0;
-    for (const r of ranked) {
-      if (!r) continue;
-      const textFields = [r.content, r.summary, r.text].filter(Boolean);
-      for (const field of textFields) {
-        totalTokens += estimateTokens(field);
-      }
-    }
-
-    // Trim results if over token budget (4000 tokens default)
-    let trimmedInfo;
-    try {
-      trimmedInfo = trimResultsByTokenBudget(ranked, { maxTokens: 4000 });
-    } catch (_) { /* non-fatal — proceed with untrimmed */ }
+    // Format results: token estimation, trimming, cleanup (shared with gsd-qdrant-mcp)
+    const { results: formattedResults, trimmedInfo, totalTokens } = formatResultsForOutput(ranked, { maxTokens: 4000 });
 
     const elapsed = Date.now() - t0;
     console.log(`[qdrant] group_by: groups=${groupCount}, chunks=${totalResults} (threshold=${SCORE_THRESHOLD.toFixed(2)} → ${rankedHits.length} above), in ${elapsed}ms`);
     if (trimmedInfo && trimmedInfo.trimmed) {
-      const charsPerResult = ranked.filter(r => r._truncated).length;
-      console.log(`[retrieval] %d results, ~%d estimated tokens, trimmed to 500 chars per result`, ranked.length, totalTokens);
+      console.log(`[retrieval] %d results, ~%d estimated tokens, trimmed to 500 chars per result`, formattedResults.length, totalTokens);
     }
 
-    // Clean up internal _truncated flag before output
-    for (const r of ranked) {
-      if (r && '_truncated' in r) delete r._truncated;
-    }
-
-    console.log(JSON.stringify({ query, project_id, results: ranked }, null, 2));
+    console.log(JSON.stringify({ query, project_id, results: formattedResults }, null, 2));
     return;
   }
 
-  if (args[0] === 'snippet' && args[1] === 'search') {
-    const query = args[2] || '';
-    const options = {};
-
-    for (let i = 3; i < args.length; i++) {
-      if (args[i].startsWith('--')) {
-        const key = args[i].slice(2);
-        const value = args[i + 1];
-        if (key === 'tags' && value) options.tags = value.split(',');
-        if (key === 'language' && value) options.language = value;
-        if (key === 'type' && value) options.type = value;
-        if (key === 'context') options.withContext = true;
-        if (key === 'limit' && value) options.limit = parseInt(value, 10);
-      }
-    }
-
-    if (!query) {
-      console.log('❌ Please provide a search query.');
-      console.log('Usage: gsd-qdrant-knowledge snippet search <query> [--tags <tag1,tag2>] [--language <lang>] [--type <type>] [--context] [--limit <n>]');
-      process.exit(1);
-    }
-
-    const runtimeSyncPath = join(PROJECT_ROOT, TOOL_DIR_NAME, 'index.js');
-    const useQdrant = existsSync(runtimeSyncPath);
-    let sorted = [];
-
-    if (useQdrant) {
-      try {
-        const { GSDKnowledgeSync } = require(runtimeSyncPath);
-        const sync = new GSDKnowledgeSync();
-        await sync.init();
-        sorted = await sync.searchWithContext(query, {
-          limit: options.limit || 10,
-          type: options.type || undefined,
-        });
-      } catch (err) {
-        console.log('⚠️  Qdrant search failed, falling back to local database:', err.message);
-      }
-    }
-
-    if (sorted.length === 0) {
-      const snippetRanking = require(findFileInCliRoot('snippet-ranking'));
-      const snippets = snippetRanking.loadDatabase();
-      const filtered = snippetRanking.filterAndRankSnippets(snippets, query, options);
-      sorted = snippetRanking.sortSnippetsByRelevance(filtered);
-    }
-
-    console.log('🔍 Snippet Search');
-    console.log('='.repeat(50));
-    console.log(`Query: "${query}"`);
-    if (options.withContext) console.log('With Context: Yes');
-    console.log(`Found ${sorted.length} results:`);
-
-    sorted.forEach((result, i) => {
-      console.log(`  ${i + 1}. ${result.path || result.name} (score: ${result.score || result.relevanceScore})`);
-      console.log(`     Type: ${result.type}, Scope: ${result.scope}`);
-      if (result.milestone || result.slice || result.task) {
-        console.log(`     GSD: ${result.milestone || ''} ${result.slice || ''} ${result.task || ''}`.trim());
-      }
-      console.log(`     ${result.content?.slice(0, 200) || 'No content'}`);
-      if (result.context && result.context.length > 0) {
-        console.log(`     Context: ${result.context.length} related documents`);
-        result.context.forEach(ctx => {
-          console.log(`       - ${ctx.source} (${ctx.ids.length} IDs: ${ctx.ids.slice(0, 3).join(', ')})`);
-        });
-      }
-    });
-
-    console.log('='.repeat(50));
-    console.log('✅ Search complete!');
-    return;
-  }
-
-  if (args[0] === 'snippet' && args[1] === 'apply') {
-    const query = args[2] || '';
-
-    if (!query) {
-      console.log('❌ Please provide a query for the snippet to apply.');
-      console.log('Usage: gsd-qdrant-knowledge snippet apply <query>');
-      process.exit(1);
-    }
-
-    const snippetRanking = require(findFileInCliRoot('snippet-ranking'));
-    const intentDetector = require(findFileInCliRoot('intent-detector'));
-    const contextAnalyzer = require(findFileInCliRoot('context-analyzer'));
-    const intent = intentDetector.detectIntent(query);
-    const snippets = snippetRanking.loadDatabase();
-    const filtered = snippetRanking.filterAndRankSnippets(snippets, intent.query, {
-      tags: intent.filters.tags || [],
-      language: (intent.filters.language && !intent.filters.tags?.includes(intent.filters.language)) ? intent.filters.language : '',
-      type: intent.filters.type || '',
-      crossProject: intent.filters.crossProject || true
-    });
-    const sorted = snippetRanking.sortSnippetsByRelevance(filtered);
-
-    console.log('📝 Snippet Apply');
-    console.log('='.repeat(50));
-    console.log(`Query: "${query}"`);
-
-    if (sorted.length === 0) {
-      console.log('\n⚠️  No matching snippets found.');
-      console.log('='.repeat(50));
-      console.log('✅ Search complete (no results)');
-      process.exit(0);
-    }
-
-    const topMatch = sorted[0];
-    const projectContext = contextAnalyzer.analyzeProjectContext();
-    const placement = contextAnalyzer.recommendCodePlacement(topMatch.description || query, projectContext);
-    const fileExtension = getExtensionForLanguage(topMatch.language);
-    const baseFileName = topMatch.sourceFile ? basename(topMatch.sourceFile).replace(extname(topMatch.sourceFile), '') : 'snippet';
-    const fileName = `${baseFileName}${fileExtension}`;
-    const filePath = join(PROJECT_ROOT, placement.path, fileName);
-
-    let willOverwrite = false;
-    if (existsSync(filePath)) {
-      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-      const timeout = setTimeout(() => {
-        console.log('\n⚠️  No user input received, defaulting to overwrite.');
-        willOverwrite = true;
-        rl.close();
-      }, 1000);
-
-      await new Promise((resolve) => {
-        rl.question('Would you like to overwrite it? (y/N): ', (answer) => {
-          clearTimeout(timeout);
-          const response = answer.toLowerCase().trim();
-          willOverwrite = response === 'y' || response === 'yes';
-          rl.close();
-          resolve();
-        });
-      });
-
-      if (!willOverwrite) {
-        console.log('❌ File not created (user declined to overwrite).');
-        console.log('✅ Operation cancelled.');
-        process.exit(0);
-      }
-    } else {
-      const dirPath = dirname(filePath);
-      if (!existsSync(dirPath)) mkdirSync(dirPath, { recursive: true });
-    }
-
-    writeFileSync(filePath, topMatch.content, 'utf8');
-    console.log(`✅ File created successfully: ${filePath}`);
+  if (args[0] === 'snippet') {
+    console.log('⚠️  Snippet commands are deprecated. Use `gsd-qdrant-knowledge context <query>` for semantic search.');
+    console.log('   The local snippet database has been removed in favor of Qdrant-based retrieval.');
     return;
   }
 

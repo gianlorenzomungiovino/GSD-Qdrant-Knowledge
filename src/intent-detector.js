@@ -2,10 +2,12 @@
 
 /**
  * Intent Detector Module
- * 
+ *
  * Provides heuristic rules to translate natural language queries into structured search intent.
  * Analyzes user input to determine search type, filters, and preferences.
  */
+
+const { filterStopwords } = require('./stopwords');
 
 /**
  * Detect intent from a natural language query
@@ -328,30 +330,11 @@ function extractKeywords(query) {
   const normalizedTokens = normalized.split(/[\s\-_.,;:!?(){}[\]<>\/\\|@#$%^&*+=~`]+/);
   
   // Filter stopwords (English + Italian) and noise tokens
-  const STOPWORDS = new Set([
-    'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-    'should', 'may', 'might', 'shall', 'can', 'need', 'to', 'of', 'in',
-    'for', 'on', 'with', 'at', 'by', 'from', 'as', 'into', 'through',
-    'during', 'before', 'after', 'above', 'below', 'between', 'out',
-    'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here',
-    'there', 'when', 'where', 'why', 'how', 'all', 'both', 'each', 'few',
-    'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only',
-    'own', 'same', 'so', 'than', 'too', 'very', 'just', 'because', 'but',
-    'and', 'or', 'if', 'while', 'about', 'up', 'il', 'lo', 'la', 'i',
-    'gli', 'le', 'un', 'uno', 'una', 'del', 'dello', 'della', 'dei',
-    'degli', 'delle', 'nel', 'nello', 'nella', 'nei', 'negli', 'nelle',
-    'sul', 'sullo', 'sulla', 'sui', 'sugli', 'sulle', 'al', 'allo',
-    'alla', 'ai', 'agli', 'alle', 'di', 'da', 'in', 'con', 'su', 'per',
-    'tra', 'fra', 'che', 'e', 'ed', 'o', 'oppure', 'ma', 'perché',
-    'poiché', 'se', 'quando', 'mentre', 'come'
-  ]);
-
   const meaningful = rawTokens.filter((token, idx) => {
     const normalizedToken = normalizedTokens[idx] || token.toLowerCase();
-    return token.length >= 2 && 
-      token.length <= 40 && 
-      !STOPWORDS.has(normalizedToken);
+    return token.length >= 2 &&
+      token.length <= 40 &&
+      filterStopwords([normalizedToken]).length > 0;
   });
   
   if (meaningful.length === 0) return '';

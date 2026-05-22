@@ -24,13 +24,13 @@ function getSiblingStem(source) {
   return { dir, stem, ext, key: `${dir}/${stem}` };
 }
 
-// Load re-ranking utilities (applyRecencyBoost, applySymbolBoost, estimateTokens, trimResultsByTokenBudget)
+// Load re-ranking utilities (applyRecencyBoost, applySymbolBoost, sortChunksByPosition, formatResultsForOutput)
 const {
   applyRecencyBoost,
   applySymbolBoost,
   calculateLexicalSignal,
-  estimateTokens,
-  trimResultsByTokenBudget
+  sortChunksByPosition,
+  formatResultsForOutput
 } = require(path.join(__dirname, '..', 're-ranking'));
 
 // Load query cache for deduplicating repeated queries
@@ -230,26 +230,6 @@ function createMcpServer() {
         // Sort chunks within each file by their position in the source file.
         // Qdrant returns hits ordered by score, not by line number — this ensures
         // multi-chunk files are presented to the agent in correct reading order.
-        const sortChunksByPosition = (hits) => {
-          return [...hits].sort((a, b) => {
-            const parentIdA = a.payload?._parent_file || '';
-            const parentIdB = b.payload?._parent_file || '';
-
-            // Different files: keep score order (descending by score)
-            if (parentIdA !== parentIdB) return b.score - a.score;
-
-            // Same file: sort by startLine ascending, then chunkIndex as tiebreaker
-            const lineA = a.payload?.startLine ?? 0;
-            const lineB = b.payload?.startLine ?? 0;
-            if (lineA !== lineB) return lineA - lineB;
-
-            // Fallback to chunkIndex for same-line chunks
-            const idxA = a.payload?.chunkIndex ?? 0;
-            const idxB = b.payload?.chunkIndex ?? 0;
-            return idxA - idxB;
-          });
-        };
-
         rankedHits = sortChunksByPosition(rankedHits);
 
         // Expand with sibling files that share the same basename in the same directory
@@ -321,35 +301,17 @@ function createMcpServer() {
           return { ...hit.payload, score };
         }).slice(0, limit);
 
-        // Symbol boost: increase scores for results whose symbolNames contain query tokens
+  // Symbol boost: increase scores for results whose symbolNames contain query tokens
         applySymbolBoost(ranked, task);
 
-        // Token estimation: calculate total tokens across all result text fields
-        let totalTokens = 0;
-        for (const r of ranked) {
-          if (!r) continue;
-          const textFields = [r.content, r.summary, r.text].filter(Boolean);
-          for (const field of textFields) {
-            totalTokens += estimateTokens(field);
-          }
-        }
+        // Format results: token estimation, trimming, cleanup (shared with cli.js)
+        const { results: formattedResults, trimmedInfo, totalTokens } = formatResultsForOutput(ranked, { maxTokens: 4000 });
 
-        // Trim results if over token budget (4000 tokens default)
-        let trimmedInfo;
-        try {
-          trimmedInfo = trimResultsByTokenBudget(ranked, { maxTokens: 4000 });
-        } catch (_) { /* non-fatal — proceed with untrimmed */ }
-
-        // Clean up internal _truncated flag before output
-        for (const r of ranked) {
-          if (r && '_truncated' in r) delete r._truncated;
-        }
-
-        console.log(`[retrieval] ${ranked.length} results, ~${totalTokens} estimated tokens` +
+        console.log(`[retrieval] ${formattedResults.length} results, ~${totalTokens} estimated tokens` +
           (trimmedInfo && trimmedInfo.trimmed ? `, trimmed to 500 chars per result` : ''));
 
         // Format results for MCP response
-        const results = ranked.map(hit => ({
+        const results = formattedResults.map(hit => ({
           type: hit.type,
           subtype: hit.subtype,
           project_id: hit.project_id,
@@ -367,13 +329,13 @@ function createMcpServer() {
         const cachePayload = {
           task,
           results,
-          totalResults: ranked.length,
+          totalResults: formattedResults.length,
           projectId,
         };
 
         // Store in cache for future repeated queries
         queryCache.set(cacheKey, cachePayload);
-        console.log(`[cache] stored: ${cacheKey} (${ranked.length} results)`);
+        console.log(`[cache] stored: ${cacheKey} (${formattedResults.length} results)`);
 
         return {
           content: [

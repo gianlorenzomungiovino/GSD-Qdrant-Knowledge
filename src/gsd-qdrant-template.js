@@ -324,7 +324,7 @@ class GSDKnowledgeSync {
     return deleted;
   }
 
-  startWatcher() { console.log('👀 Watch mode not implemented yet. Run `gsd-qdrant-knowledge` or `node src/sync-knowledge.js`.'); }
+  startWatcher() { console.log('👀 Watch mode not implemented yet. Run `gsd-qdrant-knowledge` or `gsd-qdrant-knowledge sync`.'); }
 
   /**
    * Walk .gsd/ directory and return only files with genuine cross-project value.
@@ -368,6 +368,11 @@ class GSDKnowledgeSync {
       }
       if (!entry.isFile()) continue;
       if (entry.name === 'package-lock.json') continue;
+      // Include package.json for project dependency/context info
+      if (entry.name === 'package.json') {
+        files.push(fullPath);
+        continue;
+      }
       const ext = extname(entry.name).toLowerCase();
       if (EXCLUDED_FILE_EXTENSIONS.has(ext) || !CODE_EXTENSIONS.has(ext)) continue;
       
