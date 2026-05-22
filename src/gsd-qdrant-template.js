@@ -2,12 +2,24 @@
 
 const { QdrantClient } = require('@qdrant/js-client-rest');
 const { promises: fs, existsSync } = require('fs');
-const { join, basename, extname, relative, dirname } = require('path');
+const { join, basename, extname, relative, dirname, resolve } = require('path');
 const crypto = require('crypto');
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
-const PROJECT_ROOT = process.cwd();
-const STATE_FILE = join(PROJECT_ROOT, 'gsd-qdrant-knowledge', '.qdrant-sync-state.json');
+
+// Resolve project root from --project argument or fallback to cwd
+function resolveProjectRoot() {
+  const args = process.argv.slice(2);
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--project' && i + 1 < args.length) {
+      return resolve(args[i + 1]);
+    }
+  }
+  return process.cwd();
+}
+
+const PROJECT_ROOT = resolveProjectRoot();
+const STATE_FILE = join(PROJECT_ROOT, '.gsd', '.qdrant-sync-state.json');
 
 const EXCLUDED_DIRS = new Set([
   '.git', 'node_modules', 'vendor', 'bower_components', '.next', 'dist', 'build', 'coverage', '.turbo', '.vercel', '.idea', '.vscode', '.bg-shell', 'gsd-qdrant-knowledge',
@@ -83,7 +95,10 @@ class GSDKnowledgeSync {
         console.log(`[qdrant] Collection ${collectionName} recreated with ${this.vectorName} (${this.embeddingDimensions}-dim). Full re-index required.`);
 
         // Reset sync state to force full re-index
-        try { await fs.writeFile(STATE_FILE, JSON.stringify({ lastSync: null, indexed: {} }, null, 2)); } catch (_) {}
+        try {
+          await fs.mkdir(dirname(STATE_FILE), { recursive: true });
+          await fs.writeFile(STATE_FILE, JSON.stringify({ lastSync: null, indexed: {} }, null, 2));
+        } catch (_) {}
         return;
       }
 

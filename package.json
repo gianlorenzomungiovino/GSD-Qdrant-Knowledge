@@ -1,6 +1,6 @@
 {
   "name": "gsd-qdrant-knowledge",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "description": "CLI per setup automatico GSD + Qdrant in qualsiasi progetto Node.js",
   "main": "src/gsd-qdrant-template.js",
   "bin": {
@@ -46,7 +46,6 @@
     "src/intent-detector.js",
     "src/auto-retrieve-mcp.js",
     "src/knowledge-instructions.js",
-    "src/install-gsd-extension.js",
     "src/re-ranking.js",
     "src/query-cache.js",
     "src/stopwords.js",
