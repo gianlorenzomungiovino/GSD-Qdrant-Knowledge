@@ -112,38 +112,6 @@ Trovati 3 risultati rilevanti:
   Match type: semantic
 ```
 
-## Architettura (v2.3.2 — zero file copying)
-
-```
-Sistema (installato una volta via npm):
-├── gsd-qdrant-knowledge  (CLI — bin entry)
-└── gsd-qdrant-mcp        (MCP server — bin entry, accetta --project)
-
-Progetto (config minimi, zero JS):
-├── .mcp.json             (configurazione MCP)
-├── .git/hooks/post-commit (hook auto-sync)
-└── .gsd/
-    ├── KNOWLEDGE.md       (istruzioni agent)
-    └── .qdrant-sync-state.json (stato sync)
-
-gsd_memory (single Qdrant collection, bge-m3-1024 vectors)
-├── type: doc          → .gsd/*.md (STATE.md escluso)
-└── type: code         → src/**/*.js,ts,py,go,...
-    ├── signatures, comments, exports, imports
-    └── relatedDocPaths → docs collegati (GSD IDs matching)
-```
-
-**Prima (v2.3.1):** il tool copiava file JS dentro `gsd-qdrant-knowledge/` nel progetto → tokens sprecati, duplicazione.
-**Ora (v2.3.2):** installazione una volta sola, setup crea solo config. Zero file JS nel progetto.
-
-**Link bidirezionale docs ↔ code:** durante l'indicizzazione, il tool estrae i GSD IDs (M001, S02, T03…) da ogni file. Se uno snippet di codice cita `M003/S01/` e un doc contiene gli stessi IDs, il link viene creato automaticamente.
-
-**Sibling expansion:** quando una query trova `ProjectCard.jsx`, il sistema cerca anche `ProjectCard.css`, `ProjectCard.test.js` nello stesso path — lo stem del file funziona da chiave per recuperare tutti i file correlati senza bisogno che la query li menzioni esplicitamente.
-
-- **GSD = source of truth** — i file `.gsd/` del progetto corrente restano gestiti localmente
-- **Qdrant = enhancer** — memoria condivisa tra progetti, non sostituzione del contesto locale
-- **Nessuna scrittura dentro `.gsd/`** — il tool rispetta i flussi nativi di GSD
-
 ## CLI
 
 ```bash
@@ -154,13 +122,13 @@ gsd-qdrant-knowledge context "query"        # Query semantica manuale
 gsd-qdrant-knowledge uninstall              # Rimuove gli artifact
 ```
 
-Installazione completa: **[SETUP.md](SETUP.md)**
+Installazione e configurazione: **[SETUP.md](SETUP.md)**
 
 ## Integrazione
 
-Il tool espone un **MCP server** (`gsd-qdrant-mcp`) con lo strumento `auto_retrieve`. Attualmente integrato con **GSD/pi** tramite hook `before_provider_request`, l'architettura è agnostica e può essere adattata ad altri agent.
+Il tool espone un **MCP server** (`gsd-qdrant-mcp`) con lo strumento `auto_retrieve`. È già testato e funzionante con **GSD/pi** e **Claude Code**, quindi presumibilmente compatibile con tutti gli agenti che seguono lo stesso pattern MCP (Stdio + `.mcp.json`). Agent non ancora testati potrebbero richiedere adattamenti minori.
 
-Durante il bootstrap, il progetto registra automaticamente il server in `.mcp.json` — nessuna configurazione manuale richiesta.
+Durante il setup, il progetto registra automaticamente il server in `.mcp.json` — nessuna configurazione manuale richiesta.
 
 ---
 

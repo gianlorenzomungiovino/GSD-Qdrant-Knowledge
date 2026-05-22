@@ -77,23 +77,7 @@ gsd-qdrant-knowledge migrate
 
 Questo rimuove la vecchia cartella, pulisce `.gitignore` e suggerisce di lanciare `setup`.
 
-## 4. Comandi disponibili
-
-| Comando | Descrizione |
-|---|---|
-| `gsd-qdrant-knowledge setup` | Setup progetto (config minimi + sync iniziale) |
-| `gsd-qdrant-knowledge migrate` | Migra da v2.3.1 — rimuove vecchia cartella `gsd-qdrant-knowledge/` |
-| `gsd-qdrant-knowledge sync` | Sincronizza conoscenza (da lanciare manualmente o tramite hook post-commit) |
-| `gsd-qdrant-knowledge context "<query>"` | Ricerca semantica manuale |
-| `gsd-qdrant-knowledge uninstall` | Rimuove artifact progetto senza toccare `.gsd/` |
-
-## 5. Verifica rapida
-
-Collection presenti:
-
-```bash
-curl -s http://localhost:6333/collections
-```
+## 4. Verifica rapida
 
 Verifica MCP nel progetto:
 
@@ -103,23 +87,7 @@ cat .mcp.json
 
 Dovresti vedere il server `gsd-qdrant` con command, args e env configurati.
 
-## 6. Query manuale
-
-```bash
-gsd-qdrant-knowledge context "query"
-```
-
-Per come funziona il retrieval automatico (auto-retrieve hook, scoring, link bidirezionali): [README.md](README.md)
-
-## 7. Uninstall
-
-```bash
-gsd-qdrant-knowledge uninstall
-```
-
-Rimuove gli artifact del tool dal progetto senza toccare `.gsd/`.
-
-## Variabili ambiente
+## 5. Variabili ambiente
 
 | Variabile | Default | Descrizione |
 |---|---|---|
