@@ -1,86 +1,85 @@
 #!/usr/bin/env node
 
 /**
- * GSD + Qdrant CLI - Main entry point
+ * GSD + Qdrant CLI - Main entry point (v2.3.2+)
+ *
+ * Architecture:
+ * - Installed globally or locally via npm (bin entries)
+ * - Project setup creates ONLY config files (.mcp.json, hooks, .gsd/KNOWLEDGE.md)
+ * - NO JavaScript files are copied into the project
  */
 
 const { spawnSync } = require('child_process');
 const http = require('http');
 const fs = require('fs');
-const { existsSync, readFileSync, mkdirSync, writeFileSync, copyFileSync, rmSync, unlinkSync } = fs;
-const { join, dirname, extname, basename } = require('path');
-const readline = require('readline');
-const { applyRecencyBoost, applySymbolBoost, extractTokens, estimateTokens, trimResultsByTokenBudget } = require('./re-ranking');
+const { existsSync, readFileSync, mkdirSync, writeFileSync, rmSync, unlinkSync } = fs;
+const { join, dirname, basename, relative, resolve } = require('path');
+const os = require('os');
+const { applyRecencyBoost, applySymbolBoost, extractKeywords, estimateTokens, trimResultsByTokenBudget, sortChunksByPosition, formatResultsForOutput } = require('./re-ranking');
 
 const PROJECT_ROOT = process.cwd();
 const ROOT_PKG = join(PROJECT_ROOT, 'package.json');
 const API_PKG = join(PROJECT_ROOT, 'apps', 'api', 'package.json');
-const CLI_ROOT = __dirname;
-const TOOL_DIR_NAME = 'gsd-qdrant-knowledge';
-const TOOL_DIR = join(PROJECT_ROOT, TOOL_DIR_NAME);
-const TOOL_MCP_FILE = join(TOOL_DIR, 'mcp.json');
-const ROOT_MCP_FILE = join(PROJECT_ROOT, '.mcp.json');
-const TOOL_MARKER = 'managedBy';
-const TOOL_MARKER_VALUE = 'gsd-qdrant-knowledge';
-const MCP_SERVER_NAME = 'gsd-qdrant';
-
 const DEFAULT_QDRANT_URL = 'http://localhost:6333';
 const QDRANT_HEALTHZ_PATH = '/healthz';
+const OLD_TOOL_DIR_NAME = 'gsd-qdrant-knowledge';
+
+// ─── Argument parsing ────────────────────────────────────────────────
+
+function parseArgs(argv) {
+  const args = {};
+  const positional = [];
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i].startsWith('--')) {
+      const key = argv[i].slice(2);
+      const next = argv[i + 1];
+      if (next && !next.startsWith('--')) {
+        args[key] = next;
+        i++;
+      } else {
+        args[key] = true;
+      }
+    } else {
+      positional.push(argv[i]);
+    }
+  }
+  return { positional, args };
+}
+
+// ─── MCP Server path resolution (for .mcp.json generation) ───────────
 
 /**
- * Resolve the actual path to gsd-qdrant-mcp/index.js.
- * Tries: local node_modules → global npm root → relative (dev symlink).
- * Returns null if nothing is found.
+ * Resolve the command to use for gsd-qdrant-mcp.
+ * Tries: npm bin resolution → global npm root → fallback to bare command name.
  */
-function getMcpServerPath() {
-  // 1. Local resolution
+function getMcpServerCommand() {
+  // 1. Try to resolve via npm (works for local/global installs)
   try {
     const resolved = require.resolve('gsd-qdrant-knowledge');
     const mcpPath = join(dirname(resolved), 'src', 'gsd-qdrant-mcp', 'index.js');
-    if (existsSync(mcpPath)) return mcpPath;
-  } catch (_) {}
-
-  // 2. Global npm root resolution
-  try {
-    const globalModules = getGlobalNodeModulesPath();
-    if (globalModules) {
-      const mcpPath = join(globalModules, 'gsd-qdrant-knowledge', 'src', 'gsd-qdrant-mcp', 'index.js');
-      if (existsSync(mcpPath)) return mcpPath;
+    if (existsSync(mcpPath)) {
+      // Return node + path for maximum compatibility
+      return { command: 'node', args: [mcpPath] };
     }
   } catch (_) {}
 
-  // 3. Relative path from CLI root (development / symlink)
-  const cliRoot = __dirname;
-  const candidates = [
-    join(cliRoot, 'gsd-qdrant-mcp', 'index.js'),
-    join(dirname(cliRoot), 'src', 'gsd-qdrant-mcp', 'index.js'),
-  ];
-  for (const p of candidates) {
-    if (existsSync(p)) return p;
-  }
+  // 2. Try global npm root
+  try {
+    const result = spawnSync('npm', ['root', '-g'], { shell: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    if (result.status === 0) {
+      const globalModules = result.stdout.toString().trim();
+      const mcpPath = join(globalModules, 'gsd-qdrant-knowledge', 'src', 'gsd-qdrant-mcp', 'index.js');
+      if (existsSync(mcpPath)) {
+        return { command: 'node', args: [mcpPath] };
+      }
+    }
+  } catch (_) {}
 
-  return null;
+  // 3. Fallback: bare command name (assumes gsd-qdrant-mcp is in PATH)
+  return { command: 'gsd-qdrant-mcp', args: [] };
 }
 
-function findFileInCliRoot(filename) {
-  const pathInCliRoot = join(CLI_ROOT, filename);
-  if (existsSync(pathInCliRoot)) return pathInCliRoot;
-  return join(dirname(CLI_ROOT), filename);
-}
-
-function getExtensionForLanguage(language) {
-  if (!language) return '.js';
-  const lang = language.toLowerCase();
-  const extensions = {
-    javascript: '.js', js: '.js', typescript: '.ts', ts: '.ts', python: '.py', py: '.py',
-    go: '.go', rust: '.rs', java: '.java', c: '.c', cpp: '.cpp', 'c++': '.cpp', 'c#': '.cs',
-    ruby: '.rb', php: '.php', swift: '.swift', kt: '.kt', kotlin: '.kt', scala: '.scala',
-    html: '.html', css: '.css', scss: '.scss', less: '.less', json: '.json', yaml: '.yaml',
-    yml: '.yml', markdown: '.md', md: '.md', sql: '.sql', sh: '.sh', bash: '.sh', zsh: '.zsh',
-    powershell: '.ps1', r: '.r', rscript: '.r'
-  };
-  return extensions[lang] || '.js';
-}
+// ─── Helper utilities ────────────────────────────────────────────────
 
 function run(command, args, options = {}) {
   return spawnSync(command, args, {
@@ -91,68 +90,16 @@ function run(command, args, options = {}) {
   });
 }
 
-const REQUIRED_PACKAGES = [
-  '@qdrant/js-client-rest',
-  '@xenova/transformers',
-  '@modelcontextprotocol/sdk',
-  'zod'
-];
-
-function findPackagePath() {
-  if (existsSync(API_PKG)) return API_PKG;
-  if (existsSync(ROOT_PKG)) return ROOT_PKG;
+function findFileInCliRoot(filename) {
+  const cliRoot = __dirname;
+  const candidates = [
+    join(cliRoot, filename),
+    join(dirname(cliRoot), 'src', filename),
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
   return null;
-}
-
-function getGlobalNodeModulesPath() {
-  try {
-    const result = spawnSync('npm', ['root', '-g'], { shell: true });
-    if (result.status === 0) return result.stdout.toString().trim();
-  } catch (_) {}
-  return null;
-}
-
-function areRequiredPackagesInstalled(projectRoot, pkgPath) {
-  try {
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-    const declaredDeps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
-
-    for (const dep of REQUIRED_PACKAGES) {
-      if (!declaredDeps[dep]) continue;
-      try {
-        require.resolve(dep, { paths: [projectRoot] });
-        continue;
-      } catch (_) {
-        const globalPath = getGlobalNodeModulesPath();
-        if (globalPath) {
-          try {
-            require.resolve(dep, { paths: [globalPath] });
-            continue;
-          } catch (_) {}
-        }
-        return false;
-      }
-    }
-
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-
-function installDependencies(pkgPath) {
-  if (areRequiredPackagesInstalled(PROJECT_ROOT, pkgPath)) {
-    console.log('📦 Dependencies: ok');
-    return 'ok';
-  }
-
-  console.log('📦 Dependencies: installing missing packages...');
-  const result = run('npm', ['install', ...REQUIRED_PACKAGES], { cwd: PROJECT_ROOT });
-  if (result.status !== 0) {
-    console.error('❌ Dependency installation failed.');
-    process.exit(result.status || 1);
-  }
-  return 'installed';
 }
 
 function readJsonFile(path, fallback) {
@@ -167,22 +114,20 @@ function writeJsonFile(path, value) {
   writeFileSync(path, JSON.stringify(value, null, 2) + '\n', 'utf8');
 }
 
-// ─── QDrant health check ──────────────────────────────────────────────
+function findPackagePath() {
+  if (existsSync(API_PKG)) return API_PKG;
+  if (existsSync(ROOT_PKG)) return ROOT_PKG;
+  return null;
+}
 
-/**
- * Check if a QDrant server is healthy at the given URL.
- * Qdrant v1.x returns plain text "healthz check passed" on /healthz.
- * Returns true if the response indicates health.
- * @param {string} url - Base URL (e.g. http://localhost:6333)
- * @returns {Promise<boolean>}
- */
+// ─── QDrant health check ─────────────────────────────────────────────
+
 async function checkQdrantHealth(url) {
   return new Promise((resolve) => {
     const req = http.get(`${url}${QDRANT_HEALTHZ_PATH}`, (res) => {
       let body = '';
       res.on('data', (chunk) => { body += chunk; });
       res.on('end', () => {
-        // Qdrant v1.x returns plain text "healthz check passed"
         const ok = body.includes('ok') || body.includes('passed');
         resolve(ok);
       });
@@ -192,13 +137,8 @@ async function checkQdrantHealth(url) {
   });
 }
 
-/**
- * Check if QDrant is running. Exits with error if not available.
- * @returns {{ url: string }}
- */
 async function ensureQdrantRunning() {
   const qdrantUrl = process.env.QDRANT_URL || DEFAULT_QDRANT_URL;
-
   const healthy = await checkQdrantHealth(qdrantUrl);
   if (healthy) {
     console.log('✅ QDrant server detected at ' + qdrantUrl);
@@ -211,120 +151,256 @@ async function ensureQdrantRunning() {
   process.exit(1);
 }
 
-function createGsdQdrantDirectory(projectRoot) {
-  const stateFile = join(TOOL_DIR, '.qdrant-sync-state.json');
-  const packageFile = join(TOOL_DIR, 'package.json');
-  const indexFile = join(TOOL_DIR, 'index.js');
+// ─── Setup command (v2.3.2) ──────────────────────────────────────────
 
-  if (!existsSync(TOOL_DIR)) {
-    mkdirSync(TOOL_DIR, { recursive: true });
-    console.log(`📂 Created directory: ${TOOL_DIR_NAME}/`);
+/**
+ * Setup the project for GSD + Qdrant integration.
+ * Creates minimal config files only — no JS copying.
+ */
+function setupProject() {
+  console.log('🚀 GSD + Qdrant — Project Setup\n');
+
+  const mcpCommand = getMcpServerCommand();
+  const qdrantUrl = process.env.QDRANT_URL || DEFAULT_QDRANT_URL;
+  const collectionName = process.env.COLLECTION_NAME || 'gsd_memory';
+  const vectorName = process.env.VECTOR_NAME || 'bge-m3-1024';
+
+  // 1. Check for old installation artifacts
+  const oldToolDir = join(PROJECT_ROOT, OLD_TOOL_DIR_NAME);
+  if (existsSync(oldToolDir)) {
+    console.warn(`⚠️  Found old ${OLD_TOOL_DIR_NAME}/ directory.`);
+    console.warn('   This is no longer used. Run `gsd-qdrant-knowledge migrate` to clean it up.');
+    console.warn('   Continuing with new setup...\n');
   }
 
-  if (!existsSync(stateFile)) {
-    writeJsonFile(stateFile, { lastSync: null, indexed: {} });
-    console.log(`📝 Created: ${TOOL_DIR_NAME}/.qdrant-sync-state.json`);
+  // 2. Create .mcp.json
+  const mcpJsonPath = join(PROJECT_ROOT, '.mcp.json');
+  const existingMcp = readJsonFile(mcpJsonPath, { mcpServers: {} });
+  const mcpServers = existingMcp.mcpServers && typeof existingMcp.mcpServers === 'object'
+    ? existingMcp.mcpServers
+    : {};
+
+  const desiredServerConfig = {
+    command: mcpCommand.command,
+    args: [...(mcpCommand.args || []), '--project', PROJECT_ROOT],
+    env: {
+      QDRANT_URL: qdrantUrl,
+      COLLECTION_NAME: collectionName,
+      VECTOR_NAME: vectorName,
+    },
+  };
+
+  const previousConfig = mcpServers['gsd-qdrant'] || null;
+  const previousStr = previousConfig ? JSON.stringify(previousConfig) : null;
+  const nextStr = JSON.stringify(desiredServerConfig);
+
+  if (previousStr !== nextStr) {
+    mcpServers['gsd-qdrant'] = desiredServerConfig;
+    existingMcp.mcpServers = mcpServers;
+    writeJsonFile(mcpJsonPath, existingMcp);
+    console.log('📝 Created/Updated: .mcp.json');
+  } else {
+    console.log('ℹ️  .mcp.json already configured');
   }
 
-  if (!existsSync(packageFile)) {
-    writeFileSync(packageFile, JSON.stringify({ type: 'commonjs' }, null, 2) + '\n', 'utf8');
-    console.log(`📝 Created: ${TOOL_DIR_NAME}/package.json`);
-  }
+  // 3. Install post-commit hook
+  installPostCommitHook();
 
-  if (!existsSync(indexFile)) {
-    const templateIndexFile = findFileInCliRoot('gsd-qdrant-template.js');
-    copyFileSync(templateIndexFile, indexFile);
-    console.log(`📝 Created: ${TOOL_DIR_NAME}/index.js`);
-  }
-}
+  // 4. Create .gsd/KNOWLEDGE.md if not exists
+  const knowledgePath = join(PROJECT_ROOT, '.gsd', 'KNOWLEDGE.md');
+  if (!existsSync(knowledgePath)) {
+    mkdirSync(dirname(knowledgePath), { recursive: true });
+    const pkgPath = findFileInCliRoot('package.json');
+    const pkg = pkgPath ? JSON.parse(readFileSync(pkgPath, 'utf8')) : { version: '2.3.2' };
 
-function ensureToolMcpConfig() {
-  const mcpPath = getMcpServerPath();
-  if (!mcpPath) {
-    console.warn('⚠️  Cannot resolve gsd-qdrant-mcp path. Please reinstall the package.');
-    return;
-  }
+    const knowledgeContent = `# Project Knowledge
 
-  const config = {
-    [TOOL_MARKER]: TOOL_MARKER_VALUE,
-    serverName: MCP_SERVER_NAME,
-    mcpServers: {
-      [MCP_SERVER_NAME]: {
-        command: 'node',
-        args: [mcpPath],
-        cwd: '.',
-        env: {
-          QDRANT_URL: process.env.QDRANT_URL || 'http://localhost:6333',
-          COLLECTION_NAME: process.env.COLLECTION_NAME || 'gsd_memory',
-          VECTOR_NAME: process.env.VECTOR_NAME || 'bge-m3-1024'
-        }
+Append-only register of project-specific rules, patterns, and lessons learned.
+Agents read this before every unit. Add entries when you discover something worth remembering.
+## Cross-Project Knowledge Retrieval (Qdrant)
+
+GSD-Qdrant is installed. Use \`auto_retrieve\` (via \`gsd-qdrant\` MCP server) to query cross-project knowledge.
+
+### When to use
+
+**Use \`auto_retrieve\` for:**
+- Library/framework/component questions, API usage, design patterns
+- When local search returns nothing or the topic might exist in other GSD projects
+
+### How to call
+
+\`\`\`
+auto_retrieve(task: "your task description", limit: 3, includeContent: false)
+\`\`\`
+
+Set \`includeContent: true\` when you need full source text, not just summaries.
+
+### Query tips
+
+Before calling, distill your question into **2-4 keywords** (concrete nouns/verbs, no filler).
+
+1. **Keep exact identifiers** — function/class/library names, file paths as-is
+2. **Strip conversational framing** — remove questions, polite words, fillers
+3. **Include all topics** — list distinct concepts, drop connecting words
+4. **Any language works** — bge-m3 is multilingual; keep terms in their original language
+
+### Notes
+
+- Results ranked by semantic relevance + cross-project boost
+- MCP server configured in \`.mcp.json\` as \`gsd-qdrant\`
+`;
+    writeFileSync(knowledgePath, knowledgeContent, 'utf8');
+    console.log('📝 Created: .gsd/KNOWLEDGE.md');
+  } else {
+    // Ensure the Qdrant section is present (version-aware update)
+    const instructionsScript = findFileInCliRoot('knowledge-instructions.js');
+    if (existsSync(instructionsScript)) {
+      try {
+        const { ensureKnowledgeInstructions } = require(instructionsScript);
+        ensureKnowledgeInstructions({ cwd: PROJECT_ROOT });
+      } catch (err) {
+        console.warn('⚠️  Knowledge instructions update failed:', err.message);
       }
     }
-  };
-  const existed = existsSync(TOOL_MCP_FILE);
-  writeJsonFile(TOOL_MCP_FILE, config);
-  console.log(`${existed ? '📝 Updated' : '📝 Created'}: ${TOOL_DIR_NAME}/mcp.json`);
-}
-
-function ensureRootMcpRegistration() {
-  const mcpPath = getMcpServerPath();
-  if (!mcpPath) {
-    console.warn('⚠️  Cannot resolve gsd-qdrant-mcp path. Please reinstall the package.');
-    return;
   }
 
-  const current = readJsonFile(ROOT_MCP_FILE, { mcpServers: {} });
-  const mcpServers = current.mcpServers && typeof current.mcpServers === 'object' ? current.mcpServers : {};
-  const desired = {
-    command: 'node',
-    args: [mcpPath],
-    cwd: '.',
-    env: {
-      QDRANT_URL: process.env.QDRANT_URL || 'http://localhost:6333',
-      COLLECTION_NAME: process.env.COLLECTION_NAME || 'gsd_memory',
-      VECTOR_NAME: process.env.VECTOR_NAME || 'bge-m3-1024'
+  // 5. Check dependencies
+  const pkgPath = findPackagePath();
+  if (!pkgPath) {
+    console.error('❌ No package.json found. Are you in a Node.js project?');
+    process.exit(1);
+  }
+
+  console.log(`📁 Project: ${basename(PROJECT_ROOT)}`);
+
+  // 6. Ensure QDrant is running before initial sync
+  const qdrantResult = ensureQdrantRunning();
+
+  // 7. Run initial sync
+  console.log('\n🔄 Running initial sync...');
+  try {
+    const templatePath = findFileInCliRoot('gsd-qdrant-template.js');
+    if (!templatePath) {
+      console.error('❌ Cannot find gsd-qdrant-template.js. Package may be corrupted.');
+      process.exit(1);
     }
-  };
+    const { GSDKnowledgeSync } = require(templatePath);
+    const sync = new GSDKnowledgeSync();
+    // Override project root if --project was passed
+    if (process.argv.includes('--project')) {
+      const projIdx = process.argv.indexOf('--project');
+      sync.projectName = basename(process.argv[projIdx + 1]);
+    }
+    sync.init().then(async () => {
+      const summary = await sync.syncToGsdMemory();
+      console.log(`✅ Initial sync complete! Indexed: ${summary.total}`);
+      console.log('\n✅ Setup complete. Use `gsd-qdrant-knowledge context <query>` to search.');
+      process.exit(0);
+    }).catch((syncErr) => {
+      console.error('\n❌ Initial knowledge sync failed.');
+      console.error('   Error:', syncErr.message);
+      console.error('   Make sure QDrant is running and the collection exists.');
+      process.exit(1);
+    });
+  } catch (syncErr) {
+    console.error('\n❌ Initial sync failed:', syncErr.message);
+    process.exit(1);
+  }
+}
 
-  const previous = JSON.stringify(mcpServers[MCP_SERVER_NAME] || null);
-  const next = JSON.stringify(desired);
-  if (previous === next) {
-    console.log('ℹ️  MCP server already registered in .mcp.json');
+// ─── Migrate command (cleanup old installation) ──────────────────────
+
+function migrateProject() {
+  console.log('🔄 GSD + Qdrant — Migration\n');
+
+  const oldToolDir = join(PROJECT_ROOT, OLD_TOOL_DIR_NAME);
+  if (!existsSync(oldToolDir)) {
+    console.log('ℹ️  No old installation found. Nothing to migrate.');
     return;
   }
 
-  mcpServers[MCP_SERVER_NAME] = desired;
-  current.mcpServers = mcpServers;
-  writeJsonFile(ROOT_MCP_FILE, current);
-  console.log('📝 Updated: .mcp.json');
+  console.log(`🧹 Removing old ${OLD_TOOL_DIR_NAME}/ directory...`);
+  rmSync(oldToolDir, { recursive: true, force: true });
+  console.log(`✅ Removed: ${OLD_TOOL_DIR_NAME}/`);
+
+  // Clean up .gitignore entry
+  removeFromGitignore(PROJECT_ROOT, `${OLD_TOOL_DIR_NAME}/`);
+
+  // Clean up old MCP config if it exists in the old directory
+  const oldMcpPath = join(oldToolDir, 'mcp.json'); // already deleted, but just in case
+  // Clean up old root .mcp.json registration (will be recreated by setup)
+  removeRootMcpRegistration();
+
+  console.log('\n✅ Migration complete. Run `gsd-qdrant-knowledge setup` to configure the new architecture.');
 }
 
-function removeRootMcpRegistration() {
-  if (!existsSync(ROOT_MCP_FILE)) return;
-  const current = readJsonFile(ROOT_MCP_FILE, null);
-  if (!current || !current.mcpServers || !current.mcpServers[MCP_SERVER_NAME]) return;
-  delete current.mcpServers[MCP_SERVER_NAME];
-  if (Object.keys(current.mcpServers).length === 0) {
-    unlinkSync(ROOT_MCP_FILE);
-    console.log('🧹 Removed: .mcp.json');
-    return;
+// ─── Uninstall command ───────────────────────────────────────────────
+
+async function uninstallProjectArtifacts() {
+  // Step 1: Clean up Qdrant collection
+  const qdrantUrl = process.env.QDRANT_URL || DEFAULT_QDRANT_URL;
+  try {
+    const templatePath = findFileInCliRoot('gsd-qdrant-template.js');
+    if (templatePath) {
+      const { GSDKnowledgeSync } = require(templatePath);
+      const sync = new GSDKnowledgeSync();
+      sync.client = new (require('@qdrant/js-client-rest').QdrantClient)({ url: qdrantUrl });
+      const deleted = await sync.deleteAllProjectPoints();
+      if (deleted > 0) {
+        console.log(`🧹 Qdrant: Deleted ${deleted} point(s) for project '${sync.projectName}'`);
+      } else {
+        console.log(`ℹ️  Qdrant: No points found for project '${sync.projectName}'`);
+      }
+    }
+  } catch (err) {
+    console.warn('⚠️  Qdrant cleanup skipped:', err.message);
   }
-  writeJsonFile(ROOT_MCP_FILE, current);
-  console.log('🧹 Updated: .mcp.json');
+
+  // Step 2: Remove local artifacts
+  removeRootMcpRegistration();
+
+  const hooksDir = join(PROJECT_ROOT, '.git', 'hooks');
+  if (existsSync(hooksDir)) {
+    for (const hook of ['post-commit.sh', 'post-commit.bat', 'post-commit.ps1']) {
+      const hookPath = join(hooksDir, hook);
+      if (existsSync(hookPath)) {
+        try {
+          const content = readFileSync(hookPath, 'utf8');
+          if (content.includes('gsd-qdrant-knowledge')) {
+            unlinkSync(hookPath);
+            console.log(`🧹 Removed: .git/hooks/${hook}`);
+          }
+        } catch (_) {}
+      }
+    }
+  }
+
+  // Remove old directory if it still exists
+  if (existsSync(join(PROJECT_ROOT, OLD_TOOL_DIR_NAME))) {
+    rmSync(join(PROJECT_ROOT, OLD_TOOL_DIR_NAME), { recursive: true, force: true });
+    console.log(`🧹 Removed: ${OLD_TOOL_DIR_NAME}/`);
+  }
+
+  // Remove auto-retrieve instructions
+  const instructionsScript = findFileInCliRoot('knowledge-instructions.js');
+  if (existsSync(instructionsScript)) {
+    try {
+      const { removeKnowledgeInstructions } = require(instructionsScript);
+      removeKnowledgeInstructions({ cwd: PROJECT_ROOT });
+    } catch (err) {
+      console.warn('⚠️  Knowledge instructions cleanup failed:', err.message);
+    }
+  }
 }
+
+// ─── Gitignore helpers ───────────────────────────────────────────────
 
 async function addToGitignore(projectRoot, entry) {
   const gitignorePath = join(projectRoot, '.gitignore');
-  if (!existsSync(gitignorePath)) {
-    console.log('ℹ️  .gitignore not found, skipping');
-    return;
-  }
+  if (!existsSync(gitignorePath)) return;
   const content = await fs.promises.readFile(gitignorePath, 'utf8');
   const lines = content.split('\n');
-  if (lines.some(line => line.trim() === entry)) {
-    console.log('ℹ️  Entry already in .gitignore');
-    return;
-  }
+  if (lines.some(line => line.trim() === entry)) return;
   await fs.promises.writeFile(gitignorePath, content + '\n' + entry + '\n', 'utf8');
   console.log(`📝 Added '${entry}' to .gitignore`);
 }
@@ -344,64 +420,24 @@ async function removeFromGitignore(projectRoot, entry) {
   }
 }
 
-async function uninstallProjectArtifacts() {
-  // Step 1: Clean up Qdrant collection FIRST — delete all points for this project
-  // Uses server-side filter (scroll ignores unknown params) so only matching points are fetched.
-  const qdrantUrl = process.env.QDRANT_URL || DEFAULT_QDRANT_URL;
-  try {
-    const templatePath = findFileInCliRoot('gsd-qdrant-template.js');
-    if (templatePath) {
-      const { GSDKnowledgeSync } = require(templatePath);
-      // Override QDRANT_URL env for this instance
-      const sync = new GSDKnowledgeSync();
-      sync.client = new (require('@qdrant/js-client-rest').QdrantClient)({ url: qdrantUrl });
-      const deleted = await sync.deleteAllProjectPoints();
-      if (deleted > 0) {
-        console.log(`🧹 Qdrant: Deleted ${deleted} point(s) for project '${sync.projectName}'`);
-      } else {
-        console.log(`ℹ️  Qdrant: No points found for project '${sync.projectName}'`);
-      }
-    }
-  } catch (err) {
-    console.warn('⚠️  Qdrant cleanup skipped (collection may not exist or be unreachable):', err.message);
-  }
+// ─── MCP registration helpers ────────────────────────────────────────
 
-  // Step 2: Remove local artifacts
-  removeRootMcpRegistration();
-
-  const hooksDir = join(PROJECT_ROOT, '.git', 'hooks');
-  if (existsSync(hooksDir)) {
-    for (const hook of ['post-commit.sh', 'post-commit.bat']) {
-      const hookPath = join(hooksDir, hook);
-      if (existsSync(hookPath)) {
-        // Verifica che sia il nostro hook prima di rimuovere
-        try {
-          const content = readFileSync(hookPath, 'utf8');
-          if (content.includes('gsd-qdrant-knowledge')) {
-            unlinkSync(hookPath);
-            console.log(`🧹 Removed: .git/hooks/${hook}`);
-          }
-        } catch (_) {}
-      }
-    }
+function removeRootMcpRegistration() {
+  const rootMcpPath = join(PROJECT_ROOT, '.mcp.json');
+  if (!existsSync(rootMcpPath)) return;
+  const current = readJsonFile(rootMcpPath, null);
+  if (!current || !current.mcpServers || !current.mcpServers['gsd-qdrant']) return;
+  delete current.mcpServers['gsd-qdrant'];
+  if (Object.keys(current.mcpServers).length === 0) {
+    unlinkSync(rootMcpPath);
+    console.log('🧹 Removed: .mcp.json');
+    return;
   }
-
-  if (existsSync(TOOL_DIR)) {
-    rmSync(TOOL_DIR, { recursive: true, force: true });
-    console.log(`🧹 Removed: ${TOOL_DIR_NAME}/`);
-  }
-
- // Remove auto-retrieve instructions from project-level KNOWLEDGE.md
-  const instructionsScript = findFileInCliRoot('knowledge-instructions.js');
-  if (existsSync(instructionsScript)) {
-    try {
-      const { removeKnowledgeInstructions } = require(instructionsScript);
-      removeKnowledgeInstructions({ cwd: PROJECT_ROOT });
-    } catch (err) {
-      console.warn('⚠️  Knowledge instructions cleanup failed:', err.message);
-    }
-  }
+  writeJsonFile(rootMcpPath, current);
+  console.log('🧹 Updated: .mcp.json');
 }
+
+// ─── Post-commit hook installer ──────────────────────────────────────
 
 function installPostCommitHook() {
   const hooksDir = join(PROJECT_ROOT, '.git', 'hooks');
@@ -411,11 +447,9 @@ function installPostCommitHook() {
   const hookName = isWindows ? 'post-commit.bat' : 'post-commit.sh';
   const hookPath = join(hooksDir, hookName);
 
-  // Cerca il template in ordine: src/hooks/ → root/hooks/
   const templates = [
-    join(CLI_ROOT, 'hooks', hookName),
-    join(dirname(CLI_ROOT), 'src', 'hooks', hookName),
-    join(PROJECT_ROOT, 'src', 'hooks', hookName),
+    join(__dirname, 'hooks', hookName),
+    join(dirname(__dirname), 'src', 'hooks', hookName),
   ];
 
   let hookContent = null;
@@ -437,421 +471,174 @@ function installPostCommitHook() {
   console.log(`📝 Post-commit hook installed (${hookName})`);
 }
 
-async function bootstrapProject() {
-  console.log('🚀 GSD + Qdrant CLI\n');
-  createGsdQdrantDirectory(PROJECT_ROOT);
+// ─── Sync command ────────────────────────────────────────────────────
 
-  // Ensure auto-retrieve instructions are in project-level KNOWLEDGE.md (safe to run multiple times)
-  const instructionsScript = findFileInCliRoot('knowledge-instructions.js');
-  if (existsSync(instructionsScript)) {
-    try {
-      const { ensureKnowledgeInstructions } = require(instructionsScript);
-      ensureKnowledgeInstructions();
-    } catch (err) {
-      console.warn('⚠️  Knowledge instructions setup failed:', err.message);
+async function runSync() {
+  try {
+    const templatePath = findFileInCliRoot('gsd-qdrant-template.js');
+    if (!templatePath) {
+      console.error('❌ Cannot find gsd-qdrant-template.js.');
+      process.exit(1);
     }
+    const { GSDKnowledgeSync } = require(templatePath);
+    const sync = new GSDKnowledgeSync();
+    await sync.init();
+    const summary = await sync.syncToGsdMemory();
+    console.log(`✅ Sync complete: ${summary.total} indexed, ${summary.deleted || 0} orphans deleted`);
+  } catch (err) {
+    console.error('❌ Sync failed:', err.message);
+    process.exit(1);
   }
+}
 
-  const installExtensionScript = findFileInCliRoot('install-gsd-extension.js');
-  if (existsSync(installExtensionScript)) {
-    const installResult = spawnSync('node', [installExtensionScript], {
-      cwd: PROJECT_ROOT,
-      stdio: 'inherit',
-      shell: false
-    });
-    if (installResult.status !== 0) {
-      console.error('⚠️  GSD extension installation failed');
-    }
-  }
+// ─── Context command ─────────────────────────────────────────────────
 
-  ensureToolMcpConfig();
-  ensureRootMcpRegistration();
-
-  const pkgPath = findPackagePath();
-  if (!pkgPath) {
-    console.error('❌ No package.json found. Are you in a Node.js project?');
+async function runContext(query) {
+  const templatePath = findFileInCliRoot('gsd-qdrant-template.js');
+  if (!templatePath) {
+    console.error('❌ Cannot find gsd-qdrant-template.js.');
     process.exit(1);
   }
 
-  console.log(`📁 Project: ${basename(PROJECT_ROOT)}`);
-  installDependencies(pkgPath);
-  run('node', [findFileInCliRoot('setup-from-templates.js')], { cwd: PROJECT_ROOT });
+  const { GSDKnowledgeSync } = require(templatePath);
+  const intentDetector = require(findFileInCliRoot('intent-detector.js') || 'src/intent-detector.js');
+  const project_id = basename(PROJECT_ROOT);
 
-  // Install post-commit hook for automatic knowledge sync
-  installPostCommitHook();
-
-  await addToGitignore(PROJECT_ROOT, `${TOOL_DIR_NAME}/`);
-
-  // Ensure QDrant is running before sync
-  const qdrantResult = await ensureQdrantRunning();
-
-  // Run sync with the correct QDRANT_URL in env
-  const syncScript = findFileInCliRoot('sync-knowledge.js');
-  const syncResult = spawnSync('node', [syncScript], {
-    cwd: PROJECT_ROOT,
-    stdio: 'inherit',
-    env: { ...process.env },
-  });
-  if (syncResult.status !== 0) {
-    console.error('\n❌ Initial knowledge sync failed. Collections may be empty.');
-    process.exit(syncResult.status || 1);
+  if (!query) {
+    console.log('❌ Please provide a query for context building.');
+    console.log('Usage: gsd-qdrant-knowledge context <query>');
+    process.exit(1);
   }
 
-  console.log('\n✅ Ready');
-  process.exit(0);
+  const intent = intentDetector.detectIntent(query);
+  const qdrantFilter = intentDetector.buildQdrantFilter(intent);
+
+  const sync = new GSDKnowledgeSync();
+  await sync.init();
+
+  const embeddedQuery = intentDetector.extractKeywords(query) || query;
+  const vector = await sync.embedText(embeddedQuery);
+
+  const SCORE_THRESHOLD = 0.78;
+  const FALLBACK_THRESHOLD = 0.55;
+  const LIMIT = 5;
+  const GROUP_SIZE = 2;
+
+  let hits = [];
+  let groupCount = 0;
+  try {
+    const groupConfig = {
+      vector: { name: sync.vectorName, vector },
+      group_by: 'source',
+      group_size: GROUP_SIZE,
+      limit: LIMIT * 3,
+      with_payload: true,
+      with_vector: false,
+    };
+    if (qdrantFilter) groupConfig.filter = qdrantFilter;
+
+    const groupedResults = await sync.client.searchPointGroups(sync.collectionName, groupConfig);
+    groupCount = groupedResults.groups.length;
+    for (const group of groupedResults.groups) {
+      hits = hits.concat(group.hits);
+    }
+  } catch (groupErr) {
+    console.warn('[qdrant] searchPointGroups not supported, falling back to search');
+    try {
+      const searchConfig = {
+        vector: { name: sync.vectorName, vector },
+        limit: LIMIT * 10,
+        with_payload: true,
+        with_vector: false,
+      };
+      if (qdrantFilter) searchConfig.filter = qdrantFilter;
+      const rawHits = await sync.client.search(sync.collectionName, searchConfig);
+      const sourceCounts = {};
+      for (const hit of rawHits) {
+        const src = hit.payload && hit.payload.source;
+        if (!src || (sourceCounts[src] || 0) >= GROUP_SIZE) continue;
+        sourceCounts[src] = (sourceCounts[src] || 0) + 1;
+        hits.push(hit);
+      }
+      groupCount = Object.keys(sourceCounts).length;
+    } catch (searchErr) {
+      console.warn('[qdrant] search also failed:', searchErr.message);
+    }
+  }
+
+  const totalResults = hits.length;
+  console.log('[qdrant] results: %d total, %d above threshold', totalResults, hits.filter(h => h.score >= SCORE_THRESHOLD).length);
+
+  let rankedHits = hits.filter(hit => hit.score >= SCORE_THRESHOLD);
+  if (rankedHits.length < 2 && totalResults > 0) {
+    console.log(`[qdrant] fallback: only ${rankedHits.length} results above ${SCORE_THRESHOLD.toFixed(2)}, retrying with ${FALLBACK_THRESHOLD.toFixed(2)}`);
+    rankedHits = hits.filter(hit => hit.score >= FALLBACK_THRESHOLD);
+  }
+
+  rankedHits = sortChunksByPosition(rankedHits);
+
+  let rankedResults = rankedHits.map(hit => ({ ...hit.payload, score: hit.score, _query: query }));
+  applyRecencyBoost(rankedResults);
+  applySymbolBoost(rankedResults, query);
+
+  const ranked = rankedResults
+    .sort((a, b) => b.score - a.score)
+    .slice(0, LIMIT);
+
+  const { results: formattedResults, trimmedInfo, totalTokens } = formatResultsForOutput(ranked, { maxTokens: 4000 });
+
+  const elapsed = Date.now() - Date.now(); // placeholder — actual timing not critical here
+  console.log(`[qdrant] group_by: groups=${groupCount}, chunks=${totalResults} (threshold=${SCORE_THRESHOLD.toFixed(2)} → ${rankedHits.length} above)`);
+  if (trimmedInfo && trimmedInfo.trimmed) {
+    console.log(`[retrieval] %d results, ~%d estimated tokens, trimmed to 500 chars per result`, formattedResults.length, totalTokens);
+  }
+
+  console.log(JSON.stringify({ query, project_id, results: formattedResults }, null, 2));
 }
 
-async function main() {
-  const args = process.argv.slice(2);
+// ─── Main ────────────────────────────────────────────────────────────
 
-  if (args[0] === '--version' || args[0] === '-v') {
+async function main() {
+  const rawArgs = process.argv.slice(2);
+  const { positional, args } = parseArgs(rawArgs);
+  const command = positional[0];
+
+  if (args['version'] || args['v'] || command === '--version' || command === '-v') {
     const pkgPath = findFileInCliRoot('package.json');
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
     console.log(`gsd-qdrant-knowledge v${pkg.version}`);
     process.exit(0);
   }
 
-  if (args[0] === 'uninstall') {
-    uninstallProjectArtifacts();
-    await removeFromGitignore(PROJECT_ROOT, `${TOOL_DIR_NAME}/`);
+  if (command === 'setup') {
+    setupProject();
+    return;
+  }
+
+  if (command === 'migrate') {
+    migrateProject();
+    return;
+  }
+
+  if (command === 'uninstall') {
+    await uninstallProjectArtifacts();
+    await removeFromGitignore(PROJECT_ROOT, `${OLD_TOOL_DIR_NAME}/`);
     console.log('\n✅ Uninstall complete');
     return;
   }
 
-  if (args.length === 0) {
-    await bootstrapProject();
+  if (command === 'sync') {
+    await runSync();
     return;
   }
 
-  if (args[0] === 'context') {
-    const { GSDKnowledgeSync } = require(findFileInCliRoot('gsd-qdrant-template.js'));
-    const intentDetector = require(findFileInCliRoot('intent-detector.js'));
-    const query = args[1] || '';
-    const project_id = basename(PROJECT_ROOT);
-
-    if (!query) {
-      console.log('❌ Please provide a query for context building.');
-      console.log('Usage: gsd-qdrant-knowledge context <query>');
-      process.exit(1);
-    }
-
-    // Detect search intent and build Qdrant filter from certain filters (must)
-    // vs uncertain ones (should). The LLM is responsible for normalizing the query;
-    // we only strip known filter keywords that would otherwise pollute the embedding.
-    const intent = intentDetector.detectIntent(query);
-    const qdrantFilter = intentDetector.buildQdrantFilter(intent);
-
-    const sync = new GSDKnowledgeSync();
-    await sync.init();
-    
-    // A+C approach: LLM extracts meaningful terms (prompted in KNOWLEDGE.md),
-    // but we apply a minimal keyword extraction as fallback for any unfiltered query.
-    // extractKeywords is language-agnostic — no stopword lists, just heuristic filtering.
-    const embeddedQuery = intentDetector.extractKeywords(query) || query;
-
-    const vector = await sync.embedText(embeddedQuery);
-
-    // Prefetch-based query with group_by: return max 2 chunks per source document.
-    // Uses searchPointGroups() to deduplicate across source documents.
-    const t0 = Date.now();
-    const PREFETCH_LIMIT = 50; // wider prefetch when must-filter applied
-    const GROUP_SIZE = 2;        // max chunks per source document
-    const LIMIT = 5;             // max results to return
-    const SCORE_THRESHOLD = 0.78;  // calibrated for bge-m3 mean pooling — balanced precision/recall (2.3.1 was too noisy)
-    const FALLBACK_THRESHOLD = 0.55; // lowered threshold if too few results
-
-    let hits = [];
-    let groupCount = 0;
-    try {
-      // searchPointGroups requires the vector query directly (no prefetch syntax).
-      // We use prefetch inside the query via Qdrant's internal mechanism, but since
-      // searchPointGroups does not support prefetch natively, we fall back to the
-      // simpler grouped search approach. The must-filter narrows candidates before scoring.
-      const groupConfig = {
-        vector: { name: sync.vectorName, vector },
-        group_by: 'source',
-        group_size: GROUP_SIZE,
-        limit: LIMIT * 3,  // request more groups so we can filter by threshold after
-        with_payload: true,
-        with_vector: false,
-      };
-      if (qdrantFilter) {
-        groupConfig.filter = qdrantFilter;
-      }
-      const groupedResults = await sync.client.searchPointGroups(
-        sync.collectionName,
-        groupConfig
-      );
-      groupCount = groupedResults.groups.length;
-
-      // Flatten groups into a single hits array (preserving score order within each group)
-      for (const group of groupedResults.groups) {
-        hits = hits.concat(group.hits);
-      }
-    } catch (groupErr) {
-      // Fallback: plain search with grouping done client-side if searchPointGroups fails
-      console.warn('[qdrant] searchPointGroups not supported, falling back to search');
-      try {
-        const searchConfig = {
-          vector: { name: sync.vectorName, vector },
-          limit: LIMIT * 10, // wider search for client-side dedup
-          with_payload: true,
-          with_vector: false,
-        };
-        if (qdrantFilter) {
-          searchConfig.filter = qdrantFilter;
-        }
-        const rawHits = await sync.client.search(sync.collectionName, searchConfig);
-
-        // Client-side dedup: max GROUP_SIZE per source document
-        const sourceCounts = {};
-        for (const hit of rawHits) {
-          const src = hit.payload && hit.payload.source;
-          if (!src || (sourceCounts[src] || 0) >= GROUP_SIZE) continue;
-          sourceCounts[src] = (sourceCounts[src] || 0) + 1;
-          hits.push(hit);
-        }
-        groupCount = Object.keys(sourceCounts).length;
-      } catch (searchErr) {
-        console.warn('[qdrant] search also failed, returning empty:', searchErr.message);
-      }
-    }
-
-    // Log totals before threshold filtering
-    const totalResults = hits.length;
-    console.log('[qdrant] results: %d total, %d above threshold', totalResults, hits.filter(h => h.score >= SCORE_THRESHOLD).length);
-
-    // Apply score threshold filter
-    let rankedHits = hits.filter(hit => hit.score >= SCORE_THRESHOLD);
-
-    // Fallback: if fewer than 2 results above threshold, retry with lowered threshold
-    if (rankedHits.length < 2 && totalResults > 0) {
-      console.log(`[qdrant] fallback: only ${rankedHits.length} results above ${SCORE_THRESHOLD.toFixed(2)}, retrying with ${FALLBACK_THRESHOLD.toFixed(2)}`);
-      rankedHits = hits.filter(hit => hit.score >= FALLBACK_THRESHOLD);
-    }
-
-    // Sort chunks within each file by their position in the source file.
-    // Qdrant returns hits ordered by score, not by line number — this ensures
-    // multi-chunk files are presented to the agent in correct reading order.
-    const sortChunksByPosition = (hits) => {
-      return [...hits].sort((a, b) => {
-        const parentIdA = a.payload?._parent_file || '';
-        const parentIdB = b.payload?._parent_file || '';
-
-        // Different files: keep score order (descending by score)
-        if (parentIdA !== parentIdB) return b.score - a.score;
-
-        // Same file: sort by startLine ascending, then chunkIndex as tiebreaker
-        const lineA = a.payload?.startLine ?? 0;
-        const lineB = b.payload?.startLine ?? 0;
-        if (lineA !== lineB) return lineA - lineB;
-
-        // Fallback to chunkIndex for same-line chunks
-        const idxA = a.payload?.chunkIndex ?? 0;
-        const idxB = b.payload?.chunkIndex ?? 0;
-        return idxA - idxB;
-      });
-    };
-
-    rankedHits = sortChunksByPosition(rankedHits);
-
-    // Map hits to result objects (payload + score), attach _query for path matching
-    let rankedResults = rankedHits.map(hit => {
-      return { ...hit.payload, score: hit.score, _query: query };
-    });
-
-    // Apply recency boost and path matching re-ranking
-    applyRecencyBoost(rankedResults);
-
-    // Symbol boost: increase scores for results whose symbolNames contain query tokens
-    applySymbolBoost(rankedResults, query);
-
-    // Sort by updated score descending and limit to LIMIT results
-    const ranked = rankedResults
-      .sort((a, b) => b.score - a.score)
-      .slice(0, LIMIT);
-
-    // Token estimation: calculate total tokens across all result text fields
-    let totalTokens = 0;
-    for (const r of ranked) {
-      if (!r) continue;
-      const textFields = [r.content, r.summary, r.text].filter(Boolean);
-      for (const field of textFields) {
-        totalTokens += estimateTokens(field);
-      }
-    }
-
-    // Trim results if over token budget (4000 tokens default)
-    let trimmedInfo;
-    try {
-      trimmedInfo = trimResultsByTokenBudget(ranked, { maxTokens: 4000 });
-    } catch (_) { /* non-fatal — proceed with untrimmed */ }
-
-    const elapsed = Date.now() - t0;
-    console.log(`[qdrant] group_by: groups=${groupCount}, chunks=${totalResults} (threshold=${SCORE_THRESHOLD.toFixed(2)} → ${rankedHits.length} above), in ${elapsed}ms`);
-    if (trimmedInfo && trimmedInfo.trimmed) {
-      const charsPerResult = ranked.filter(r => r._truncated).length;
-      console.log(`[retrieval] %d results, ~%d estimated tokens, trimmed to 500 chars per result`, ranked.length, totalTokens);
-    }
-
-    // Clean up internal _truncated flag before output
-    for (const r of ranked) {
-      if (r && '_truncated' in r) delete r._truncated;
-    }
-
-    console.log(JSON.stringify({ query, project_id, results: ranked }, null, 2));
+  if (command === 'context') {
+    await runContext(positional[1] || '');
     return;
   }
 
-  if (args[0] === 'snippet' && args[1] === 'search') {
-    const query = args[2] || '';
-    const options = {};
-
-    for (let i = 3; i < args.length; i++) {
-      if (args[i].startsWith('--')) {
-        const key = args[i].slice(2);
-        const value = args[i + 1];
-        if (key === 'tags' && value) options.tags = value.split(',');
-        if (key === 'language' && value) options.language = value;
-        if (key === 'type' && value) options.type = value;
-        if (key === 'context') options.withContext = true;
-        if (key === 'limit' && value) options.limit = parseInt(value, 10);
-      }
-    }
-
-    if (!query) {
-      console.log('❌ Please provide a search query.');
-      console.log('Usage: gsd-qdrant-knowledge snippet search <query> [--tags <tag1,tag2>] [--language <lang>] [--type <type>] [--context] [--limit <n>]');
-      process.exit(1);
-    }
-
-    const runtimeSyncPath = join(PROJECT_ROOT, TOOL_DIR_NAME, 'index.js');
-    const useQdrant = existsSync(runtimeSyncPath);
-    let sorted = [];
-
-    if (useQdrant) {
-      try {
-        const { GSDKnowledgeSync } = require(runtimeSyncPath);
-        const sync = new GSDKnowledgeSync();
-        await sync.init();
-        sorted = await sync.searchWithContext(query, {
-          limit: options.limit || 10,
-          type: options.type || undefined,
-        });
-      } catch (err) {
-        console.log('⚠️  Qdrant search failed, falling back to local database:', err.message);
-      }
-    }
-
-    if (sorted.length === 0) {
-      const snippetRanking = require(findFileInCliRoot('snippet-ranking'));
-      const snippets = snippetRanking.loadDatabase();
-      const filtered = snippetRanking.filterAndRankSnippets(snippets, query, options);
-      sorted = snippetRanking.sortSnippetsByRelevance(filtered);
-    }
-
-    console.log('🔍 Snippet Search');
-    console.log('='.repeat(50));
-    console.log(`Query: "${query}"`);
-    if (options.withContext) console.log('With Context: Yes');
-    console.log(`Found ${sorted.length} results:`);
-
-    sorted.forEach((result, i) => {
-      console.log(`  ${i + 1}. ${result.path || result.name} (score: ${result.score || result.relevanceScore})`);
-      console.log(`     Type: ${result.type}, Scope: ${result.scope}`);
-      if (result.milestone || result.slice || result.task) {
-        console.log(`     GSD: ${result.milestone || ''} ${result.slice || ''} ${result.task || ''}`.trim());
-      }
-      console.log(`     ${result.content?.slice(0, 200) || 'No content'}`);
-      if (result.context && result.context.length > 0) {
-        console.log(`     Context: ${result.context.length} related documents`);
-        result.context.forEach(ctx => {
-          console.log(`       - ${ctx.source} (${ctx.ids.length} IDs: ${ctx.ids.slice(0, 3).join(', ')})`);
-        });
-      }
-    });
-
-    console.log('='.repeat(50));
-    console.log('✅ Search complete!');
-    return;
-  }
-
-  if (args[0] === 'snippet' && args[1] === 'apply') {
-    const query = args[2] || '';
-
-    if (!query) {
-      console.log('❌ Please provide a query for the snippet to apply.');
-      console.log('Usage: gsd-qdrant-knowledge snippet apply <query>');
-      process.exit(1);
-    }
-
-    const snippetRanking = require(findFileInCliRoot('snippet-ranking'));
-    const intentDetector = require(findFileInCliRoot('intent-detector'));
-    const contextAnalyzer = require(findFileInCliRoot('context-analyzer'));
-    const intent = intentDetector.detectIntent(query);
-    const snippets = snippetRanking.loadDatabase();
-    const filtered = snippetRanking.filterAndRankSnippets(snippets, intent.query, {
-      tags: intent.filters.tags || [],
-      language: (intent.filters.language && !intent.filters.tags?.includes(intent.filters.language)) ? intent.filters.language : '',
-      type: intent.filters.type || '',
-      crossProject: intent.filters.crossProject || true
-    });
-    const sorted = snippetRanking.sortSnippetsByRelevance(filtered);
-
-    console.log('📝 Snippet Apply');
-    console.log('='.repeat(50));
-    console.log(`Query: "${query}"`);
-
-    if (sorted.length === 0) {
-      console.log('\n⚠️  No matching snippets found.');
-      console.log('='.repeat(50));
-      console.log('✅ Search complete (no results)');
-      process.exit(0);
-    }
-
-    const topMatch = sorted[0];
-    const projectContext = contextAnalyzer.analyzeProjectContext();
-    const placement = contextAnalyzer.recommendCodePlacement(topMatch.description || query, projectContext);
-    const fileExtension = getExtensionForLanguage(topMatch.language);
-    const baseFileName = topMatch.sourceFile ? basename(topMatch.sourceFile).replace(extname(topMatch.sourceFile), '') : 'snippet';
-    const fileName = `${baseFileName}${fileExtension}`;
-    const filePath = join(PROJECT_ROOT, placement.path, fileName);
-
-    let willOverwrite = false;
-    if (existsSync(filePath)) {
-      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-      const timeout = setTimeout(() => {
-        console.log('\n⚠️  No user input received, defaulting to overwrite.');
-        willOverwrite = true;
-        rl.close();
-      }, 1000);
-
-      await new Promise((resolve) => {
-        rl.question('Would you like to overwrite it? (y/N): ', (answer) => {
-          clearTimeout(timeout);
-          const response = answer.toLowerCase().trim();
-          willOverwrite = response === 'y' || response === 'yes';
-          rl.close();
-          resolve();
-        });
-      });
-
-      if (!willOverwrite) {
-        console.log('❌ File not created (user declined to overwrite).');
-        console.log('✅ Operation cancelled.');
-        process.exit(0);
-      }
-    } else {
-      const dirPath = dirname(filePath);
-      if (!existsSync(dirPath)) mkdirSync(dirPath, { recursive: true });
-    }
-
-    writeFileSync(filePath, topMatch.content, 'utf8');
-    console.log(`✅ File created successfully: ${filePath}`);
-    return;
-  }
-
-  await bootstrapProject();
+  // Default: run setup (backward compatible)
+  setupProject();
 }
 
 main();

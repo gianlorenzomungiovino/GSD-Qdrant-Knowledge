@@ -15,43 +15,7 @@ const SWEEP_INTERVAL_MS = 60 * 1000; // sweep every 60 seconds
 let hits = 0;
 let misses = 0;
 
-// Stopwords — English + Italian (union set for deduplication)
-const STOPWORDS_EN = new Set([
-  'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-  'should', 'may', 'might', 'shall', 'can', 'need', 'dare', 'ought',
-  'used', 'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from',
-  'as', 'into', 'through', 'during', 'before', 'after', 'above', 'below',
-  'between', 'out', 'off', 'over', 'under', 'again', 'further', 'then',
-  'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'both',
-  'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor',
-  'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 'just',
-  'because', 'but', 'and', 'or', 'if', 'while', 'about', 'up', 'any'
-]);
-
-const STOPWORDS_IT = new Set([
-  // Articoli
-  'il', 'lo', 'la', 'i', 'gli', 'le', 'un', 'uno', 'una', "un'",
-  // Preposizioni articolate
-  'del', 'dello', 'della', 'dei', 'degli', 'delle',
-  'nel', 'nello', 'nella', 'nei', 'negli', 'nelle',
-  'sul', 'sullo', 'sulla', 'sui', 'sugli', 'sulle',
-  // Preposizioni articolate con "da" (dal, dallo...) e forme contratte
-  'col', 'colla', 'coi', 'cogli', 'cole',
-  'al', 'allo', 'alla', 'ai', 'agli', 'alle',
-  // Preposizioni semplici
-  'di', 'da', 'in', 'con', 'su', 'per', 'tra', 'fra',
-  // Pronomi
-  'mi', 'ti', 'ci', 'vi', 'si', 'lo', 'la', 'li', 'le', 'ne', 'gli',
-  // Congiunzioni e altre
-  'che', 'e', 'ed', 'o', 'oppure', 'ma', 'perché', 'poiché', 'siccome',
-  'se', 'quando', 'mentre', 'dopo', 'prima', 'subito', 'appena',
-  'così', 'anche', 'non', 'più', 'meno', 'troppo', 'abbastanza',
-  'qui', 'quà', 'qua', 'lì', 'là', 'come', 'dove', 'dunque',
-  'pertanto', 'infatti', 'cioè', 'vale', 'a dire'
-]);
-
-const STOPWORDS = new Set([...STOPWORDS_EN, ...STOPWORDS_IT]);
+const { STOPWORDS } = require('./stopwords');
 
 /**
  * Normalize a query string for cache key generation.

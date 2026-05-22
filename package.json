@@ -1,6 +1,6 @@
 {
   "name": "gsd-qdrant-knowledge",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "description": "CLI per setup automatico GSD + Qdrant in qualsiasi progetto Node.js",
   "main": "src/gsd-qdrant-template.js",
   "bin": {
@@ -13,8 +13,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "sync-knowledge": "node src/sync-knowledge.js"
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [
     "gsd",
@@ -40,20 +39,16 @@
   },
   "files": [
     "src/cli.js",
-    "src/context-analyzer.js",
     "src/gsd-qdrant-mcp/index.js",
     "src/gsd-qdrant-mcp/package.json",
     "src/gsd-qdrant-mcp/README.md",
     "src/gsd-qdrant-template.js",
     "src/intent-detector.js",
-    "src/setup-from-templates.js",
-    "src/snippet-ranking.js",
-    "src/sync-knowledge.js",
     "src/auto-retrieve-mcp.js",
     "src/knowledge-instructions.js",
-    "src/install-gsd-extension.js",
     "src/re-ranking.js",
     "src/query-cache.js",
+    "src/stopwords.js",
     "src/hooks/post-commit.bat",
     "src/hooks/post-commit.ps1",
     "src/hooks/post-commit.sh",

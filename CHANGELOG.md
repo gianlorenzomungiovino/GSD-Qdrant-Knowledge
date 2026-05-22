@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.3.2
+
+### Breaking — Nuova architettura di installazione (zero file copying)
+
+- **Nessuna copia di file JavaScript nel progetto**: il tool non crea più la cartella `gsd-qdrant-knowledge/` dentro il progetto. I file runtime restano nell'installazione npm (globale o locale).
+- **Setup minimale**: il comando `setup` crea SOLO tre artifact: `.mcp.json` (configurazione MCP), `.git/hooks/post-commit` (hook auto-sync), `.gsd/KNOWLEDGE.md` (istruzioni per l'agent).
+- **Comandi dedicati**:
+  - `gsd-qdrant-knowledge setup` — setup progetto con nuova architettura (crea config minimi, esegue sync iniziale)
+  - `gsd-qdrant-knowledge migrate` — migra da v2.3.1: rimuove la vecchia cartella `gsd-qdrant-knowledge/`, pulisce `.gitignore`, suggerisce `setup`
+  - `gsd-qdrant-knowledge sync` — sincronizza conoscenza (invariato)
+  - `gsd-qdrant-knowledge context "<query>"` — ricerca semantica manuale (invariato)
+  - `gsd-qdrant-knowledge uninstall` — rimuove artifact progetto (invariato)
+- **MCP server con `--project`**: `gsd-qdrant-mcp` accetta `--project {path}` per conoscere la root del progetto. Legge configurazione da `.mcp.json` o variabili d'ambiente.
+- **STATE_FILE spostato**: da `gsd-qdrant-knowledge/.qdrant-sync-state.json` a `.gsd/.qdrant-sync-state.json`.
+- **Rimossi file non più usati**: `install-gsd-extension.js` (estensione GSD non più necessaria con la nuova architettura).
+
+### Fixed
+
+- **Token sprecati nel contesto progetto**: prima, i file JS del tool venivano copiati nel progetto e letti da GSD come parte del contesto. Ora zero file JS nel progetto → contesto pulito.
+- **Duplicazione codice**: ogni progetto aveva la sua copia degli stessi file. Ora il tool è installato una volta sola (npm).
+
 ## 2.3.1
 
 ### Changed — Retrieval Threshold Calibration (bge-m3 mean pooling)

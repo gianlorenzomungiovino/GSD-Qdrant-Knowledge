@@ -1,24 +1,13 @@
 /**
  * Re-ranking Module
- * 
+ *
  * Applies recency boost, path matching, and symbol/source name boosting to Qdrant search results.
  * Results with recent lastModified timestamps get a +0.05 score boost,
  * results whose source paths contain query words get an additional +0.15 boost,
  * and results containing exact token matches on symbolNames get a ×1.5 score multiplier.
  */
 
-const QUERY_STOPWORDS = new Set([
-  'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-  'should', 'may', 'might', 'shall', 'can', 'need', 'to', 'of', 'in',
-  'for', 'on', 'with', 'at', 'by', 'from', 'as', 'into', 'through',
-  'during', 'before', 'after', 'above', 'below', 'between', 'out',
-  'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here',
-  'there', 'when', 'where', 'why', 'how', 'all', 'both', 'each', 'few',
-  'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only',
-  'own', 'same', 'so', 'than', 'too', 'very', 'just', 'because', 'but',
-  'and', 'or', 'if', 'while', 'about', 'up'
-]);
+const { filterStopwords } = require('./stopwords');
 
 function extractTokens(query) {
   if (!query || typeof query !== 'string') return [];
@@ -29,7 +18,7 @@ function extractTokens(query) {
     .trim();
 
   const tokens = normalized.split(/[\s\-_/\\.]+/);
-  return tokens.filter(t => t.length >= 2 && !QUERY_STOPWORDS.has(t));
+  return filterStopwords(tokens);
 }
 
 function sourceToTokens(source) {
@@ -223,6 +212,69 @@ function trimResultsByTokenBudget(results, options = {}) {
   return { trimmed: true, originalCount, finalCount: results.length };
 }
 
+/**
+ * Sort search results: different files keep score order (desc), same file sorts by startLine asc.
+ * Used by both cli.js (context command) and gsd-qdrant-mcp/index.js (auto_retrieve tool).
+ * @param {Array} hits - Array of Qdrant hit objects with payload containing startLine, chunkIndex, _parent_file
+ * @returns {Array} Sorted hits
+ */
+function sortChunksByPosition(hits) {
+  return [...hits].sort((a, b) => {
+    const parentIdA = a.payload?._parent_file || '';
+    const parentIdB = b.payload?._parent_file || '';
+
+    // Different files: keep score order (descending by score)
+    if (parentIdA !== parentIdB) return b.score - a.score;
+
+    // Same file: sort by startLine ascending, then chunkIndex as tiebreaker
+    const lineA = a.payload?.startLine ?? 0;
+    const lineB = b.payload?.startLine ?? 0;
+    if (lineA !== lineB) return lineA - lineB;
+
+    // Fallback to chunkIndex for same-line chunks
+    const idxA = a.payload?.chunkIndex ?? 0;
+    const idxB = b.payload?.chunkIndex ?? 0;
+    return idxA - idxB;
+  });
+}
+
+/**
+ * Format search results for output: token estimation, trimming, and cleanup.
+ * Shared logic between cli.js (context command) and gsd-qdrant-mcp/index.js (auto_retrieve).
+ * @param {Array} ranked - Ranked result objects
+ * @param {object} options - Configuration
+ * @param {number} options.maxTokens - Token budget (default 4000)
+ * @param {number} options.maxCharsPerResult - Max chars per result (default 500)
+ * @returns {{ results: Array, trimmedInfo: object|null }} Formatted results and trim info
+ */
+function formatResultsForOutput(ranked, options = {}) {
+  const maxTokens = typeof options.maxTokens === 'number' ? options.maxTokens : 4000;
+  const maxCharsPerResult = typeof options.maxCharsPerResult === 'number' ? options.maxCharsPerResult : 500;
+
+  // Token estimation
+  let totalTokens = 0;
+  for (const r of ranked) {
+    if (!r) continue;
+    const textFields = [r.content, r.summary, r.text].filter(Boolean);
+    for (const field of textFields) {
+      totalTokens += estimateTokens(field);
+    }
+  }
+
+  // Trim results if over token budget
+  let trimmedInfo = null;
+  try {
+    trimmedInfo = trimResultsByTokenBudget(ranked, { maxTokens, maxCharsPerResult });
+  } catch (_) { /* non-fatal — proceed with untrimmed */ }
+
+  // Clean up internal _truncated flag before output
+  for (const r of ranked) {
+    if (r && '_truncated' in r) delete r._truncated;
+  }
+
+  return { results: ranked, trimmedInfo, totalTokens };
+}
+
 module.exports = {
   applyRecencyBoost,
   applySymbolBoost,
@@ -231,5 +283,7 @@ module.exports = {
   calculateSourceTokenOverlapScore,
   calculateLexicalSignal,
   estimateTokens,
-  trimResultsByTokenBudget
+  trimResultsByTokenBudget,
+  sortChunksByPosition,
+  formatResultsForOutput
 };
