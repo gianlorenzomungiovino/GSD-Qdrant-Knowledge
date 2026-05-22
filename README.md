@@ -47,28 +47,29 @@ Un'agent senza contesto cross-project tende a riscrivere pattern che esistono gi
 
 ## Features
 
-| Feature                        | Dettaglio                                                                                                                                                                                |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ⚡ **Auto-retrieve hook**      | **★ Unique** — Iniezione automatica di contesto prima di ogni risposta. Zero query manuali, zero tokens sprecati a reinventare                                                           |
-| 🌐 **Cross-project retrieval** | Collection unificata `gsd_memory` con embedding bge-m3-1024 multilingue — tutti i progetti condividono la stessa knowledge base                                                              |
-| 🔍 **Flat search + re-ranking**| Flat search(LIMIT=30) → lexical rescue pre-threshold → threshold filter(≥0.78 CLI / ≥0.70 MCP) → recency/path matching → token truncation; più candidati per il re-ranker, soglie abbassate |
-| 📊 **Re-ranking avanzato**     | Recency boost +0.05 (file <30gg), path matching +0.15, symbol boost ×1.5, source path overlap fino a +0.20 — flat search LIMIT=30 con soglie 0.78/0.55 CLI e 0.70/0.48 MCP |
-| 🔗 **Doc↔Code linking**        | **★ Unique** — ogni snippet ha `relatedDocPaths` e `relatedDocIds`: il codice sa quali docs gli appartengono, e i docs sanno quali code file citano. Retrieval contestuale bidirezionale |
-| 💻 **Smart code indexing**     | bge-m3-1024 con path-first (prima linea = percorso file) e weighted header SIGNATURES:/EXPORTS:/IMPORTS: — il codice è indicizzato come lo leggono gli agent                                                        |
-| 🔄 **Auto-sync**               | Hook `post-commit` sincronizza automaticamente. Health check su Qdrant prima di ogni sync. Zero configurazione manuale                                                                   |
-| ⚡ **Zero config**             | Un comando: `gsd-qdrant-knowledge`. Bootstrap, collection, MCP registration, hook — tutto automatico                                                                                     |
+| Feature                         | Dettaglio                                                                                                                                                                                   |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ⚡ **Auto-retrieve hook**       | **★ Unique** — Iniezione automatica di contesto prima di ogni risposta. Zero query manuali, zero tokens sprecati a reinventare                                                              |
+| 🌐 **Cross-project retrieval**  | Collection unificata `gsd_memory` con embedding bge-m3-1024 multilingue — tutti i progetti condividono la stessa knowledge base                                                             |
+| 🔍 **Flat search + re-ranking** | Flat search(LIMIT=30) → lexical rescue pre-threshold → threshold filter(≥0.78 CLI / ≥0.70 MCP) → recency/path matching → token truncation; più candidati per il re-ranker, soglie abbassate |
+| 📊 **Re-ranking avanzato**      | Recency boost +0.05 (file <30gg), path matching +0.15, symbol boost ×1.5, source path overlap fino a +0.20 — flat search LIMIT=30 con soglie 0.78/0.55 CLI e 0.70/0.48 MCP                  |
+| 🔗 **Doc↔Code linking**         | **★ Unique** — ogni snippet ha `relatedDocPaths` e `relatedDocIds`: il codice sa quali docs gli appartengono, e i docs sanno quali code file citano. Retrieval contestuale bidirezionale    |
+| 💻 **Smart code indexing**      | bge-m3-1024 con path-first (prima linea = percorso file) e weighted header SIGNATURES:/EXPORTS:/IMPORTS: — il codice è indicizzato come lo leggono gli agent                                |
+| 🔄 **Auto-sync**                | Hook `post-commit` sincronizza automaticamente. Health check su Qdrant prima di ogni sync. Zero configurazione manuale                                                                      |
+| ⚡ **Zero config**              | Un comando: `gsd-qdrant-knowledge`. Bootstrap, collection, MCP registration, hook — tutto automatico                                                                                        |
 
 ## Scoring (bge-m3 + flat search + re-ranking)
 
-| Range           | Significato                                                        |
-| --------------- | ------------------------------------------------------------------ |
-| **0.95 – 1.0**  | Match eccellente — vettoriale forte + recency/path/symbol boost      |
-| **0.85 – 0.94** | Match forte — buon embedding, boosting applicato                   |
+| Range           | Significato                                                                    |
+| --------------- | ------------------------------------------------------------------------------ |
+| **0.95 – 1.0**  | Match eccellente — vettoriale forte + recency/path/symbol boost                |
+| **0.85 – 0.94** | Match forte — buon embedding, boosting applicato                               |
 | **0.78 – 0.94** | Rilevante CLI / ≥0.70 MCP — contesto utile (soglia primaria `SCORE_THRESHOLD`) |
-| **0.55 – 0.77** | Fallback CLI / ≥0.48 MCP — risultati deboli ma potenzialmente utili                |
-| **< 0.48**      | Ignorato (sotto entrambe le soglie fallback)               |
+| **0.55 – 0.77** | Fallback CLI / ≥0.48 MCP — risultati deboli ma potenzialmente utili            |
+| **< 0.48**      | Ignorato (sotto entrambe le soglie fallback)                                   |
 
 Il re-ranking applica:
+
 - **+0.05 recency boost** per file modificati negli ultimi 30 giorni
 - **+0.15 path matching** quando parole della query corrispondono al percorso sorgente
 - **Symbol boost ×1.5** (≈+0.2) su match con `symbolNames` nel payload
@@ -126,7 +127,7 @@ Installazione e configurazione: **[SETUP.md](SETUP.md)**
 
 ## Integrazione
 
-Il tool espone un **MCP server** (`gsd-qdrant-mcp`) con lo strumento `auto_retrieve`. È già testato e funzionante con **GSD/pi** e **Claude Code**, quindi presumibilmente compatibile con tutti gli agenti che seguono lo stesso pattern MCP (Stdio + `.mcp.json`). Agent non ancora testati potrebbero richiedere adattamenti minori.
+Il tool espone un **MCP server** (`gsd-qdrant-mcp`) con lo strumento `auto_retrieve`. È già testato e funzionante con **GSD/pi** e **Claude Code**, quindi compatibile con tutti gli agenti che seguono lo stesso pattern MCP (Stdio + `.mcp.json`).
 
 Durante il setup, il progetto registra automaticamente il server in `.mcp.json` — nessuna configurazione manuale richiesta.
 

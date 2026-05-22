@@ -62,6 +62,7 @@ gsd-qdrant-knowledge setup
 ```
 
 Il comando `setup`:
+
 - crea `.mcp.json` con configurazione del server MCP (`gsd-qdrant`)
 - installa l'hook `.git/hooks/post-commit` per auto-sync
 - crea `.gsd/KNOWLEDGE.md` con istruzioni per l'agent (se non esiste)
@@ -89,13 +90,13 @@ Dovresti vedere il server `gsd-qdrant` con command, args e env configurati.
 
 ## 5. Variabili ambiente
 
-| Variabile | Default | Descrizione |
-|---|---|---|
-| `QDRANT_URL` | `http://localhost:6333` | URL del server Qdrant |
-| `COLLECTION_NAME` | `gsd_memory` | Nome della collection unificata |
-| `VECTOR_NAME` | `bge-m3-1024` | Nome del vettore nella collection (Xenova/bge-m3, 1024 dim multilingue) |
-| `EMBEDDING_MODEL` | `Xenova/bge-m3` | Modello embedding |
-| `EMBEDDING_DIMENSIONS` | `1024` | Dimensione del vettore |
+| Variabile              | Default                 | Descrizione                                                             |
+| ---------------------- | ----------------------- | ----------------------------------------------------------------------- |
+| `QDRANT_URL`           | `http://localhost:6333` | URL del server Qdrant                                                   |
+| `COLLECTION_NAME`      | `gsd_memory`            | Nome della collection unificata                                         |
+| `VECTOR_NAME`          | `bge-m3-1024`           | Nome del vettore nella collection (Xenova/bge-m3, 1024 dim multilingue) |
+| `EMBEDDING_MODEL`      | `Xenova/bge-m3`         | Modello embedding                                                       |
+| `EMBEDDING_DIMENSIONS` | `1024`                  | Dimensione del vettore                                                  |
 
 ## Architettura v2.3.2
 
@@ -111,8 +112,6 @@ Progetto (config minimi, zero JS):
     ├── KNOWLEDGE.md       (istruzioni agent)
     └── .qdrant-sync-state.json (stato sync locale)
 ```
-
-Il tool **non copia più file JavaScript** dentro il progetto. L'installazione è globale/locale una volta, il setup crea solo config.
 
 ---
 
