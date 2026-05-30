@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.3.3
+
+### Added — TurboQuant Compression (Qdrant 1.18+)
+
+- **Quantizzazione TurboQuant abilitata di default**: La collection `gsd_memory` ora usa TurboQuant 4-bit (TQ4) per compressione vettoriale.
+- **~8x compression** vs F32 (doppia della scalar quantization), **recall ~0.92** (quasi invariata), **ricerca più veloce** (vettori più piccoli = più dati in CPU cache).
+- **Funziona con qualsiasi embedding model**: TurboQuant applica una rotazione Hadamard che normalizza la distribuzione dei vettori — non serve più una distribuzione centrata come per la binary quantization.
+- **Configurabile via env vars**:
+  - `QDRANT_QUANTIZATION=turbo` (default) / `none` (disabilita)
+  - `QDRANT_TURBO_BITS=bits4` (default, 8x) / `bits2` (16x) / `bits1_5` (24x) / `bits1` (32x)
+  - `QDRANT_TURBO_ALWAYS_RAM=true` (default, keep quantized vectors in RAM)
+- **Upgrade automatico**: Se una collection esistente non ha quantizzazione, il tool la ricrea con TurboQuant al prossimo sync (triggera full re-index).
+- **Aggiornata documentazione SETUP.md** con nuove variabili ambiente e spiegazione TurboQuant.
+
+### Fixed — MCP server path resolution for local/npm installs
+
+- **Server MCP ora usa sempre `node` + percorso assoluto**: `getMcpServerCommand()` risolve il percorso con `require.resolve()` o percorsi relativi a `__dirname`, mai comandi bare nel PATH.
+- **Funziona con installazione locale (npx/npm install)**: prima, il fallback usava `gsd-qdrant-mcp` come comando bare, che non esisteva quando il pacchetto era installato localmente — il server MCP non veniva trovato.
+- **`-v` / `--version` funzionano in tutti i contesti**: `findFileInCliRoot()` ora cerca anche in `dirname(__dirname)` (root del pacchetto npm) e `process.cwd()`, risolvendo il crash `readFileSync(null)`.
+- **Variabili TurboQuant allineate alla documentazione ufficiale Qdrant**: formato `quantization_config.turbo` con `bits` e `always_ram` (prima usava `quantization.type` con `product` + `compression` non supportati).
+
 ## 2.3.2
 
 ### Breaking — Nuova architettura di installazione (zero file copying)

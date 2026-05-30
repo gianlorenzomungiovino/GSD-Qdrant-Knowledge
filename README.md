@@ -2,7 +2,7 @@
 
 **Knowledge base semantica cross-project per AI coding agents.**
 
-Un agent che reinventa la ruota ogni volta che cambia progetto? Non più. Questo tool indicizza automaticamente `.gsd/` e codice sorgente in una collection Qdrant unificata, poi fa retrieving di contesto rilevante da _altri progetti_ — con scoring intelligente che premia contenuti riutilizzabili e cross-project.
+Un agent che reinventa la ruota ogni volta che cambia progetto? Non più. Questo tool indicizza automaticamente `.gsd/` e codice sorgente in una collection Qdrant unificata che supporta **TurboQuant**, poi fa retrieving di contesto rilevante da _altri progetti_ — con scoring intelligente che premia contenuti riutilizzabili e cross-project.
 
 **E non serve mai ricordare di cercarlo.** L'hook inietta contesto rilevante prima di ogni risposta, automaticamente. Zero query manuali. **E zero tokens sprecati a reinventare soluzioni che esistono già.**
 
@@ -47,16 +47,17 @@ Un'agent senza contesto cross-project tende a riscrivere pattern che esistono gi
 
 ## Features
 
-| Feature                         | Dettaglio                                                                                                                                                                                   |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ⚡ **Auto-retrieve hook**       | **★ Unique** — Iniezione automatica di contesto prima di ogni risposta. Zero query manuali, zero tokens sprecati a reinventare                                                              |
-| 🌐 **Cross-project retrieval**  | Collection unificata `gsd_memory` con embedding bge-m3-1024 multilingue — tutti i progetti condividono la stessa knowledge base                                                             |
-| 🔍 **Flat search + re-ranking** | Flat search(LIMIT=30) → lexical rescue pre-threshold → threshold filter(≥0.78 CLI / ≥0.70 MCP) → recency/path matching → token truncation; più candidati per il re-ranker, soglie abbassate |
-| 📊 **Re-ranking avanzato**      | Recency boost +0.05 (file <30gg), path matching +0.15, symbol boost ×1.5, source path overlap fino a +0.20 — flat search LIMIT=30 con soglie 0.78/0.55 CLI e 0.70/0.48 MCP                  |
-| 🔗 **Doc↔Code linking**         | **★ Unique** — ogni snippet ha `relatedDocPaths` e `relatedDocIds`: il codice sa quali docs gli appartengono, e i docs sanno quali code file citano. Retrieval contestuale bidirezionale    |
-| 💻 **Smart code indexing**      | bge-m3-1024 con path-first (prima linea = percorso file) e weighted header SIGNATURES:/EXPORTS:/IMPORTS: — il codice è indicizzato come lo leggono gli agent                                |
-| 🔄 **Auto-sync**                | Hook `post-commit` sincronizza automaticamente. Health check su Qdrant prima di ogni sync. Zero configurazione manuale                                                                      |
-| ⚡ **Zero config**              | Un comando: `gsd-qdrant-knowledge`. Bootstrap, collection, MCP registration, hook — tutto automatico                                                                                        |
+| Feature                         | Dettaglio                                                                                                                                                                                                                        |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ⚡ **Auto-retrieve hook**       | **★ Unique** — Iniezione automatica di contesto prima di ogni risposta. Zero query manuali, zero tokens sprecati a reinventare                                                                                                   |
+| 🌐 **Cross-project retrieval**  | Collection unificata `gsd_memory` con embedding bge-m3-1024 multilingue — tutti i progetti condividono la stessa knowledge base                                                                                                  |
+| 🔍 **Flat search + re-ranking** | Flat search(LIMIT=30) → lexical rescue pre-threshold → threshold filter(≥0.78 CLI / ≥0.70 MCP) → recency/path matching → token truncation; più candidati per il re-ranker, soglie abbassate                                      |
+| 📊 **Re-ranking avanzato**      | Recency boost +0.05 (file <30gg), path matching +0.15, symbol boost ×1.5, source path overlap fino a +0.20 — flat search LIMIT=30 con soglie 0.78/0.55 CLI e 0.70/0.48 MCP                                                       |
+| 🔗 **Doc↔Code linking**         | **★ Unique** — ogni snippet ha `relatedDocPaths` e `relatedDocIds`: il codice sa quali docs gli appartengono, e i docs sanno quali code file citano. Retrieval contestuale bidirezionale                                         |
+| 💻 **Smart code indexing**      | bge-m3-1024 con path-first (prima linea = percorso file) e weighted header SIGNATURES:/EXPORTS:/IMPORTS: — il codice è indicizzato come lo leggono gli agent                                                                     |
+| 🔄 **Auto-sync**                | Hook `post-commit` sincronizza automaticamente. Health check su Qdrant prima di ogni sync. Zero configurazione manuale                                                                                                           |
+| ⚡ **Zero config**              | Un comando: `gsd-qdrant-knowledge`. Bootstrap, collection, MCP registration, hook — tutto automatico                                                                                                                             |
+| 🗜️ **TurboQuant 4-bit**         | Qdrant 1.18+ con compressione vettoriale TurboQuant: **~8x meno spazio** vs F32 (doppia della scalar quantization), **recall ~0.92**, **ricerca più veloce** (vettori più piccoli = più dati in CPU cache). Abilitato di default |
 
 ## Scoring (bge-m3 + flat search + re-ranking)
 

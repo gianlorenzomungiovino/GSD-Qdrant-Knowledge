@@ -1,6 +1,6 @@
 {
   "name": "gsd-qdrant-knowledge",
-  "version": "2.3.2",
+  "version": "2.3.3",
   "description": "CLI per setup automatico GSD + Qdrant in qualsiasi progetto Node.js",
   "main": "src/gsd-qdrant-template.js",
   "bin": {

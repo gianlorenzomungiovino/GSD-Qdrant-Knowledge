@@ -53,17 +53,29 @@ function parseArgs(argv) {
  * Tries: npm bin resolution → global npm root → fallback to bare command name.
  */
 function getMcpServerCommand() {
-  // 1. Try to resolve via npm (works for local/global installs)
+  // 1. Try to resolve via require (works for local/global npm installs)
   try {
     const resolved = require.resolve('gsd-qdrant-knowledge');
     const mcpPath = join(dirname(resolved), 'src', 'gsd-qdrant-mcp', 'index.js');
     if (existsSync(mcpPath)) {
-      // Return node + path for maximum compatibility
       return { command: 'node', args: [mcpPath] };
     }
   } catch (_) {}
 
-  // 2. Try global npm root
+  // 2. Try __dirname relative paths (works when CLI is run directly from source)
+  const cliRoot = __dirname;
+  const relativePaths = [
+    join(cliRoot, 'gsd-qdrant-mcp', 'index.js'),
+    join(dirname(cliRoot), 'src', 'gsd-qdrant-mcp', 'index.js'),
+    join(cliRoot, '..', 'src', 'gsd-qdrant-mcp', 'index.js'),
+  ];
+  for (const p of relativePaths) {
+    if (existsSync(p)) {
+      return { command: 'node', args: [p] };
+    }
+  }
+
+  // 3. Try global npm root
   try {
     const result = spawnSync('npm', ['root', '-g'], { shell: true, stdio: ['pipe', 'pipe', 'pipe'] });
     if (result.status === 0) {
@@ -75,8 +87,30 @@ function getMcpServerCommand() {
     }
   } catch (_) {}
 
-  // 3. Fallback: bare command name (assumes gsd-qdrant-mcp is in PATH)
-  return { command: 'gsd-qdrant-mcp', args: [] };
+  // 4. Last resort: try to find package.json to derive path
+  const pkgPath = findFileInCliRoot('package.json');
+  if (pkgPath) {
+    const mcpPath = join(dirname(pkgPath), 'src', 'gsd-qdrant-mcp', 'index.js');
+    if (existsSync(mcpPath)) {
+      return { command: 'node', args: [mcpPath] };
+    }
+  }
+
+  // 5. Absolute fallback: assume installed in standard npm location
+  const nodePrefix = process.env.APPDATA ? join(process.env.APPDATA, 'npm') : '/usr/local';
+  const fallbackPaths = [
+    join(nodePrefix, 'node_modules', 'gsd-qdrant-knowledge', 'src', 'gsd-qdrant-mcp', 'index.js'),
+    join(nodePrefix, '..', 'lib', 'node_modules', 'gsd-qdrant-knowledge', 'src', 'gsd-qdrant-mcp', 'index.js'),
+  ];
+  for (const p of fallbackPaths) {
+    if (existsSync(p)) {
+      return { command: 'node', args: [p] };
+    }
+  }
+
+  // Should never reach here if package is installed correctly
+  console.error('❌ Cannot find gsd-qdrant-mcp server. Is gsd-qdrant-knowledge installed?');
+  process.exit(1);
 }
 
 // ─── Helper utilities ────────────────────────────────────────────────
@@ -94,7 +128,9 @@ function findFileInCliRoot(filename) {
   const cliRoot = __dirname;
   const candidates = [
     join(cliRoot, filename),
-    join(dirname(cliRoot), 'src', filename),
+    join(dirname(cliRoot), filename),       // package root (global/local npm install)
+    join(dirname(cliRoot), 'src', filename), // src/ relative to package root
+    join(process.cwd(), filename),           // fallback: cwd
   ];
   for (const p of candidates) {
     if (existsSync(p)) return p;
@@ -605,6 +641,10 @@ async function main() {
 
   if (args['version'] || args['v'] || command === '--version' || command === '-v') {
     const pkgPath = findFileInCliRoot('package.json');
+    if (!pkgPath) {
+      console.error('❌ Cannot find package.json. Is this package installed correctly?');
+      process.exit(1);
+    }
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
     console.log(`gsd-qdrant-knowledge v${pkg.version}`);
     process.exit(0);

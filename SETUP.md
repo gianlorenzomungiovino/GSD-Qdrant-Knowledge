@@ -90,15 +90,31 @@ Dovresti vedere il server `gsd-qdrant` con command, args e env configurati.
 
 ## 5. Variabili ambiente
 
-| Variabile              | Default                 | Descrizione                                                             |
-| ---------------------- | ----------------------- | ----------------------------------------------------------------------- |
-| `QDRANT_URL`           | `http://localhost:6333` | URL del server Qdrant                                                   |
-| `COLLECTION_NAME`      | `gsd_memory`            | Nome della collection unificata                                         |
-| `VECTOR_NAME`          | `bge-m3-1024`           | Nome del vettore nella collection (Xenova/bge-m3, 1024 dim multilingue) |
-| `EMBEDDING_MODEL`      | `Xenova/bge-m3`         | Modello embedding                                                       |
-| `EMBEDDING_DIMENSIONS` | `1024`                  | Dimensione del vettore                                                  |
+| Variabile                  | Default                 | Descrizione                                                             |
+| -------------------------- | ----------------------- | ----------------------------------------------------------------------- |
+| `QDRANT_URL`               | `http://localhost:6333` | URL del server Qdrant                                                   |
+| `COLLECTION_NAME`          | `gsd_memory`            | Nome della collection unificata                                         |
+| `VECTOR_NAME`              | `bge-m3-1024`           | Nome del vettore nella collection (Xenova/bge-m3, 1024 dim multilingue) |
+| `EMBEDDING_MODEL`          | `Xenova/bge-m3`         | Modello embedding                                                       |
+| `EMBEDDING_DIMENSIONS`     | `1024`                  | Dimensione del vettore                                                  |
+| `QDRANT_QUANTIZATION`      | `turbo`                 | Tipo di quantizzazione: `turbo` (default), `none` (disabilita)          |
+| `QDRANT_TURBO_BITS`        | `bits4`                 | Profondità encoding: `bits4` (8x, default), `bits2` (16x), `bits1_5` (24x), `bits1` (32x) |
+| `QDRANT_TURBO_ALWAYS_RAM`  | `true`                  | Mantieni vettori quantizzati in RAM (default: true)                      |
 
-## Architettura v2.3.2
+### TurboQuant (Qdrant 1.18+)
+
+La quantizzazione TurboQuant è **abilitata di default**. Offre:
+
+- **~8x compression** vs F32 (doppia della scalar quantization)
+- **Recall ~0.92** (quasi invariata rispetto a F32)
+- **Velocità simile** alla scalar quantization
+- **Funziona con qualsiasi embedding model** (non serve distribuzione centrata)
+
+Per disabilitare: `QDRANT_QUANTIZATION=none`
+
+> **Nota:** Abilitare TurboQuant su una collection esistente richiede un **full re-index**. Il tool lo fa automaticamente al prossimo sync.
+
+## Architettura
 
 ```
 Sistema (installato una volta via npm):

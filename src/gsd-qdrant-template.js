@@ -64,6 +64,14 @@ class GSDKnowledgeSync {
     this.vectorName = process.env.VECTOR_NAME || 'bge-m3-1024';
     this.embeddingDimensions = parseInt(process.env.EMBEDDING_DIMENSIONS || '1024', 10);
     this.embeddingModel = process.env.EMBEDDING_MODEL || 'Xenova/bge-m3';
+
+    // TurboQuant configuration (Qdrant 1.18+)
+    // TQ4 = 4-bit TurboQuant: 8x compression vs F32 (2x scalar quantization), ~0.92 recall
+    // Set QDRANT_QUANTIZATION=turbo to enable. Values: turbo (default), none
+    // QDRANT_TURBO_BITS: encoding depth (default: bits4). Options: bits4, bits2, bits1_5, bits1
+    this.quantizationEnabled = process.env.QDRANT_QUANTIZATION !== 'none';
+    this.turboBits = process.env.QDRANT_TURBO_BITS || 'bits4'; // bits4, bits2, bits1_5, bits1
+    this.turboAlwaysRam = process.env.QDRANT_TURBO_ALWAYS_RAM !== 'false'; // default: true
     this.pipeline = null;
   }
 
@@ -80,6 +88,8 @@ class GSDKnowledgeSync {
   }
 
   async ensureCollection(collectionName) {
+    const collectionConfig = this.buildCollectionConfig();
+
     try {
       const existing = await this.client.getCollection(collectionName);
       const vectors = existing?.config?.params?.vectors;
@@ -89,9 +99,7 @@ class GSDKnowledgeSync {
       if (namedVector && namedVector.size !== this.embeddingDimensions) {
         console.log(`[qdrant] Vector dimension mismatch: ${this.collectionName} has ${namedVector.size}-dim (${this.vectorName}), need ${this.embeddingDimensions}. Recreating collection...`);
         await this.client.deleteCollection(collectionName);
-        await this.client.createCollection(collectionName, {
-          vectors: { [this.vectorName]: { size: this.embeddingDimensions, distance: 'Cosine' } },
-        });
+        await this.client.createCollection(collectionName, collectionConfig);
         console.log(`[qdrant] Collection ${collectionName} recreated with ${this.vectorName} (${this.embeddingDimensions}-dim). Full re-index required.`);
 
         // Reset sync state to force full re-index
@@ -103,16 +111,64 @@ class GSDKnowledgeSync {
       }
 
       if (!namedVector) throw new Error(`Collection ${collectionName} exists without named vector ${this.vectorName}. Recreate it.`);
+
+      // Collection exists with correct vector config — check if quantization needs upgrading.
+      // Qdrant 1.18+ supports TurboQuant. If the collection was created before quantization
+      // was enabled, we need to recreate it to apply quantization (not supported as an update).
+      if (this.quantizationEnabled && existing?.config?.quantization_config) {
+        const hasQuantization = existing.config.quantization_config.turbo !== undefined;
+        if (!hasQuantization) {
+          console.log(`[qdrant] Collection ${collectionName} exists without quantization. Upgrading to TurboQuant...`);
+          await this.client.deleteCollection(collectionName);
+          await this.client.createCollection(collectionName, collectionConfig);
+          console.log(`[qdrant] Collection ${collectionName} recreated with TurboQuant (${this.turboBits}). Full re-index required.`);
+
+          // Reset sync state to force full re-index
+          try {
+            await fs.mkdir(dirname(STATE_FILE), { recursive: true });
+            await fs.writeFile(STATE_FILE, JSON.stringify({ lastSync: null, indexed: {} }, null, 2));
+          } catch (_) {}
+          return;
+        }
+      }
+
       return;
     } catch (err) {
       if (err.status === 404) {
-        await this.client.createCollection(collectionName, {
-          vectors: { [this.vectorName]: { size: this.embeddingDimensions, distance: 'Cosine' } },
-        });
+        console.log(`[qdrant] Creating collection ${collectionName} with ${this.vectorName} (${this.embeddingDimensions}-dim, Cosine)`);
+        if (this.quantizationEnabled) {
+          const compressionMap = { bits4: '8x', bits2: '16x', bits1_5: '24x', bits1: '32x' };
+          const comp = compressionMap[this.turboBits] || '8x';
+          console.log(`[qdrant] TurboQuant enabled: ${this.turboBits} (${comp} compression vs F32)`);
+        }
+        await this.client.createCollection(collectionName, collectionConfig);
         return;
       }
       throw err;
     }
+  }
+
+  /**
+   * Build the collection configuration object, including TurboQuant if enabled.
+   * TurboQuant (Qdrant 1.18+) provides ~8x compression vs F32 with ~0.92 recall.
+   * Double the compression of scalar quantization, with faster search (smaller vectors = more CPU cache).
+   * Format per: https://qdrant.tech/documentation/manage-data/quantization/
+   */
+  buildCollectionConfig() {
+    const config = {
+      vectors: { [this.vectorName]: { size: this.embeddingDimensions, distance: 'Cosine' } },
+    };
+
+    if (this.quantizationEnabled) {
+      config.quantization_config = {
+        turbo: {
+          bits: this.turboBits,
+          always_ram: this.turboAlwaysRam,
+        },
+      };
+    }
+
+    return config;
   }
 
   async syncAll() {
