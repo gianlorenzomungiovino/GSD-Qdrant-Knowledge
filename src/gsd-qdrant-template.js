@@ -78,7 +78,10 @@ class GSDKnowledgeSync {
   async init() {
     await this.ensureCollection(this.collectionName);
     try {
-      const { pipeline } = require('@xenova/transformers');
+      const { pipeline, env } = require('@xenova/transformers');
+      // Use the same cache directory as install-model.js (postinstall) so the
+      // model downloaded during npm install is reused — avoids re-downloading.
+      env.cacheDir = join(process.env.HOME || process.env.USERPROFILE || '.', '.cache', 'huggingface', 'hub');
       this.pipeline = await pipeline('feature-extraction', this.embeddingModel);
     } catch (err) {
       if (process.env.GSD_QDRANT_VERBOSE === '1') {
@@ -198,7 +201,7 @@ class GSDKnowledgeSync {
       const countResult = await this.client.count(this.collectionName);
       const total = countResult.count ?? countResult.total ?? 0;
       if (total === 0) {
-        console.log('  ⚠️  Collection is empty — forcing full re-index');
+        console.log('  ℹ️  Collection is empty — starting fresh index');
         collectionEmpty = true;
       }
     } catch (_) {
@@ -219,8 +222,31 @@ class GSDKnowledgeSync {
     let updated = 0;
     let fileIndex = 0;
     
-    // If collection is empty, reset sync state to force re-indexing all files
-    const syncState = collectionEmpty ? {} : await this.loadSyncState();
+    // Load sync state — if collection is empty, start with a fresh state
+    let syncState = collectionEmpty ? {} : await this.loadSyncState();
+    
+    // If collection has points but sync state is empty, start fresh.
+    // This handles the case where the collection was recreated (e.g., vector dimension
+    // mismatch, quantization upgrade) but the state file wasn't cleared.
+    if (!collectionEmpty && Object.keys(syncState).filter(k => k.startsWith('indexed_')).length === 0) {
+      console.log(`  ℹ️  Collection has points but sync state is empty — starting fresh index for project '${this.projectName}'`);
+      syncState = {};
+    }
+    
+    // Check if the sync state belongs to a different project.
+    // If the state tracks files but Qdrant has no points for this project,
+    // the state likely belongs to another project that was synced before.
+    if (!collectionEmpty && Object.keys(syncState).filter(k => k.startsWith('indexed_')).length > 0) {
+      const stateSampleCount = Object.keys(syncState).filter(k => k.startsWith('indexed_')).length;
+      const projectPointCount = await this.countProjectPoints();
+      
+      // If state says we indexed N files but Qdrant has far fewer points for this project,
+      // the state likely belongs to a different project. Start fresh.
+      if (stateSampleCount > 10 && projectPointCount < Math.max(stateSampleCount * 0.1, 5)) {
+        console.log(`  ℹ️  Sync state tracks ${stateSampleCount} files — starting fresh index`);
+        syncState = {};
+      }
+    }
     
     // Index documentation files (.md) — one point per file (docs are small enough)
     for (const filePath of mdFiles) {
@@ -403,6 +429,28 @@ class GSDKnowledgeSync {
    * and CONTEXT-DRAFT files. Everything else (task plans, summaries, slice details) is
    * project-specific noise that has no reuse value across projects.
    */
+  /** Count total points in the collection for this project only */
+  async countProjectPoints() {
+    let count = 0;
+    let offset = null;
+    while (true) {
+      const result = await this.client.scroll(this.collectionName, {
+        limit: 100,
+        offset,
+        with_payload: false,
+        with_vector: false,
+        filter: {
+          must: [
+            { key: 'project_id', match: { value: this.projectName } }
+          ]
+        }
+      });
+      count += result.points.length;
+      if (!result.next_page_offset) break;
+      offset = result.next_page_offset;
+    }
+    return count;
+  }
   async walkGsd(dir) {
     const files = [];
     for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
@@ -1144,6 +1192,9 @@ class GSDKnowledgeSync {
   async saveSyncState(state) {
     const dir = dirname(STATE_FILE);
     await fs.mkdir(dir, { recursive: true });
+    // Track which project last wrote this state file (shared across projects in same dir)
+    state._lastProject = this.projectName;
+    state._lastSyncAt = Date.now();
     await fs.writeFile(STATE_FILE, JSON.stringify(state, null, 2));
   }
 }

@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.3.4
+
+### Fixed — Full re-index when collection already exists and is populated
+
+- **Ripristinato l'indicizzazione completa su collection esistenti**: Quando la collection `gsd_memory` era già creata e popolata (es. da un progetto precedente), il sync non indicizzava più i file del nuovo progetto perché il controllo di esistenza della collection falliva il percorso corretto. Ora il flusso `init()` verifica correttamente se la collection esiste e prosegue con l'indicizzazione, anche se la collection è già presente nel server Qdrant.
+
+### Removed — Obsolete test files
+
+- **Eliminati file di test non più utilizzati**: Rimossi file di test obsoleti e duplicati che non facevano più parte del flusso di sviluppo.
+
+### Changed — Model download moved to `npm install`
+
+- **Download modello `bge-m3` anticipato a `npm install`**: Il modello embedding (1.1 GB) viene ora scaricato automaticamente durante l'installazione del pacchetto (`"install": "node src/install-model.js"`), invece di essere scaricato on-demand al primo `setup`. Il comando `setup` parte quindi immediatamente senza attesa di download.
+- **Script di install non-bloccante**: Se il download fallisce (es. rete lenta), l'installazione del pacchetto non viene interrotta — il comando `setup` scaricherà il modello on-demand come fallback.
+- **Configurazione da `.env`**: Lo script usa `EMBEDDING_MODEL` dalle variabili ambiente (default `Xenova/bge-m3`), allineato alla configurazione esistente.
+
 ## 2.3.3
 
 ### Added — TurboQuant Compression (Qdrant 1.18+)

@@ -187,13 +187,14 @@ async function ensureQdrantRunning() {
   process.exit(1);
 }
 
-// ─── Setup command (v2.3.2) ──────────────────────────────────────────
+// ─── Setup command (v2.3.3) ──────────────────────────────────────────
 
 /**
  * Setup the project for GSD + Qdrant integration.
  * Creates minimal config files only — no JS copying.
+ * Uses async/await identical to runSync() for consistent behavior.
  */
-function setupProject() {
+async function setupProject() {
   console.log('🚀 GSD + Qdrant — Project Setup\n');
 
   const mcpCommand = getMcpServerCommand();
@@ -309,10 +310,10 @@ Before calling, distill your question into **2-4 keywords** (concrete nouns/verb
 
   console.log(`📁 Project: ${basename(PROJECT_ROOT)}`);
 
-  // 6. Ensure QDrant is running before initial sync
-  const qdrantResult = ensureQdrantRunning();
+  // 6. Ensure QDrant is running before initial sync (AWAITED — no race condition)
+  await ensureQdrantRunning();
 
-  // 7. Run initial sync
+  // 7. Run initial sync — identical flow to runSync()
   console.log('\n🔄 Running initial sync...');
   try {
     const templatePath = findFileInCliRoot('gsd-qdrant-template.js');
@@ -327,19 +328,14 @@ Before calling, distill your question into **2-4 keywords** (concrete nouns/verb
       const projIdx = process.argv.indexOf('--project');
       sync.projectName = basename(process.argv[projIdx + 1]);
     }
-    sync.init().then(async () => {
-      const summary = await sync.syncToGsdMemory();
-      console.log(`✅ Initial sync complete! Indexed: ${summary.total}`);
-      console.log('\n✅ Setup complete. Use `gsd-qdrant-knowledge context <query>` to search.');
-      process.exit(0);
-    }).catch((syncErr) => {
-      console.error('\n❌ Initial knowledge sync failed.');
-      console.error('   Error:', syncErr.message);
-      console.error('   Make sure QDrant is running and the collection exists.');
-      process.exit(1);
-    });
+    await sync.init();
+    const summary = await sync.syncToGsdMemory();
+    console.log(`✅ Initial sync complete! Indexed: ${summary.total}`);
+    console.log('\n✅ Setup complete. Use `gsd-qdrant-knowledge context <query>` to search.');
   } catch (syncErr) {
-    console.error('\n❌ Initial sync failed:', syncErr.message);
+    console.error('\n❌ Initial sync failed.');
+    console.error('   Error:', syncErr.message);
+    console.error('   Make sure QDrant is running and the collection exists.');
     process.exit(1);
   }
 }
@@ -427,6 +423,14 @@ async function uninstallProjectArtifacts() {
       console.warn('⚠️  Knowledge instructions cleanup failed:', err.message);
     }
   }
+
+  // Note about the embedding model cache
+  const home = process.env.HOME || process.env.USERPROFILE || '.';
+  const modelCachePath = join(home, '.cache', 'huggingface', 'hub', 'Xenova', 'bge-m3');
+  console.log(`\n💡 Embedding model cache: ${modelCachePath}`);
+  console.log('   This model was pre-installed by gsd-qdrant-knowledge.');
+  console.log('   If you no longer need it, you can safely delete this directory.');
+  console.log('   Other models in this cache are shared and will NOT be removed.');
 }
 
 // ─── Gitignore helpers ───────────────────────────────────────────────

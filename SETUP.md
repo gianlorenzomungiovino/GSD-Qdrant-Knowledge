@@ -90,16 +90,16 @@ Dovresti vedere il server `gsd-qdrant` con command, args e env configurati.
 
 ## 5. Variabili ambiente
 
-| Variabile                  | Default                 | Descrizione                                                             |
-| -------------------------- | ----------------------- | ----------------------------------------------------------------------- |
-| `QDRANT_URL`               | `http://localhost:6333` | URL del server Qdrant                                                   |
-| `COLLECTION_NAME`          | `gsd_memory`            | Nome della collection unificata                                         |
-| `VECTOR_NAME`              | `bge-m3-1024`           | Nome del vettore nella collection (Xenova/bge-m3, 1024 dim multilingue) |
-| `EMBEDDING_MODEL`          | `Xenova/bge-m3`         | Modello embedding                                                       |
-| `EMBEDDING_DIMENSIONS`     | `1024`                  | Dimensione del vettore                                                  |
-| `QDRANT_QUANTIZATION`      | `turbo`                 | Tipo di quantizzazione: `turbo` (default), `none` (disabilita)          |
-| `QDRANT_TURBO_BITS`        | `bits4`                 | Profondità encoding: `bits4` (8x, default), `bits2` (16x), `bits1_5` (24x), `bits1` (32x) |
-| `QDRANT_TURBO_ALWAYS_RAM`  | `true`                  | Mantieni vettori quantizzati in RAM (default: true)                      |
+| Variabile                 | Default                 | Descrizione                                                                               |
+| ------------------------- | ----------------------- | ----------------------------------------------------------------------------------------- |
+| `QDRANT_URL`              | `http://localhost:6333` | URL del server Qdrant                                                                     |
+| `COLLECTION_NAME`         | `gsd_memory`            | Nome della collection unificata                                                           |
+| `VECTOR_NAME`             | `bge-m3-1024`           | Nome del vettore nella collection (Xenova/bge-m3, 1024 dim multilingue)                   |
+| `EMBEDDING_MODEL`         | `Xenova/bge-m3`         | Modello embedding                                                                         |
+| `EMBEDDING_DIMENSIONS`    | `1024`                  | Dimensione del vettore                                                                    |
+| `QDRANT_QUANTIZATION`     | `turbo`                 | Tipo di quantizzazione: `turbo` (default), `none` (disabilita)                            |
+| `QDRANT_TURBO_BITS`       | `bits4`                 | Profondità encoding: `bits4` (8x, default), `bits2` (16x), `bits1_5` (24x), `bits1` (32x) |
+| `QDRANT_TURBO_ALWAYS_RAM` | `true`                  | Mantieni vettori quantizzati in RAM (default: true)                                       |
 
 ### TurboQuant (Qdrant 1.18+)
 
@@ -113,6 +113,20 @@ La quantizzazione TurboQuant è **abilitata di default**. Offre:
 Per disabilitare: `QDRANT_QUANTIZATION=none`
 
 > **Nota:** Abilitare TurboQuant su una collection esistente richiede un **full re-index**. Il tool lo fa automaticamente al prossimo sync.
+
+## Cache del modello embedding
+
+Il modello `bge-m3` (~1.4 GB) viene scaricato automaticamente durante `npm install` (postinstall hook) nella cache HuggingFace:
+
+```
+# Windows
+C:\Users\<Utente>\.cache\huggingface\hub\Xenova\bge-m3
+
+# macOS / Linux
+~/.cache/huggingface/hub/Xenova/bge-m3
+```
+
+Questo modello è **condiviso** con altri tool che usano `@xenova/transformers`. Non viene rimosso durante `gsd-qdrant-knowledge uninstall` — se vuoi liberare spazio, cancella manualmente la directory.
 
 ## Architettura
 
