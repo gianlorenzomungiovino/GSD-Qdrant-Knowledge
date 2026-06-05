@@ -50,6 +50,15 @@ Before calling, distill your question into **2-4 keywords** (concrete nouns/verb
 3. **Include all topics** — list distinct concepts, drop connecting words
 4. **Any language works** — bge-m3 is multilingual; keep terms in their original language
 
+### Example
+
+| Natural language question | Keywords |
+|---|---|
+| "How do I handle JWT authentication in GSD MCP servers?" | `JWT authentication GSD MCP servers` |
+| "Show me middleware patterns for error handling" | `middleware patterns error handling` |
+| "Come si usa auto_retrieve per cercare nella knowledge?" | `auto_retrieve knowledge` |
+| "Best practices for GSD slice planning and task completion" | `GSD slice planning task completion best practices` |
+
 ### Notes
 
 - Results ranked by semantic relevance + cross-project boost
