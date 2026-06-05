@@ -34,7 +34,7 @@ const EXCLUDED_FILE_EXTENSIONS = new Set([
 ]);
 
 // GSD files with genuine cross-project value — only these are indexed from .gsd/
-// Everything else (task plans, summaries, slice details) is project-specific noise.
+// Everything else (task plans, summaries, slice details, overrides) is project-specific noise.
 const CROSS_PROJECT_GSD_FILES = new Set([
   'ROADMAP.md',       // Architecture vision, slice dependencies, demo milestones
   'CONTEXT.md',       // Milestone brief — scope, goals, constraints from discussion
@@ -42,7 +42,9 @@ const CROSS_PROJECT_GSD_FILES = new Set([
   'ASSESSMENT.md',    // Roadmap reassessment — strategic decisions after slice completion
   'RESEARCH.md',      // Research findings — library comparisons, architecture analysis
   'CONTEXT-DRAFT.md', // Draft context — incremental planning artifacts
-  'CODEBASE.md'       // Codebase map — structured file index for cross-project navigation
+  'CODEBASE.md',      // Codebase map — structured file index for cross-project navigation
+  'VISION.md',        // Project vision, principles, what's accepted/rejected
+  'CHANGELOG.md'      // Release history — version tracking, feature evolution
 ]);
 
 // Files managed by GSD locally - exclude from Qdrant to avoid duplicate context
@@ -52,7 +54,8 @@ const GSD_PROJECT_FILES = new Set([
   'DECISIONS.md',
   'KNOWLEDGE.md',
   'PROJECT.md',
-  'FUTURE-REQUIREMENTS.md'
+  'FUTURE-REQUIREMENTS.md',
+  'OVERRIDES.md'      // Override metadata — no project value for cross-project embedding
 ]);
 
 class GSDKnowledgeSync {
@@ -427,8 +430,8 @@ class GSDKnowledgeSync {
   /**
    * Walk .gsd/ directory and return only files with genuine cross-project value.
    * Uses a whitelist approach: only index ROADMAP, CONTEXT, UAT, ASSESSMENT, RESEARCH,
-   * CONTEXT-DRAFT, and CODEBASE files. Everything else (task plans, summaries, slice details) is
-   * project-specific noise that has no reuse value across projects.
+   * CONTEXT-DRAFT, CODEBASE, VISION, and CHANGELOG files.
+   * Everything else (task plans, summaries, slice details, overrides) is project-specific noise.
    */
   /** Count total points in the collection for this project only */
   async countProjectPoints() {
@@ -464,12 +467,12 @@ class GSDKnowledgeSync {
         // Match ROADMAP, CONTEXT, UAT, ASSESSMENT, RESEARCH, CONTEXT-DRAFT, CODEBASE (and their numbered variants like S01-UAT)
         if (CROSS_PROJECT_GSD_FILES.has(basename(fullPath))) {
           files.push(fullPath);
-        } else if (/^(ROADMAP|CONTEXT|UAT|ASSESSMENT|RESEARCH|CODEBASE)$/.test(fileName)) {
+        } else if (/^(ROADMAP|CONTEXT|UAT|ASSESSMENT|RESEARCH|CODEBASE|VISION|CHANGELOG)$/.test(fileName)) {
           // Allow numbered variants: M001-ROADMAP, S03-UAT, T02-RESEARCH, etc.
           const baseName = fileName.replace(/^[A-Z]+\d+[-_]/i, '');
           if (CROSS_PROJECT_GSD_FILES.has(`${baseName}.md`)) {
             files.push(fullPath);
-          } else if (/^(ROADMAP|CONTEXT|UAT|ASSESSMENT|RESEARCH|CODEBASE)$/.test(baseName) || baseName === 'CONTEXT-DRAFT') {
+          } else if (/^(ROADMAP|CONTEXT|UAT|ASSESSMENT|RESEARCH|CODEBASE|VISION|CHANGELOG)$/.test(baseName) || baseName === 'CONTEXT-DRAFT') {
             files.push(fullPath);
           }
         }
