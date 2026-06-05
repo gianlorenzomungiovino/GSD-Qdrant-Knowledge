@@ -152,4 +152,4 @@ class QueryCache {
 // Singleton instance — shared across all imports
 const cache = new QueryCache();
 
-module.exports = { cache, normalizeQuery };
+module.exports = { cache };
