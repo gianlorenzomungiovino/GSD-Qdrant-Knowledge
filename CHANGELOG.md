@@ -1,5 +1,46 @@
 # Changelog
 
+## 2.3.5
+
+### Added — CODEBASE.md embedding in Qdrant whitelist
+
+- **CODEBASE.md, VISION.md, CHANGELOG.md aggiunti alla whitelist di embedding**: Questi file ora vengono indicizzati in Qdrant insieme ai file sorgente del progetto, fornendo all'agente contesto sul progetto (visione, struttura, storia delle modifiche) durante la ricerca semantica.
+- **OVERRIDES.md esplicitamente escluso**: Il file di override non viene più incluso nella whitelist, evitando rumore nei risultati di ricerca.
+- Basato sull'analisi di 781 file .md del repo gsd-pi per determinare i file più rilevanti per l'embedding.
+
+### Added — CLI path matching activation
+
+- **`applyRecencyBoost()` ora riceve `rawQuery` in `cli.js`**: Il percorso del file sorgente viene confrontato con i token della query originale, attivando il path matching nel re-ranking anche dal CLI interattivo.
+- **`calculateLexicalSignal()` esportato da `re-ranking.js`**: Reso disponibile per prevenire il crash del server MCP quando il segnale lessicale era richiesto ma non esportato.
+
+### Added — KNOWLEDGE.md Query Tips examples
+
+- **Sezione Example con 4 esempi concreti**: Il template `auto_retrieve` in KNOWLEDGE.md ora include una tabella con esempi di trasformazione domanda → keywords, per aiutare l'agente a formulare query più efficaci.
+
+### Removed — Dead code elimination
+
+- **Eliminato `src/stopwords.js`**: File di stopwords eliminato e dati inlineati nei 3 consumatori (query-cache.js, intent-detector.js, re-ranking.js). Elimina una dipendenza cross-file non necessaria.
+- **Eliminato `src/auto-retrieve-mcp.js`**: File orfano senza referenze nel codice sorgente.
+- **Eliminato `src/install-gsd-extension.js`**: File orfano senza referenze nel codice sorgente.
+- **Eliminato `src/gsd-qdrant-mcp/README.md`**: File ridondante — la documentazione è nel README principale del progetto.
+
+### Removed — Stopwords filtering removed from token extraction
+
+- **`filterStopwords` rimosso da `extractTokens()` e `extractKeywords()`**: Solo il filtro per lunghezza del token (≥2 caratteri) è mantenuto. Le stopwords non filtrano più i token durante l'estrazione.
+- **`filterStopwords` rimosso da `normalizeQuery()`**: La funzione ora fa solo lowercase → trim → split → filtro token vuoti → join. Niente più stopwords.
+
+### Removed — Unused exports cleaned up
+
+- **13 exports rimosse totali**: 5 da re-ranking.js, 6 da intent-detector.js, 2 da knowledge-instructions.js — tutte verificate come non usate esternamente.
+
+### Changed — Simplified normalizeQuery()
+
+- **`normalizeQuery()` semplificato in query-cache.js**: Rimossa costante STOPWORDS e funzione filterStopwords. Pipeline: lowercase → trim → split → filtro token vuoti → join.
+
+### Fixed — package.json files array cleaned
+
+- **Rimossi riferimenti a file eliminati**: stopwords.js, auto-retrieve-mcp.js, GSD-QDRANT-SETUP.md, src/gsd-qdrant-mcp/README.md rimossi dal fields array. `npm pack` genera tarball pulito.
+
 ## 2.3.4
 
 ### Fixed — Full re-index when collection already exists and is populated
