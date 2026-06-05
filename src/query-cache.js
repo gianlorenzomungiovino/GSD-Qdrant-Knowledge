@@ -15,7 +15,27 @@ const SWEEP_INTERVAL_MS = 60 * 1000; // sweep every 60 seconds
 let hits = 0;
 let misses = 0;
 
-const { STOPWORDS } = require('./stopwords');
+// Inline stopwords (English + Italian) — originally from stopwords.js
+const STOPWORDS = new Set([
+  'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+  'should', 'may', 'might', 'shall', 'can', 'need', 'to', 'of', 'in',
+  'for', 'on', 'with', 'at', 'by', 'from', 'as', 'into', 'through',
+  'during', 'before', 'after', 'above', 'below', 'between', 'out',
+  'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here',
+  'there', 'when', 'where', 'why', 'how', 'all', 'both', 'each', 'few',
+  'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only',
+  'own', 'same', 'so', 'than', 'too', 'very', 'just', 'because', 'but',
+  'and', 'or', 'if', 'while', 'about', 'up',
+  'il', 'lo', 'la', 'i', 'gli', 'le', 'un', 'uno', 'una',
+  'del', 'dello', 'della', 'dei', 'degli', 'delle',
+  'nel', 'nello', 'nella', 'nei', 'negli', 'nelle',
+  'sul', 'sullo', 'sulla', 'sui', 'sugli', 'sulle',
+  'al', 'allo', 'alla', 'ai', 'agli', 'alle',
+  'di', 'da', 'in', 'con', 'su', 'per',
+  'tra', 'fra', 'che', 'e', 'ed', 'o', 'oppure', 'ma', 'perché',
+  'poiché', 'se', 'quando', 'mentre', 'come'
+]);
 
 /**
  * Normalize a query string for cache key generation.
