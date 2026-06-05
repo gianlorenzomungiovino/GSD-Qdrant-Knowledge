@@ -42,7 +42,6 @@
     "src/cli.js",
     "src/gsd-qdrant-mcp/index.js",
     "src/gsd-qdrant-mcp/package.json",
-    "src/gsd-qdrant-mcp/README.md",
     "src/gsd-qdrant-template.js",
     "src/intent-detector.js",
     "src/knowledge-instructions.js",
