@@ -74,7 +74,6 @@ const CONFIG = resolveConfig();
 
 // Load re-ranking utilities
 const {
-  applyRecencyBoost,
   applySymbolBoost,
   calculateLexicalSignal,
   sortChunksByPosition,

@@ -618,7 +618,7 @@ async function runContext(query) {
   rankedHits = sortChunksByPosition(rankedHits);
 
   let rankedResults = rankedHits.map(hit => ({ ...hit.payload, score: hit.score, _query: query }));
-  applyRecencyBoost(rankedResults);
+  applyRecencyBoost(rankedResults, 30, query);
   applySymbolBoost(rankedResults, query);
 
   const ranked = rankedResults
