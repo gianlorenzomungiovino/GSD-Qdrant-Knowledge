@@ -277,10 +277,6 @@ function formatResultsForOutput(ranked, options = {}) {
 module.exports = {
   applyRecencyBoost,
   applySymbolBoost,
-  extractTokens,
-  sourceToTokens,
-  calculateSourceTokenOverlapScore,
-  calculateLexicalSignal,
   estimateTokens,
   trimResultsByTokenBudget,
   sortChunksByPosition,

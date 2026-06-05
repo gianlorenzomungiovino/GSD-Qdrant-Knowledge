@@ -255,5 +255,4 @@ function removeKnowledgeInstructions(options = {}) {
   };
 }
 
-module.exports = { ensureKnowledgeInstructions, removeKnowledgeInstructions, removeInstructionsFromFile };
-module.exports.default = ensureKnowledgeInstructions;
+module.exports = { ensureKnowledgeInstructions, removeKnowledgeInstructions };
