@@ -15,31 +15,11 @@ const SWEEP_INTERVAL_MS = 60 * 1000; // sweep every 60 seconds
 let hits = 0;
 let misses = 0;
 
-// Inline stopwords (English + Italian) — originally from stopwords.js
-const STOPWORDS = new Set([
-  'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-  'should', 'may', 'might', 'shall', 'can', 'need', 'to', 'of', 'in',
-  'for', 'on', 'with', 'at', 'by', 'from', 'as', 'into', 'through',
-  'during', 'before', 'after', 'above', 'below', 'between', 'out',
-  'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here',
-  'there', 'when', 'where', 'why', 'how', 'all', 'both', 'each', 'few',
-  'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only',
-  'own', 'same', 'so', 'than', 'too', 'very', 'just', 'because', 'but',
-  'and', 'or', 'if', 'while', 'about', 'up',
-  'il', 'lo', 'la', 'i', 'gli', 'le', 'un', 'uno', 'una',
-  'del', 'dello', 'della', 'dei', 'degli', 'delle',
-  'nel', 'nello', 'nella', 'nei', 'negli', 'nelle',
-  'sul', 'sullo', 'sulla', 'sui', 'sugli', 'sulle',
-  'al', 'allo', 'alla', 'ai', 'agli', 'alle',
-  'di', 'da', 'in', 'con', 'su', 'per',
-  'tra', 'fra', 'che', 'e', 'ed', 'o', 'oppure', 'ma', 'perché',
-  'poiché', 'se', 'quando', 'mentre', 'come'
-]);
+
 
 /**
  * Normalize a query string for cache key generation.
- * Steps: lowercase → split on whitespace/punctuation → filter stopwords → join.
+ * Steps: lowercase → trim → split on whitespace/hyphens/underscores → filter empty tokens → join.
  * @param {string} query - Original user query
  * @returns {string} Normalized query suitable as a cache key
  */
@@ -48,10 +28,10 @@ function normalizeQuery(query) {
 
   const normalized = query.toLowerCase().trim();
   const tokens = normalized.split(/[\s\-_]+/);
-  const filtered = tokens.filter(t => t.length > 0 && !STOPWORDS.has(t));
+  const filtered = tokens.filter(t => t.length > 0);
   const result = filtered.join(' ');
 
-  console.log('[cache] normalized: %s → %s', query, result);
+  console.log('[cache] normalized: %s → %s', query, result); // lowercase → trim → split → filter empty → join
   return result;
 }
 
