@@ -45,7 +45,6 @@
     "src/gsd-qdrant-mcp/README.md",
     "src/gsd-qdrant-template.js",
     "src/intent-detector.js",
-    "src/auto-retrieve-mcp.js",
     "src/knowledge-instructions.js",
     "src/re-ranking.js",
     "src/query-cache.js",
