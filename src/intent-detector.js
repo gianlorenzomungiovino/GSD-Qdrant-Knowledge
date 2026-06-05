@@ -7,42 +7,6 @@
  * Analyzes user input to determine search type, filters, and preferences.
  */
 
-// Inline stopwords (English + Italian) — originally from stopwords.js
-const STOPWORDS_EN = new Set([
-  'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-  'should', 'may', 'might', 'shall', 'can', 'need', 'to', 'of', 'in',
-  'for', 'on', 'with', 'at', 'by', 'from', 'as', 'into', 'through',
-  'during', 'before', 'after', 'above', 'below', 'between', 'out',
-  'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here',
-  'there', 'when', 'where', 'why', 'how', 'all', 'both', 'each', 'few',
-  'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only',
-  'own', 'same', 'so', 'than', 'too', 'very', 'just', 'because', 'but',
-  'and', 'or', 'if', 'while', 'about', 'up'
-]);
-
-const STOPWORDS_IT = new Set([
-  'il', 'lo', 'la', 'i', 'gli', 'le', 'un', 'uno', 'una',
-  'del', 'dello', 'della', 'dei', 'degli', 'delle',
-  'nel', 'nello', 'nella', 'nei', 'negli', 'nelle',
-  'sul', 'sullo', 'sulla', 'sui', 'sugli', 'sulle',
-  'al', 'allo', 'alla', 'ai', 'agli', 'alle',
-  'di', 'da', 'in', 'con', 'su', 'per',
-  'tra', 'fra', 'che', 'e', 'ed', 'o', 'oppure', 'ma', 'perché',
-  'poiché', 'se', 'quando', 'mentre', 'come'
-]);
-
-const STOPWORDS = new Set([...STOPWORDS_EN, ...STOPWORDS_IT]);
-
-/**
- * Filter out stopwords from a token array.
- * @param {string[]} tokens - Array of lowercase tokens
- * @returns {string[]} Tokens with stopwords removed
- */
-function filterStopwords(tokens) {
-  return tokens.filter(t => t.length >= 2 && !STOPWORDS.has(t));
-}
-
 /**
  * Detect intent from a natural language query
  * 
@@ -348,29 +312,24 @@ function extractSearchTerms(query, filters) {
 
 /**
  * Keyword extraction for embedding queries.
- * 
- * Simple fallback: tokenize, filter noise (stopwords + short/long tokens).
+ *
+ * Simple fallback: tokenize, filter noise tokens (length 2–40).
  * This is a minimal safety net — the primary normalization should happen via
  * KNOWLEDGE.md instructions to the LLM before calling auto_retrieve.
  */
 function extractKeywords(query) {
   if (!query || typeof query !== 'string') return '';
 
-  const raw = query.trim();
-  const normalized = raw.toLowerCase();
-  
+  const raw = query.trim().toLowerCase();
+
   // Split on whitespace, punctuation, hyphens, underscores
-  const rawTokens = raw.split(/[\s\-_.,;:!?(){}[\]<>\/\\|@#$%^&*+=~`]+/);
-  const normalizedTokens = normalized.split(/[\s\-_.,;:!?(){}[\]<>\/\\|@#$%^&*+=~`]+/);
-  
-  // Filter stopwords (English + Italian) and noise tokens
-  const meaningful = rawTokens.filter((token, idx) => {
-    const normalizedToken = normalizedTokens[idx] || token.toLowerCase();
-    return token.length >= 2 &&
-      token.length <= 40 &&
-      filterStopwords([normalizedToken]).length > 0;
+  const tokens = raw.split(/[\s\-_.,;:!?(){}[\]<>\/\\|@#$%^&*+=~`]+/);
+
+  // Filter noise tokens (length 2–40)
+  const meaningful = tokens.filter(token => {
+    return token.length >= 2 && token.length <= 40;
   });
-  
+
   if (meaningful.length === 0) return '';
 
   // Return all meaningful tokens — no artificial cap. The embedding model handles variable length.
