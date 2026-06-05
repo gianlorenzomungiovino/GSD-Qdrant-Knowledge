@@ -41,7 +41,8 @@ const CROSS_PROJECT_GSD_FILES = new Set([
   'UAT.md',           // Verified test cases — reusable patterns and edge cases
   'ASSESSMENT.md',    // Roadmap reassessment — strategic decisions after slice completion
   'RESEARCH.md',      // Research findings — library comparisons, architecture analysis
-  'CONTEXT-DRAFT.md'  // Draft context — incremental planning artifacts
+  'CONTEXT-DRAFT.md', // Draft context — incremental planning artifacts
+  'CODEBASE.md'       // Codebase map — structured file index for cross-project navigation
 ]);
 
 // Files managed by GSD locally - exclude from Qdrant to avoid duplicate context
@@ -426,7 +427,7 @@ class GSDKnowledgeSync {
   /**
    * Walk .gsd/ directory and return only files with genuine cross-project value.
    * Uses a whitelist approach: only index ROADMAP, CONTEXT, UAT, ASSESSMENT, RESEARCH,
-   * and CONTEXT-DRAFT files. Everything else (task plans, summaries, slice details) is
+   * CONTEXT-DRAFT, and CODEBASE files. Everything else (task plans, summaries, slice details) is
    * project-specific noise that has no reuse value across projects.
    */
   /** Count total points in the collection for this project only */
@@ -460,15 +461,15 @@ class GSDKnowledgeSync {
       } else if (entry.isFile() && entry.name.endsWith('.md')) {
         // Whitelist: only index GSD files that have cross-project value
         const fileName = basename(entry.name, '.md').toUpperCase();
-        // Match ROADMAP, CONTEXT, UAT, ASSESSMENT, RESEARCH, CONTEXT-DRAFT (and their numbered variants like S01-UAT)
+        // Match ROADMAP, CONTEXT, UAT, ASSESSMENT, RESEARCH, CONTEXT-DRAFT, CODEBASE (and their numbered variants like S01-UAT)
         if (CROSS_PROJECT_GSD_FILES.has(basename(fullPath))) {
           files.push(fullPath);
-        } else if (/^(ROADMAP|CONTEXT|UAT|ASSESSMENT|RESEARCH)$/.test(fileName)) {
+        } else if (/^(ROADMAP|CONTEXT|UAT|ASSESSMENT|RESEARCH|CODEBASE)$/.test(fileName)) {
           // Allow numbered variants: M001-ROADMAP, S03-UAT, T02-RESEARCH, etc.
           const baseName = fileName.replace(/^[A-Z]+\d+[-_]/i, '');
           if (CROSS_PROJECT_GSD_FILES.has(`${baseName}.md`)) {
             files.push(fullPath);
-          } else if (/^(ROADMAP|CONTEXT|UAT|ASSESSMENT|RESEARCH)$/.test(baseName) || baseName === 'CONTEXT-DRAFT') {
+          } else if (/^(ROADMAP|CONTEXT|UAT|ASSESSMENT|RESEARCH|CODEBASE)$/.test(baseName) || baseName === 'CONTEXT-DRAFT') {
             files.push(fullPath);
           }
         }
