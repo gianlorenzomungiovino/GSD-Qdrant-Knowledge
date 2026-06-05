@@ -49,7 +49,6 @@
     "src/knowledge-instructions.js",
     "src/re-ranking.js",
     "src/query-cache.js",
-    "src/stopwords.js",
     "src/install-model.js",
     "src/hooks/post-commit.bat",
     "src/hooks/post-commit.ps1",
