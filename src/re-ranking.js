@@ -274,9 +274,66 @@ function formatResultsForOutput(ranked, options = {}) {
   return { results: ranked, trimmedInfo, totalTokens };
 }
 
+/**
+ * Calculate a composite relevance score from similarity, recency, importance, and project boosts.
+ *
+ * Formula: 0.6 × similarity + 0.15 × recency + 0.05 × importance + reusableBoost + crossProjectBoost + sameProjectBoost
+ *
+ * - similarity: base semantic search score (0–1)
+ * - recency: 1 − min(1, ageInDays / 30), where ageInDays = (now − timestampMs) / 86400000
+ * - importance: (importanceValue / 5), clamped to [0, 1]
+ * - reusableBoost: +0.08 if reusable === true
+ * - crossProjectBoost: +0.06 if project_id differs from the caller's projectId
+ * - sameProjectBoost: +0.04 if project_id matches the caller's projectId
+ *
+ * Used by both CLI (context command) and MCP (auto_retrieve tool) for unified ranking.
+ *
+ * @param {object} params
+ * @param {number} params.similarity - Base semantic score (0–1)
+ * @param {number} params.timestamp - lastModified timestamp in milliseconds
+ * @param {number} [params.importance] - Importance value 1–5 (default 1)
+ * @param {boolean} [params.reusable] - Whether the result is marked reusable (default false)
+ * @param {string} [params.projectId] - Project ID of the result
+ * @param {string} [params.callerProjectId] - Project ID of the caller (for cross/same-project boost)
+ * @returns {number} Composite score clamped to [0, 1]
+ */
+function calculateCompositeScore({
+  similarity,
+  timestamp,
+  importance = 1,
+  reusable = false,
+  projectId,
+  callerProjectId,
+}) {
+  const now = Date.now();
+
+  // Base similarity (0–1)
+  const sim = Math.max(0, Math.min(1, Number(similarity) || 0));
+
+  // Recency: 1 − min(1, ageInDays / 30)
+  const ts = timestamp != null ? Number(timestamp) : now;
+  const ageMs = now - ts;
+  const ageInDays = Math.max(0, ageMs / 86400000);
+  const recency = Math.max(0, Math.min(1, 1 - ageInDays / 30));
+
+  // Importance: (value / 5), clamped to [0, 1]
+  const imp = Math.max(0, Math.min(1, Number(importance) / 5));
+
+  // Boosts
+  const reusableBoost = reusable ? 0.08 : 0;
+  const crossProjectBoost = projectId && projectId !== callerProjectId ? 0.06 : 0;
+  const sameProjectBoost = projectId && projectId === callerProjectId ? 0.04 : 0;
+
+  // Composite score
+  const score = sim * 0.6 + recency * 0.15 + imp * 0.05 + reusableBoost + crossProjectBoost + sameProjectBoost;
+
+  return Math.max(0, Math.min(1, score));
+}
+
 module.exports = {
   applyRecencyBoost,
   applySymbolBoost,
+  calculateCompositeScore,
   calculateLexicalSignal,
   estimateTokens,
   trimResultsByTokenBudget,
