@@ -17,6 +17,27 @@
 
 - **Sezione Example con 4 esempi concreti**: Il template `auto_retrieve` in KNOWLEDGE.md ora include una tabella con esempi di trasformazione domanda → keywords, per aiutare l'agente a formulare query più efficaci.
 
+### Added — Unified composite scoring (M010 + M011)
+
+- **Formula composita centralizzata in `calculateCompositeScore()`** (`src/re-ranking.js`): `0.6×similarity + 0.15×recency + 0.05×importance + boosts`, clamped [0,1]. Tutti e 3 gli entry point (CLI, MCP, Template) unificati sulla stessa funzione.
+- **Threshold unificati**: CLI e MCP usano ora `0.70` (primario) / `0.48` (fallback) invece di soglie raw diverse (CLI 0.78/0.55, MCP 0.70/0.48, Template 0.60 raw).
+- **CLI filtering su composite score invece di raw cosine**: Prima, il CLI filtrava sul raw score Qdrant PRIMA dei boosts — un risultato con 0.75 raw veniva scartato anche se i boosts lo avrebbero portato a 0.90+. Ora il filtro avviene dopo il composite score.
+- **crossProjectBoost ridotto da 0.12 a 0.06**: Ridotta la dominance di progetti grandi nei risultati MCP.
+- **Chunking 1500/200 mantenuto**, token budget raddoppiato a **8000**, `maxCharsPerResult` aumentato a **800** (prima 500), MCP LIMIT ridotto a **15** (prima 30).
+- **Template `searchWithContext` allineato**: Non usa più `score_threshold` raw di Qdrant — fetch dei candidati e scoring composito locale, come CLI e MCP.
+
+### Added — CLI context tabella markdown + pattern detection (M011)
+
+- **`formatResultsForTable()` in `re-ranking.js`**: Il comando `CLI context` ora produce una tabella markdown strutturata con colonne **File | Descrizione | Progetto | Tecnica** invece di JSON grezzo.
+- **`pattern-detection.js` con `PATTERN_DB` centralizzato**: 10+ pattern tecnologici rilevati via regex (zero-LLM). `getTopPatterns()` aggrega e normalizza i pattern su più risultati.
+- **Header pattern in evidenza** nella tabella CLI, con footers che mostrano contenuti troncati (80 char summary, 200 char content).
+
+### Added — CLI conceptual expansion (M011)
+
+- **`related-concepts.js` con two-phase semantic search**: Risultati primari → estrazione keyword → ricerca secondaria Qdrant → filtraggio overlap. Espansione semantica dei concetti senza chiamate LLM esterne.
+- **`related-docs.js` con GSD ID extraction**: Correlazione documentazione tramite estrazione di GSD IDs (M\d{3}, S\d{2}, T\d{2}, R\d{3}, D\d{3}) dai payload Qdrant.
+- **`formatConceptsSection()`**: Sezioni markdown "Concetti correlati" e "Documentazione correlata" sotto la tabella CLI, con try/catch indipendente per resilienza.
+
 ### Removed — Dead code elimination
 
 - **Eliminato `src/stopwords.js`**: File di stopwords eliminato e dati inlineati nei 3 consumatori (query-cache.js, intent-detector.js, re-ranking.js). Elimina una dipendenza cross-file non necessaria.
@@ -36,6 +57,10 @@
 ### Changed — Simplified normalizeQuery()
 
 - **`normalizeQuery()` semplificato in query-cache.js**: Rimossa costante STOPWORDS e funzione filterStopwords. Pipeline: lowercase → trim → split → filtro token vuoti → join.
+
+### Changed — COLLECTION_NAME ora configurabile via env var
+
+- **`gsd-qdrant-template.js` legge `COLLECTION_NAME` da `process.env`**: Prima hardcoded a `'gsd_memory'`, ora rispetta la variabile d'ambiente con fallback. Allineato alle altre configurazioni (QDRANT_URL, VECTOR_NAME, ecc.).
 
 ### Fixed — package.json files array cleaned
 

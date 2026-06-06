@@ -63,7 +63,7 @@ class GSDKnowledgeSync {
   constructor() {
     this.client = new QdrantClient({ url: QDRANT_URL });
     this.projectName = basename(PROJECT_ROOT);
-    this.collectionName = 'gsd_memory'; // Unified collection for all projects
+    this.collectionName = process.env.COLLECTION_NAME || 'gsd_memory'; // Unified collection for all projects
     // bge-m3: multilingual (100+ languages), optimized for retrieval, 1024-dim Cosine embeddings.
     // Replaces codebert-base which was English-only and performed poorly on non-English queries.
     this.vectorName = process.env.VECTOR_NAME || 'bge-m3-1024';

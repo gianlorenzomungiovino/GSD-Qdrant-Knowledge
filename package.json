@@ -11,10 +11,7 @@
     "access": "public"
   },
   "scripts": {
-    "postinstall": "node src/install-model.js",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "postinstall": "node src/install-model.js"
   },
   "keywords": [
     "gsd",
@@ -54,10 +51,7 @@
     "README.md",
     "CHANGELOG.md"
   ],
-  "devDependencies": {
-    "@vitest/coverage-v8": "^4.1.2",
-    "vitest": "^4.1.2"
-  },
+
   "type": "commonjs",
   "bugs": {
     "url": "https://github.com/gianlorenzomungiovino/GSD-Qdrant-Knowledge/issues"

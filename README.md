@@ -51,8 +51,8 @@ Un'agent senza contesto cross-project tende a riscrivere pattern che esistono gi
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ⚡ **Auto-retrieve hook**       | **★ Unique** — Iniezione automatica di contesto prima di ogni risposta. Zero query manuali, zero tokens sprecati a reinventare                                                                                                   |
 | 🌐 **Cross-project retrieval**  | Collection unificata `gsd_memory` con embedding bge-m3-1024 multilingue — tutti i progetti condividono la stessa knowledge base                                                                                                  |
-| 🔍 **Flat search + re-ranking** | Flat search(LIMIT=30) → lexical rescue pre-threshold → threshold filter(≥0.78 CLI / ≥0.70 MCP) → recency/path matching → token truncation; più candidati per il re-ranker, soglie abbassate                                      |
-| 📊 **Re-ranking avanzato**      | Recency boost +0.05 (file <30gg), path matching +0.15, symbol boost ×1.5, source path overlap fino a +0.20 — flat search LIMIT=30 con soglie 0.78/0.55 CLI e 0.70/0.48 MCP                                                       |
+| 🔍 **Flat search + re-ranking** | Flat search(LIMIT=30) → lexical rescue pre-threshold → composite score filtering(≥0.70 / ≥0.48) → recency/path matching → token truncation; più candidati per il re-ranker, soglie unificate                                      |
+| 📊 **Re-ranking avanzato**      | Recency boost +0.05 (file <30gg), path matching +0.15, symbol boost ×1.5, source path overlap fino a +0.20 — formula composita unificata `0.6×sim + 0.15×recency + 0.05×importance + boosts` su tutti e 3 gli entry point                                                       |
 | 🔗 **Doc↔Code linking**         | **★ Unique** — ogni snippet ha `relatedDocPaths` e `relatedDocIds`: il codice sa quali docs gli appartengono, e i docs sanno quali code file citano. Retrieval contestuale bidirezionale                                         |
 | 💻 **Smart code indexing**      | bge-m3-1024 con path-first (prima linea = percorso file) e weighted header SIGNATURES:/EXPORTS:/IMPORTS: — il codice è indicizzato come lo leggono gli agent                                                                     |
 | 🔄 **Auto-sync**                | Hook `post-commit` sincronizza automaticamente. Health check su Qdrant prima di ogni sync. Zero configurazione manuale                                                                                                           |
@@ -65,9 +65,16 @@ Un'agent senza contesto cross-project tende a riscrivere pattern che esistono gi
 | --------------- | ------------------------------------------------------------------------------ |
 | **0.95 – 1.0**  | Match eccellente — vettoriale forte + recency/path/symbol boost                |
 | **0.85 – 0.94** | Match forte — buon embedding, boosting applicato                               |
-| **0.78 – 0.94** | Rilevante CLI / ≥0.70 MCP — contesto utile (soglia primaria `SCORE_THRESHOLD`) |
-| **0.55 – 0.77** | Fallback CLI / ≥0.48 MCP — risultati deboli ma potenzialmente utili            |
-| **< 0.48**      | Ignorato (sotto entrambe le soglie fallback)                                   |
+| **0.70 – 0.84** | Rilevante — contesto utile (soglia primaria unificata)                         |
+| **0.48 – 0.69** | Fallback — risultati deboli ma potenzialmente utili                            |
+| **< 0.48**      | Ignorato (sotto soglia fallback)                                               |
+
+Formula composita unificata (tutti e 3 gli entry point):
+
+```
+score = 0.6 × similarity + 0.15 × recency + 0.05 × importance + boosts
+clamped [0, 1]
+```
 
 Il re-ranking applica:
 
@@ -75,23 +82,25 @@ Il re-ranking applica:
 - **+0.15 path matching** quando parole della query corrispondono al percorso sorgente
 - **Symbol boost ×1.5** (≈+0.2) su match con `symbolNames` nel payload
 - **Source path overlap fino a +0.20** — il basename del file (`ProjectCard.jsx`) viene tokenizzato e confrontato con i token della query
+- **crossProjectBoost +0.06** per risultati da altri progetti
 
-Soglie: flat search restituisce fino a LIMIT=30 candidati, filtra per SCORE_THRESHOLD (CLI 0.78 / MCP 0.70), fallback a FALLBACK_THRESHOLD (CLI 0.55 / MCP 0.48) se troppo pochi risultati. Il re-ranking fa il lavoro di filtraggio finale.
+Soglie unificate: flat search restituisce fino a LIMIT=30 candidati (CLI) / LIMIT=15 (MCP), filtra per SCORE_THRESHOLD **0.70** (primario) / FALLBACK_THRESHOLD **0.48** (fallback). Il re-ranking fa il lavoro di filtraggio finale.
 
 ## Pipeline di retrieval (dettaglio)
 
 ```
-flat search(LIMIT=30, bge-m3-1024)
+flat search(LIMIT=30 CLI / 15 MCP, bge-m3-1024)
     → lexical rescue pre-threshold (+symbol match ×1.5, +source overlap fino a 0.12)
-    → threshold filter(≥0.78 CLI / ≥0.70 MCP)
-    → fallback se <2 risultati (≥0.55 CLI / ≥0.48 MCP)
+    → composite score filtering(≥0.70 primario / ≥0.48 fallback)
     → sortChunksByPosition() (ordinamento per startLine)
     → sibling file expansion (.css ↔ .jsx stesso stem)
-    → re-ranking(recency + path match + symbol boost ×1.5 + source overlap fino a 0.20)
-    → token estimation/truncation(4000 max, 500 char per risultato)
+    → re-ranking(composite: recency + path match + symbol boost ×1.5 + source overlap + crossProjectBoost)
+    → token estimation/truncation(8000 max, 800 char per risultato)
 ```
 
 Il **lexical rescue pre-threshold** è il passo chiave che permette ai file con nomi significativi (`ProjectCard.jsx`, `AuthMiddleware.ts`) di sopravvivere al cutoff anche quando l'embedding semantico da solo non basta. Senza questo step, un punteggio vettoriale borderline (es. 0.41) veniva eliminato prima che il re-ranking potesse applicare i boost lessicali.
+
+**CLI context output**: Oltre al retrieval standard, il comando `context` produce una tabella markdown strutturata con pattern tecnologici rilevati, concetti correlati espansi semanticamente (two-phase search) e documentazione correlata.
 
 ## Esempio di output
 
