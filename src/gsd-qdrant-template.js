@@ -4,6 +4,7 @@ const { QdrantClient } = require('@qdrant/js-client-rest');
 const { promises: fs, existsSync } = require('fs');
 const { join, basename, extname, relative, dirname, resolve } = require('path');
 const crypto = require('crypto');
+const { calculateCompositeScore } = require('./re-ranking');
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
 
@@ -341,10 +342,13 @@ class GSDKnowledgeSync {
     const limit = options.limit || 10;
     const vector = await this.embedText(query);
 
-    // Prefetch-based search: broad candidate gathering then refine with score threshold
+    // Composite score thresholds — unified with CLI and MCP
+    const SCORE_THRESHOLD = options.scoreThreshold || 0.70;
+    const FALLBACK_THRESHOLD = 0.48;
+
+    // Prefetch-based search: broad candidate gathering then refine with composite score
     const t0 = Date.now();
     const prefetchLimit = Math.max(limit * 3, 20);
-    const SCORE_THRESHOLD = options.scoreThreshold || 0.6;
 
     let hits = [];
     try {
@@ -355,7 +359,6 @@ class GSDKnowledgeSync {
           limit: prefetchLimit,
         },
         limit: Math.min(limit * 2, prefetchLimit),
-        score_threshold: SCORE_THRESHOLD,
         with_payload: true, 
         with_vector: false
       });
@@ -366,7 +369,7 @@ class GSDKnowledgeSync {
       }
       hits = await this.client.search(this.collectionName, { 
         vector: { name: this.vectorName, vector }, 
-        limit,
+        limit: prefetchLimit,
         with_payload: true, 
         with_vector: false
       });
@@ -374,16 +377,46 @@ class GSDKnowledgeSync {
 
     const elapsed = Date.now() - t0;
     if (process.env.GSD_QDRANT_VERBOSE === '1') {
-      console.log('[qdrant] searchWithContext: %d results in %dms', hits.length, elapsed);
+      console.log('[qdrant] searchWithContext: %d raw results in %dms', hits.length, elapsed);
     }
 
-    // Filter results locally
-    let filtered = hits;
-    if (options.type) {
-      filtered = filtered.filter(h => h.payload.type === options.type);
+    // Compute composite scores for unified ranking (same formula as CLI and MCP)
+    const scoredHits = hits.map(hit => {
+      const payload = hit.payload || {};
+      const composite = calculateCompositeScore({
+        similarity: hit.score,
+        timestamp: payload.timestamp || (payload.lastModified ? payload.lastModified * 1000 : null),
+        importance: payload.importance || 1,
+        reusable: payload.reusable || false,
+        projectId: payload.project_id,
+        callerProjectId: options.projectId || this.projectName,
+      });
+      return { ...hit, compositeScore: composite };
+    });
+
+    const abovePrimary = scoredHits.filter(h => h.compositeScore >= SCORE_THRESHOLD).length;
+    if (process.env.GSD_QDRANT_VERBOSE === '1') {
+      console.log('[qdrant] searchWithContext: %d above primary threshold (%.2f)', abovePrimary, SCORE_THRESHOLD);
     }
-    
-    return filtered.map((hit) => ({ score: hit.score, ...hit.payload }));
+
+    // Filter by composite score with fallback
+    let rankedHits = scoredHits.filter(hit => hit.compositeScore >= SCORE_THRESHOLD);
+    if (rankedHits.length < 2 && scoredHits.length > 0) {
+      if (process.env.GSD_QDRANT_VERBOSE === '1') {
+        console.log(`[qdrant] searchWithContext: only ${rankedHits.length} results above ${SCORE_THRESHOLD.toFixed(2)}, falling back to ${FALLBACK_THRESHOLD.toFixed(2)}`);
+      }
+      rankedHits = scoredHits.filter(hit => hit.compositeScore >= FALLBACK_THRESHOLD);
+    }
+
+    // Apply type filter if specified
+    if (options.type) {
+      rankedHits = rankedHits.filter(h => h.payload.type === options.type);
+    }
+
+    // Sort by composite score descending
+    rankedHits.sort((a, b) => b.compositeScore - a.compositeScore);
+
+    return rankedHits.map((hit) => ({ score: hit.compositeScore, ...hit.payload }));
   }
 
   /**
