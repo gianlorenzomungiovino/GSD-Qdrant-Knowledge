@@ -417,6 +417,94 @@ function formatResultsForTable(rankedResults, topPatterns) {
   return { header, table, footers };
 }
 
+/**
+ * Format related concepts and documentation as markdown sections for CLI output.
+ *
+ * Produces:
+ *   - "## Concetti correlati" with a numbered list (when concepts array is non-empty)
+ *   - "## Documentazione correlata" with grouped doc entries (when relatedDocs array is non-empty)
+ *
+ * Each section is wrapped in try/catch so a formatting error in one does not
+ * prevent the other from rendering.  Long descriptions are truncated to 120 chars.
+ *
+ * @param {Array<Object>|null|undefined} concepts — related concepts from findRelatedConcepts: [{name, description, source, score}, ...]
+ * @param {Array<Object>|null|undefined} relatedDocs — related docs from findRelatedDocs: [{ids, docPaths, descriptions}, ...]
+ * @returns {string} markdown-formatted sections or empty string when both inputs are empty
+ */
+function formatConceptsSection(concepts, relatedDocs) {
+  const conceptList = Array.isArray(concepts) ? concepts : [];
+  const docGroups = Array.isArray(relatedDocs) ? relatedDocs : [];
+
+  // If both arrays are empty, return early
+  if (conceptList.length === 0 && docGroups.length === 0) {
+    return '';
+  }
+
+  let output = '';
+
+  // ── Concepts section ─────────────────────────────────────────────────
+  try {
+    if (conceptList.length > 0) {
+      output += '\n## Concetti correlati\n\n';
+      for (let i = 0; i < conceptList.length; i++) {
+        const c = conceptList[i];
+        if (!c) continue;
+
+        const name = c.name || c.source || 'Concetto sconosciuto';
+        let description = c.description || '—';
+        // Truncate long descriptions to 120 chars
+        if (description.length > 120) {
+          description = description.slice(0, 117) + '...';
+        }
+        const source = c.source || '—';
+        const score = typeof c.score === 'number' ? c.score.toFixed(2) : 'N/A';
+
+        output += `${i + 1}. **${name}** — ${description}\n   - Source: ${source} (score: ${score})\n\n`;
+      }
+    }
+  } catch (err) {
+    console.log(`[retrieval] Concepts formatting failed: ${err.message}`);
+  }
+
+  // ── Documentation section ────────────────────────────────────────────
+  try {
+    if (docGroups.length > 0) {
+      output += '\n## Documentazione correlata\n\n';
+      for (const group of docGroups) {
+        if (!group) continue;
+
+        // GSD IDs: M001, S01, T02, etc.
+        const ids = group.ids || group.id || group.sharedIds || [];
+        const idsText = Array.isArray(ids) ? ids.join(', ') : String(ids);
+        output += `### GSD IDs: ${idsText}\n\n`;
+
+        // Doc paths with descriptions
+        const docPaths = group.docPaths || group.sources || group.paths || [];
+        const descriptions = group.descriptions || group.titles || [];
+
+        if (Array.isArray(docPaths)) {
+          for (let i = 0; i < docPaths.length; i++) {
+            const path = docPaths[i] || '—';
+            const desc = Array.isArray(descriptions) && descriptions[i]
+              ? descriptions[i]
+              : '';
+            const entry = desc ? `${path} — ${desc}` : path;
+            output += `- ${entry}\n`;
+          }
+        } else if (docPaths) {
+          output += `- ${docPaths}\n`;
+        }
+
+        output += '\n';
+      }
+    }
+  } catch (err) {
+    console.log(`[retrieval] Documentation formatting failed: ${err.message}`);
+  }
+
+  return output;
+}
+
 module.exports = {
   applyRecencyBoost,
   applySymbolBoost,
@@ -426,5 +514,6 @@ module.exports = {
   trimResultsByTokenBudget,
   sortChunksByPosition,
   formatResultsForOutput,
-  formatResultsForTable
+  formatResultsForTable,
+  formatConceptsSection
 };
