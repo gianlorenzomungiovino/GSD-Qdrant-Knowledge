@@ -52,6 +52,9 @@ PRE-PUBLISH-CHECKLIST.md
 # Build artifacts
 *.tgz
 
+# Tests (local verification only)
+tests/
+
 # ── GSD baseline (auto-generated) ──
 nul
 nul.*
