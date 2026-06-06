@@ -15,8 +15,10 @@ const fs = require('fs');
 const { existsSync, readFileSync, mkdirSync, writeFileSync, rmSync, unlinkSync } = fs;
 const { join, dirname, basename, relative, resolve } = require('path');
 const os = require('os');
-const { applyRecencyBoost, applySymbolBoost, calculateCompositeScore, extractKeywords, estimateTokens, trimResultsByTokenBudget, sortChunksByPosition, formatResultsForOutput, formatResultsForTable } = require('./re-ranking');
+const { applyRecencyBoost, applySymbolBoost, calculateCompositeScore, extractKeywords, estimateTokens, trimResultsByTokenBudget, sortChunksByPosition, formatResultsForOutput, formatResultsForTable, formatConceptsSection } = require('./re-ranking');
 const { getTopPatterns } = require('./pattern-detection');
+const { findRelatedConcepts } = require('./related-concepts');
+const { findRelatedDocs } = require('./related-docs');
 
 const PROJECT_ROOT = process.cwd();
 const ROOT_PKG = join(PROJECT_ROOT, 'package.json');
@@ -659,6 +661,19 @@ async function runContext(query) {
   // Format and output as markdown table
   try {
     const tableOutput = formatResultsForTable(ranked, topPatterns);
+
+    // Add related concepts and documentation section
+    try {
+      const concepts = await findRelatedConcepts(sync.client, sync.collectionName, query, ranked);
+      const relatedDocs = await findRelatedDocs(sync.client, sync.collectionName, ranked);
+      const conceptsSection = formatConceptsSection(concepts, relatedDocs);
+      if (conceptsSection) {
+        tableOutput.footers += conceptsSection;
+      }
+    } catch (conceptsErr) {
+      console.error('[retrieval] concepts formatting failed:', conceptsErr.message);
+    }
+
     console.log(tableOutput.header + tableOutput.table + tableOutput.footers);
   } catch (tableErr) {
     console.error('[retrieval] table formatting failed:', tableErr.message);
