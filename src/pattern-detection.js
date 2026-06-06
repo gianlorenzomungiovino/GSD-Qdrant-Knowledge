@@ -22,6 +22,7 @@ const PATTERN_DB = {
     { pattern: /express(\.js)?/i, label: 'Express' },
     { pattern: /fastify/i, label: 'Fastify' },
     { pattern: /nestjs/i, label: 'NestJS' },
+    { pattern: /node_modules|nodejs|node\.js/i, label: 'Node.js' },
   ],
   testing: [
     { pattern: /jest/i, label: 'Jest' },

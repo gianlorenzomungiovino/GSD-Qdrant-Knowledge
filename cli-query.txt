@@ -1,0 +1,68 @@
+PS D:\Gianlorenzo\Documents\Sviluppo\_Tools\sandbox> gsd-qdrant-knowledge context "button submit"                                                         
+[qdrant] searchPointGroups not supported, falling back to search
+**Pattern rilevati:** React, TypeScript
+
+| File | Descrizione | Progetto | Tecnica |
+|------|-----------|----------|---------|
+| [components/ui/button.tsx](#components_ui_button_tsx) | interface | WooNext | code/typescript |
+| [start/src/frontend/componenti/BackButton.jsx](#start_src_frontend_componenti_BackButton_jsx) | BackButton | Gotcha | code/javascript |
+| [src/components/NewsletterForm.jsx](#src_components_NewsletterForm_jsx) | NewsletterForm | marketing espresso_scraping | code/javascript |
+| [app/checkout/page.tsx](#app_checkout_page_tsx) | CheckoutPage | WooNext | code/typescript |
+| [components/back.tsx](#components_back_tsx) | BackButton | WooNext | code/typescript |
+
+### components/ui/button.tsx
+
+
+      variant: "default",
+      size: "default",
+    },
+  }
+)
+
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants>...
+
+### start/src/frontend/componenti/BackButton.jsx
+
+export function BackButton({ onClick, children }) {
+  return (
+    <button
+      onClick={(e) => {
+        e.preventDefault();
+        onClick?.();
+      }}
+      className="back-button"
+      titl...
+### src/components/NewsletterForm.jsx
+
+
+              </label>
+            </div>
+          </div>
+
+          {/* Submit button */}
+          <div className="flex flex-col md:flex-row items-start md:items-center col-span-2">
+           ...
+
+### app/checkout/page.tsx
+
+
+              >
+                {submitting ? "Processing…" : "Complete order"}
+              </Button>
+              <p className="text-center text-xs text-zinc-500 dark:text-zinc-400">
+     ...
+
+### components/back.tsx
+
+"use client";
+
+import { useRouter } from "next/navigation";
+import { Button } from "./ui/button";
+
+export default function BackButton() {
+  const router = useRouter();
+
+  return (
+    <But...

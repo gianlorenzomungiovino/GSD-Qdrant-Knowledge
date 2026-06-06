@@ -587,7 +587,6 @@ async function runContext(query) {
       hits = hits.concat(group.hits);
     }
   } catch (groupErr) {
-    console.warn('[qdrant] searchPointGroups not supported, falling back to search');
     try {
       const searchConfig = {
         vector: { name: sync.vectorName, vector },
