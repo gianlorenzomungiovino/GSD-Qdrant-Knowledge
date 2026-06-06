@@ -15,7 +15,7 @@ const fs = require('fs');
 const { existsSync, readFileSync, mkdirSync, writeFileSync, rmSync, unlinkSync } = fs;
 const { join, dirname, basename, relative, resolve } = require('path');
 const os = require('os');
-const { applyRecencyBoost, applySymbolBoost, calculateCompositeScore, sortChunksByPosition, formatResultsForOutput, formatResultsForTable, formatConceptsSection } = require('./re-ranking');
+const { applyRecencyBoost, applySymbolBoost, sortChunksByPosition, formatResultsForOutput, formatResultsForTable, formatConceptsSection } = require('./re-ranking');
 const { getTopPatterns } = require('./pattern-detection');
 const { findRelatedConcepts } = require('./related-concepts');
 const { findRelatedDocs } = require('./related-docs');
@@ -612,32 +612,19 @@ async function runContext(query) {
 
   const totalResults = hits.length;
 
-  // Compute composite scores for filtering
-  const scoredHits = hits.map(hit => {
-    const payload = hit.payload || {};
-    const composite = calculateCompositeScore({
-      similarity: hit.score,
-      timestamp: payload.timestamp || payload.lastModified ? (payload.lastModified * 1000) : null,
-      importance: payload.importance || 1,
-      reusable: payload.reusable || false,
-      projectId: payload.project_id,
-      callerProjectId: project_id,
-    });
-    return { ...hit, compositeScore: composite };
-  });
+  // Filter on raw Qdrant score (same as MCP) — boosts applied after for ranking
+  const aboveThreshold = hits.filter(h => h.score >= SCORE_THRESHOLD).length;
+  console.log('[qdrant] results: %d total, %d above threshold', totalResults, aboveThreshold);
 
-  const aboveThreshold = scoredHits.filter(h => h.compositeScore >= SCORE_THRESHOLD).length;
-  console.log('[qdrant] results: %d total, %d above composite threshold', totalResults, aboveThreshold);
-
-  let rankedHits = scoredHits.filter(hit => hit.compositeScore >= SCORE_THRESHOLD);
+  let rankedHits = hits.filter(hit => hit.score >= SCORE_THRESHOLD);
   if (rankedHits.length < 2 && totalResults > 0) {
     console.log(`[qdrant] fallback: only ${rankedHits.length} results above ${SCORE_THRESHOLD.toFixed(2)}, retrying with ${FALLBACK_THRESHOLD.toFixed(2)}`);
-    rankedHits = scoredHits.filter(hit => hit.compositeScore >= FALLBACK_THRESHOLD);
+    rankedHits = hits.filter(hit => hit.score >= FALLBACK_THRESHOLD);
   }
 
   rankedHits = sortChunksByPosition(rankedHits);
 
-  let rankedResults = rankedHits.map(hit => ({ ...hit.payload, score: hit.compositeScore, _query: query }));
+  let rankedResults = rankedHits.map(hit => ({ ...hit.payload, score: hit.score, _query: query }));
   applyRecencyBoost(rankedResults, 30, query);
   applySymbolBoost(rankedResults, query);
 
