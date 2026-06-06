@@ -1,4 +1,4 @@
-const { calculateCompositeScore } = require('./re-ranking');
+const { calculateCompositeScore, formatResultsForTable } = require('./re-ranking');
 
 describe('calculateCompositeScore', () => {
   const now = Date.now();
@@ -186,5 +186,185 @@ describe('calculateCompositeScore', () => {
 
   it('exports as a named function', () => {
     expect(typeof calculateCompositeScore).toBe('function');
+  });
+});
+
+describe('formatResultsForTable', () => {
+  it('produces header with detected patterns in bold', () => {
+    const topPatterns = {
+      categories: {
+        frontend: ['React', 'TypeScript'],
+        backend: ['Express'],
+      },
+    };
+    const result = formatResultsForTable([], topPatterns);
+    expect(result.header).toContain('**Pattern rilevati:**');
+    expect(result.header).toContain('React');
+    expect(result.header).toContain('TypeScript');
+    expect(result.header).toContain('Express');
+  });
+
+  it('produces markdown table with correct header row', () => {
+    const result = formatResultsForTable(
+      [
+        { source: 'src/Button.tsx', summary: 'Button component', project_id: 'proj-A', type: 'code', language: 'TypeScript' },
+      ],
+      { categories: {} }
+    );
+    expect(result.table).toContain('| File | Descrizione | Progetto | Tecnica |');
+    expect(result.table).toContain('|------|-----------|----------|---------|');
+  });
+
+  it('formats 3 results into 3 table rows', () => {
+    const results = [
+      { source: 'src/A.tsx', summary: 'First result', project_id: 'A', type: 'code', language: 'TS' },
+      { source: 'src/B.ts', summary: 'Second result', project_id: 'B', type: 'doc', language: 'markdown' },
+      { source: 'src/C.js', summary: 'Third result', project_id: 'C', type: 'code', language: 'javascript' },
+    ];
+    const result = formatResultsForTable(results, { categories: {} });
+    const lines = result.table.split('\n').filter(l => l.includes('src/') && l.includes('|'));
+    expect(lines.length).toBe(3);
+  });
+
+  it('creates anchor links for file paths', () => {
+    const result = formatResultsForTable(
+      [{ source: 'src/components/Button.tsx', summary: 'test', project_id: 'X', type: 'code', language: 'TS' }],
+      { categories: {} }
+    );
+    expect(result.table).toContain('[src/components/Button.tsx](#src_components_Button_tsx)');
+  });
+
+  it('handles missing fields gracefully', () => {
+    const result = formatResultsForTable(
+      [{ source: '', summary: '', project_id: null, type: null, language: null }],
+      { categories: {} }
+    );
+    expect(result.table).toContain('—');
+  });
+
+  it('truncates long descriptions to 80 chars', () => {
+    const longSummary = 'A'.repeat(200);
+    const result = formatResultsForTable(
+      [{ source: 'test.ts', summary: longSummary, project_id: 'X', type: 'code', language: 'TS' }],
+      { categories: {} }
+    );
+    const lines = result.table.split('\n').filter(l => l.includes('test.ts') && l.includes('|'));
+    const desc = lines[0].split('|')[2].trim();
+    expect(desc.length).toBeLessThanOrEqual(80);
+    expect(desc).toContain('...');
+  });
+
+  it('handles empty results array', () => {
+    const result = formatResultsForTable([], { categories: {} });
+    expect(result.table).toContain('| File | Descrizione | Progetto | Tecnica |');
+    expect(result.table).toContain('|------|-----------|----------|---------|');
+    // No data rows for empty array
+    expect(result.table.split('\n').filter(l => l.includes('|') && !l.includes('File')).length).toBe(1);
+  });
+
+  it('handles null results gracefully', () => {
+    const result = formatResultsForTable(null, { categories: {} });
+    expect(result.table).toContain('| — | — | — | — |');
+  });
+
+  it('handles undefined topPatterns gracefully', () => {
+    const result = formatResultsForTable(
+      [{ source: 'test.ts', summary: 'test', project_id: 'X', type: 'code', language: 'TS' }],
+      undefined
+    );
+    expect(result.header).toBe('');
+    expect(result.table).toContain('| File | Descrizione | Progetto | Tecnica |');
+  });
+
+  it('handles partially empty payload (some null, some empty)', () => {
+    const result = formatResultsForTable(
+      [
+        { source: 'src/A.tsx', summary: null, project_id: 'X', type: 'code', language: null },
+        { source: null, summary: 'has summary', project_id: null, type: null, language: null },
+      ],
+      { categories: {} }
+    );
+    expect(result.table).toContain('—');
+    expect(result.table).toContain('has summary');
+  });
+
+  it('handles results with null entries in array', () => {
+    const result = formatResultsForTable([null, { source: 'test.ts', summary: 'ok', project_id: 'X', type: 'code', language: 'TS' }, null], { categories: {} });
+    const lines = result.table.split('\n').filter(l => l.startsWith('|'));
+    // header + separator + 2 placeholder rows + 1 data row + empty
+    expect(lines.some(l => l.includes('—'))).toBe(true);
+  });
+
+  it('generates footers with ### File sections', () => {
+    const result = formatResultsForTable(
+      [
+        { source: 'src/A.tsx', summary: 'test', project_id: 'X', type: 'code', language: 'TS', content: 'const x = 1;' },
+      ],
+      { categories: {} }
+    );
+    expect(result.footers).toContain('### src/A.tsx');
+    expect(result.footers).toContain('const x = 1;');
+  });
+
+  it('truncates content snippets to 200 chars in footers', () => {
+    const longContent = 'A'.repeat(500);
+    const result = formatResultsForTable(
+      [{ source: 'test.ts', summary: 'test', project_id: 'X', type: 'code', language: 'TS', content: longContent }],
+      { categories: {} }
+    );
+    expect(result.footers).toContain('A'.repeat(197));
+    expect(result.footers).toContain('...');
+  });
+
+  it('returns footers with source header but no content when content is empty', () => {
+    const result = formatResultsForTable(
+      [{ source: 'test.ts', summary: 'test', project_id: 'X', type: 'code', language: 'TS', content: '' }],
+      { categories: {} }
+    );
+    expect(result.footers).toContain('### test.ts');
+    expect(result.footers).not.toContain('A');
+  });
+
+  it('returns empty footers for empty results', () => {
+    const result = formatResultsForTable([], { categories: {} });
+    expect(result.footers).toBe('');
+  });
+
+  it('handles topPatterns with mixed label formats (strings and objects)', () => {
+    const topPatterns = {
+      categories: {
+        frontend: [{ label: 'React', count: 3 }, 'TypeScript'],
+      },
+    };
+    const result = formatResultsForTable([], topPatterns);
+    expect(result.header).toContain('React');
+    expect(result.header).toContain('TypeScript');
+  });
+
+  it('handles topPatterns with non-array category values gracefully (no crash)', () => {
+    const topPatterns = {
+      categories: {
+        frontend: 'React', // not an array — flatMap returns []
+      },
+    };
+    const result = formatResultsForTable([], topPatterns);
+    // Non-array values are skipped by flatMap — no crash, no labels
+    expect(result.header).toBe('');
+  });
+
+  it('technique column shows type/language format', () => {
+    const result = formatResultsForTable(
+      [{ source: 'test.ts', summary: 'test', project_id: 'X', type: 'code', language: 'TypeScript' }],
+      { categories: {} }
+    );
+    expect(result.table).toContain('code/TypeScript');
+  });
+
+  it('technique column shows just type when language is empty', () => {
+    const result = formatResultsForTable(
+      [{ source: 'test.ts', summary: 'test', project_id: 'X', type: 'doc', language: '' }],
+      { categories: {} }
+    );
+    expect(result.table).toContain('| doc |');
   });
 });

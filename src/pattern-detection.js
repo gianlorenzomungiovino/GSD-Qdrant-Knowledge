@@ -116,6 +116,10 @@ function detectPatterns(source, summary, content, tags) {
  * @returns {{ categories: { [category: string]: { label: string, count: number }[] } }}
  */
 function getTopPatterns(results) {
+  if (!results || !Array.isArray(results)) {
+    return { categories: {} };
+  }
+
   const categoryLabelCounts = {}; // { [category]: { [label]: count } }
 
   for (const result of results) {
