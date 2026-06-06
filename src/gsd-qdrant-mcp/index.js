@@ -75,6 +75,7 @@ const CONFIG = resolveConfig();
 // Load re-ranking utilities
 const {
   applySymbolBoost,
+  calculateCompositeScore,
   calculateLexicalSignal,
   sortChunksByPosition,
   formatResultsForOutput
@@ -298,13 +299,16 @@ function createMcpServer() {
         const projectId = CONFIG.projectRoot.split(/[/\\]/).pop();
 
         const ranked = rankedHits.map(hit => {
-          const recencyScore = Math.min(1, (Date.now() - hit.payload.timestamp) / (30 * 24 * 60 * 60 * 1000));
-          const importanceScore = (hit.payload.importance || 1) / 5;
-          const reusableBoost = hit.payload.reusable ? 0.08 : 0;
-          const crossProjectBoost = hit.payload.project_id && hit.payload.project_id !== projectId ? 0.06 : 0;
-          const sameProjectBoost = hit.payload.project_id === projectId ? 0.04 : 0;
-          const score = hit.score * 0.6 + (1 - recencyScore) * 0.15 + importanceScore * 0.05 + reusableBoost + crossProjectBoost + sameProjectBoost;
-          return { ...hit.payload, score };
+          const payload = hit.payload || {};
+          const composite = calculateCompositeScore({
+            similarity: hit.score,
+            timestamp: payload.timestamp,
+            importance: payload.importance || 1,
+            reusable: payload.reusable || false,
+            projectId: payload.project_id,
+            callerProjectId: projectId,
+          });
+          return { ...hit.payload, score: composite };
         });
 
         // Deduplicate by project_id: keep top 2 results per project, then sort by score
