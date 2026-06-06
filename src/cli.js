@@ -15,7 +15,8 @@ const fs = require('fs');
 const { existsSync, readFileSync, mkdirSync, writeFileSync, rmSync, unlinkSync } = fs;
 const { join, dirname, basename, relative, resolve } = require('path');
 const os = require('os');
-const { applyRecencyBoost, applySymbolBoost, calculateCompositeScore, extractKeywords, estimateTokens, trimResultsByTokenBudget, sortChunksByPosition, formatResultsForOutput } = require('./re-ranking');
+const { applyRecencyBoost, applySymbolBoost, calculateCompositeScore, extractKeywords, estimateTokens, trimResultsByTokenBudget, sortChunksByPosition, formatResultsForOutput, formatResultsForTable } = require('./re-ranking');
+const { getTopPatterns } = require('./pattern-detection');
 
 const PROJECT_ROOT = process.cwd();
 const ROOT_PKG = join(PROJECT_ROOT, 'package.json');
@@ -564,6 +565,7 @@ async function runContext(query) {
   const LIMIT = 5;
   const GROUP_SIZE = 2;
 
+  const start = Date.now();
   let hits = [];
   let groupCount = 0;
   try {
@@ -643,13 +645,25 @@ async function runContext(query) {
 
   const { results: formattedResults, trimmedInfo, totalTokens } = formatResultsForOutput(ranked, { maxTokens: 4000 });
 
-  const elapsed = Date.now() - Date.now(); // placeholder — actual timing not critical here
   console.log(`[qdrant] group_by: groups=${groupCount}, chunks=${totalResults} (threshold=${SCORE_THRESHOLD.toFixed(2)} → ${rankedHits.length} above)`);
   if (trimmedInfo && trimmedInfo.trimmed) {
     console.log(`[retrieval] %d results, ~%d estimated tokens, trimmed to 500 chars per result`, formattedResults.length, totalTokens);
   }
 
-  console.log(JSON.stringify({ query, project_id, results: formattedResults }, null, 2));
+  const elapsed = Date.now() - start;
+  console.log(`[retrieval] completed in ${elapsed}ms`);
+
+  // Detect patterns across all ranked results
+  const topPatterns = getTopPatterns(ranked);
+
+  // Format and output as markdown table
+  try {
+    const tableOutput = formatResultsForTable(ranked, topPatterns);
+    console.log(tableOutput.header + tableOutput.table + tableOutput.footers);
+  } catch (tableErr) {
+    console.error('[retrieval] table formatting failed:', tableErr.message);
+    console.log(JSON.stringify({ query, project_id, results: formattedResults }, null, 2));
+  }
 }
 
 // ─── Main ────────────────────────────────────────────────────────────
