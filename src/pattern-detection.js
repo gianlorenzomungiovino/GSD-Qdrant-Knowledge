@@ -4,7 +4,7 @@
  * Identifies technology patterns in source paths, summaries, content, and tags
  * to enable highlighted technology display in CLI output tables.
  *
- * Categories: frontend, backend, testing, build, framework, database, infrastructure
+ * Categories: frontend, backend, runtime, testing, build, framework, database, infrastructure
  */
 
 // ─── Pattern Database ──────────────────────────────────────────────────
@@ -22,7 +22,11 @@ const PATTERN_DB = {
     { pattern: /express(\.js)?/i, label: 'Express' },
     { pattern: /fastify/i, label: 'Fastify' },
     { pattern: /nestjs/i, label: 'NestJS' },
-    { pattern: /node_modules|nodejs|node\.js/i, label: 'Node.js' },
+  ],
+  runtime: [
+    { pattern: /node_modules|nodejs|node\.js|server\.(js|ts)|bin\/|\.bin\//i, label: 'Node.js' },
+    { pattern: /next\.config|middleware\.(js|ts)|\.next\//i, label: 'Next.js/Node' },
+    { pattern: /require\s*\(|module\.exports\s*=|process\.(env|cwd|exit)/i, label: 'Node.js' },
   ],
   testing: [
     { pattern: /jest/i, label: 'Jest' },
