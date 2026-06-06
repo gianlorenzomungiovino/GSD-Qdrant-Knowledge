@@ -395,17 +395,17 @@ function buildQdrantFilter(intent) {
     const mappedType = TYPE_MAP[intent.filters.type];
     if (mappedType && KNOWN_PAYLOAD_TYPES.has(mappedType)) {
       should.push({ key: 'type', match: { value: mappedType } });
-      console.log('[qdrant] filter: type "%s" → payload "%s" (soft boost)', intent.filters.type, mappedType);
+
     } else if (intent.filters.type) {
       // Unknown search type — no mapping exists. Skip entirely.
-      console.log('[qdrant] filter: unknown type "%s", skipping', intent.filters.type);
+
     }
   }
 
   // ── project_id → soft boost (should, not must) ──────────────────
   if (intent.filters.project_id) {
     should.push({ key: 'project_id', match: { value: intent.filters.project_id } });
-    console.log('[qdrant] filter: project "%s" (soft boost)', intent.filters.project_id);
+
   }
 
   // ── tags → soft boost (should) ────────────────────────────────────
@@ -426,7 +426,7 @@ function buildQdrantFilter(intent) {
   if (should.length > 0) filter.should = should;
 
   // Log what we built for agent observability
-  console.log('[qdrant] filter: must=%d, should=%d', must.length, should.length);
+
 
   return Object.keys(filter).length > 0 ? filter : null;
 }

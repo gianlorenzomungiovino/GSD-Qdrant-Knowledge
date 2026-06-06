@@ -51,8 +51,8 @@ Un'agent senza contesto cross-project tende a riscrivere pattern che esistono gi
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ⚡ **Auto-retrieve hook**       | **★ Unique** — Iniezione automatica di contesto prima di ogni risposta. Zero query manuali, zero tokens sprecati a reinventare                                                                                                   |
 | 🌐 **Cross-project retrieval**  | Collection unificata `gsd_memory` con embedding bge-m3-1024 multilingue — tutti i progetti condividono la stessa knowledge base                                                                                                  |
-| 🔍 **Flat search + re-ranking** | Flat search(LIMIT=30) → lexical rescue pre-threshold → composite score filtering(≥0.70 / ≥0.48) → recency/path matching → token truncation; più candidati per il re-ranker, soglie unificate                                      |
-| 📊 **Re-ranking avanzato**      | Recency boost +0.05 (file <30gg), path matching +0.15, symbol boost ×1.5, source path overlap fino a +0.20 — formula composita unificata `0.6×sim + 0.15×recency + 0.05×importance + boosts` su tutti e 3 gli entry point                                                       |
+| 🔍 **Flat search + re-ranking** | Flat search(LIMIT=30) → lexical rescue pre-threshold → composite score filtering(≥0.70 / ≥0.48) → recency/path matching → token truncation; più candidati per il re-ranker, soglie unificate                                     |
+| 📊 **Re-ranking avanzato**      | Recency boost +0.05 (file <30gg), path matching +0.15, symbol boost ×1.5, source path overlap fino a +0.20 — formula composita unificata `0.6×sim + 0.15×recency + 0.05×importance + boosts` su tutti e 3 gli entry point        |
 | 🔗 **Doc↔Code linking**         | **★ Unique** — ogni snippet ha `relatedDocPaths` e `relatedDocIds`: il codice sa quali docs gli appartengono, e i docs sanno quali code file citano. Retrieval contestuale bidirezionale                                         |
 | 💻 **Smart code indexing**      | bge-m3-1024 con path-first (prima linea = percorso file) e weighted header SIGNATURES:/EXPORTS:/IMPORTS: — il codice è indicizzato come lo leggono gli agent                                                                     |
 | 🔄 **Auto-sync**                | Hook `post-commit` sincronizza automaticamente. Health check su Qdrant prima di ogni sync. Zero configurazione manuale                                                                                                           |
@@ -61,13 +61,13 @@ Un'agent senza contesto cross-project tende a riscrivere pattern che esistono gi
 
 ## Scoring (bge-m3 + flat search + re-ranking)
 
-| Range           | Significato                                                                    |
-| --------------- | ------------------------------------------------------------------------------ |
-| **0.95 – 1.0**  | Match eccellente — vettoriale forte + recency/path/symbol boost                |
-| **0.85 – 0.94** | Match forte — buon embedding, boosting applicato                               |
-| **0.70 – 0.84** | Rilevante — contesto utile (soglia primaria unificata)                         |
-| **0.48 – 0.69** | Fallback — risultati deboli ma potenzialmente utili                            |
-| **< 0.48**      | Ignorato (sotto soglia fallback)                                               |
+| Range           | Significato                                                     |
+| --------------- | --------------------------------------------------------------- |
+| **0.95 – 1.0**  | Match eccellente — vettoriale forte + recency/path/symbol boost |
+| **0.85 – 0.94** | Match forte — buon embedding, boosting applicato                |
+| **0.70 – 0.84** | Rilevante — contesto utile (soglia primaria unificata)          |
+| **0.48 – 0.69** | Fallback — risultati deboli ma potenzialmente utili             |
+| **< 0.48**      | Ignorato (sotto soglia fallback)                                |
 
 Formula composita unificata (tutti e 3 gli entry point):
 

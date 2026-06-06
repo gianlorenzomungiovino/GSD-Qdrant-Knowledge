@@ -5,9 +5,6 @@
  *
  * Usage:
  *   const { findRelatedDocs } = require('./related-docs');
- *
- * Observability:
- *   Logs [related-docs] with GSD ID count and doc group count.
  */
 
 /**
@@ -17,7 +14,7 @@
  * performs a Qdrant search for docs containing those IDs,
  * and returns grouped results as [{ids, docPaths, descriptions}].
  *
- * @param {Object} client — QdrantClient instance
+ * @param {Object} sync — GSDKnowledgeSync instance (has .client, .pipeline, .generatePlaceholderEmbedding)
  * @param {string} collectionName — Qdrant collection name
  * @param {Array<Object>} rankedResults — primary ranked results
  * @param {Object} options — search options
@@ -25,7 +22,7 @@
  * @param {number} options.limit — max doc groups (default: 5)
  * @returns {Promise<Array<Object>>} related docs as [{ids, docPaths, descriptions}]
  */
-async function findRelatedDocs(client, collectionName, rankedResults, options = {}) {
+async function findRelatedDocs(sync, collectionName, rankedResults, options = {}) {
   const {
     vectorName = process.env.VECTOR_NAME || 'bge-m3-1024',
     limit = 5,
@@ -53,7 +50,6 @@ async function findRelatedDocs(client, collectionName, rankedResults, options = 
   }
 
   if (allIds.size === 0) {
-    console.log('[related-docs] No GSD IDs found in ranked results');
     return [];
   }
 
@@ -66,21 +62,20 @@ async function findRelatedDocs(client, collectionName, rankedResults, options = 
   // Build embedding from GSD IDs
   let vector;
   try {
-    if (client.pipeline) {
-      const output = await client.pipeline(idsArray.join(' '), { pooling: 'mean', normalize: true });
+    if (sync.client.pipeline) {
+      const output = await sync.client.pipeline(idsArray.join(' '), { pooling: 'mean', normalize: true });
       vector = Array.from(output.data);
     } else {
-      vector = client.generatePlaceholderEmbedding(idsArray.join(' '));
+      vector = sync.generatePlaceholderEmbedding(idsArray.join(' '));
     }
   } catch (err) {
-    console.log(`[related-docs] Embedding failed: ${err.message}`);
     return [];
   }
 
   // Search for docs
   let hits;
   try {
-    hits = await client.search(collectionName, {
+    hits = await sync.client.search(collectionName, {
       vector: { name: vectorName, vector },
       limit: Math.max(limit * 3, 15),
       with_payload: true,
@@ -90,7 +85,6 @@ async function findRelatedDocs(client, collectionName, rankedResults, options = 
       },
     });
   } catch (err) {
-    console.log(`[related-docs] Qdrant search failed: ${err.message}`);
     return [];
   }
 
@@ -115,8 +109,6 @@ async function findRelatedDocs(client, collectionName, rankedResults, options = 
   relatedDocs.sort((a, b) => b.docPaths.length - a.docPaths.length);
 
   const filtered = relatedDocs.slice(0, limit);
-
-  console.log(`[related-docs] ${idCount} GSD IDs → ${hits.length} doc results → ${filtered.length} groups`);
 
   return filtered;
 }

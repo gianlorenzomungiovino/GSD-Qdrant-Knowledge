@@ -110,7 +110,6 @@ function applySymbolBoost(results, rawQuery) {
     }
   }
 
-  console.log('[retrieval] symbolBoost: %d results, sourceBoost: %d results', boostedCount, sourceBoostedCount);
   return results;
 }
 
@@ -161,9 +160,6 @@ function applyRecencyBoost(results, optionsOrDays = 30, rawQuery) {
     totalBoost += boost;
     result.score = Math.min(1.0, result.score + boost);
   }
-
-  const avgBoost = results.length > 0 ? totalBoost / results.length : 0;
-  console.log(`[rerank] ${results.length} results scored, avg boost: ${avgBoost.toFixed(3)}`);
 
   return results;
 }
@@ -463,7 +459,7 @@ function formatConceptsSection(concepts, relatedDocs) {
       }
     }
   } catch (err) {
-    console.log(`[retrieval] Concepts formatting failed: ${err.message}`);
+    // Silent failure — concepts section omitted on error
   }
 
   // ── Documentation section ────────────────────────────────────────────
@@ -499,7 +495,7 @@ function formatConceptsSection(concepts, relatedDocs) {
       }
     }
   } catch (err) {
-    console.log(`[retrieval] Documentation formatting failed: ${err.message}`);
+    // Silent failure — docs section omitted on error
   }
 
   return output;

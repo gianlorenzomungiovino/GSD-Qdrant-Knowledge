@@ -108,9 +108,9 @@ function deriveDescription(payload) {
  * with configurable options, filters out results overlapping with primary
  * ranked results (by source path), and returns top 3-5 related concepts.
  *
- * @param {Object} client — QdrantClient instance
+ * @param {Object} sync — GSDKnowledgeSync instance (has .client, .pipeline, .generatePlaceholderEmbedding)
  * @param {string} collectionName — Qdrant collection name
- * @param {string} query — original user query (for logging)
+ * @param {string} query — original user query
  * @param {Array<Object>} rankedResults — primary ranked results to exclude
  * @param {Object} options — search options
  * @param {string} options.vectorName — vector name (default: 'bge-m3-1024')
@@ -118,7 +118,7 @@ function deriveDescription(payload) {
  * @param {number} options.threshold — similarity threshold (default: 0.50)
  * @returns {Promise<Array<Object>>} related concepts as {name, description, source, score}
  */
-async function findRelatedConcepts(client, collectionName, query, rankedResults, options = {}) {
+async function findRelatedConcepts(sync, collectionName, query, rankedResults, options = {}) {
   const {
     vectorName = process.env.VECTOR_NAME || 'bge-m3-1024',
     limit = 15,
@@ -130,7 +130,6 @@ async function findRelatedConcepts(client, collectionName, query, rankedResults,
   const keywordCount = keywords.length;
 
   if (keywordCount === 0) {
-    console.log(`[related-concepts] No keywords extracted from ${rankedResults?.length ?? 0} results for query "${query}"`);
     return [];
   }
 
@@ -143,36 +142,33 @@ async function findRelatedConcepts(client, collectionName, query, rankedResults,
   // Build embedding from the keyword query
   let vector;
   try {
-    if (client.pipeline) {
-      const output = await client.pipeline(keywordQuery, { pooling: 'mean', normalize: true });
+    if (sync.client.pipeline) {
+      const output = await sync.client.pipeline(keywordQuery, { pooling: 'mean', normalize: true });
       vector = Array.from(output.data);
     } else {
       // Fallback: use placeholder embedding if pipeline not available
-      vector = client.generatePlaceholderEmbedding(keywordQuery);
+      vector = sync.generatePlaceholderEmbedding(keywordQuery);
     }
   } catch (err) {
-    console.log(`[related-concepts] Embedding failed: ${err.message}`);
     return [];
   }
 
   // Perform secondary Qdrant search
   let secondaryHits;
   try {
-    secondaryHits = await client.search(collectionName, {
+    secondaryHits = await sync.client.search(collectionName, {
       vector: { name: vectorName, vector },
       limit: Math.max(limit * 2, 30), // prefetch-style: get more candidates
       with_payload: true,
       with_vector: false,
     });
   } catch (err) {
-    console.log(`[related-concepts] Qdrant search failed: ${err.message}`);
     return [];
   }
 
   const secondaryCount = secondaryHits.length;
 
   if (secondaryCount === 0) {
-    console.log(`[related-concepts] Secondary search returned 0 results for query "${query}"`);
     return [];
   }
 
@@ -214,8 +210,6 @@ async function findRelatedConcepts(client, collectionName, query, rankedResults,
   related.sort((a, b) => b.score - a.score);
   const filtered = related.slice(0, 5);
 
-  console.log(`[related-concepts] ${keywordCount} keywords → ${secondaryCount} secondary results → ${filtered.length} related concepts`);
-
   return filtered;
 }
 
@@ -224,14 +218,14 @@ async function findRelatedConcepts(client, collectionName, query, rankedResults,
  *
  * Looks for docs that share GSD IDs (M001, S01, T02, etc.) with the code result.
  *
- * @param {Object} client — QdrantClient instance
+ * @param {Object} sync — GSDKnowledgeSync instance (has .client, .pipeline, .generatePlaceholderEmbedding)
  * @param {string} collectionName — Qdrant collection name
  * @param {string} source — source path of the code result
  * @param {Object} payload — payload of the code result (for GSD ID extraction)
  * @param {Object} options — search options
  * @returns {Promise<Array<Object>>} related docs as {source, title, sharedIds, score}
  */
-async function findRelatedDocs(client, collectionName, source, payload, options = {}) {
+async function findRelatedDocs(sync, collectionName, source, payload, options = {}) {
   const {
     vectorName = process.env.VECTOR_NAME || 'bge-m3-1024',
     limit = 5,
@@ -250,7 +244,6 @@ async function findRelatedDocs(client, collectionName, source, payload, options 
   for (const id of pathIds) codeIds.add(id);
 
   if (codeIds.size === 0) {
-    console.log(`[related-docs] No GSD IDs found for source "${source}"`);
     return [];
   }
 
@@ -265,21 +258,20 @@ async function findRelatedDocs(client, collectionName, source, payload, options 
   // Build embedding
   let vector;
   try {
-    if (client.pipeline) {
-      const output = await client.pipeline(idsQuery, { pooling: 'mean', normalize: true });
+    if (sync.client.pipeline) {
+      const output = await sync.client.pipeline(idsQuery, { pooling: 'mean', normalize: true });
       vector = Array.from(output.data);
     } else {
-      vector = client.generatePlaceholderEmbedding(idsQuery);
+      vector = sync.generatePlaceholderEmbedding(idsQuery);
     }
   } catch (err) {
-    console.log(`[related-docs] Embedding failed: ${err.message}`);
     return [];
   }
 
   // Search for docs
   let hits;
   try {
-    hits = await client.search(collectionName, {
+    hits = await sync.client.search(collectionName, {
       vector: { name: vectorName, vector },
       limit: Math.max(limit * 3, 15),
       with_payload: true,
@@ -291,7 +283,6 @@ async function findRelatedDocs(client, collectionName, source, payload, options 
       },
     });
   } catch (err) {
-    console.log(`[related-docs] Qdrant search failed: ${err.message}`);
     return [];
   }
 
@@ -314,8 +305,6 @@ async function findRelatedDocs(client, collectionName, source, payload, options 
 
   relatedDocs.sort((a, b) => b.score - a.score);
   const filtered = relatedDocs.slice(0, limit);
-
-  console.log(`[related-docs] ${docCount} GSD IDs → ${hits.length} doc results → ${filtered.length} related docs`);
 
   return filtered;
 }
