@@ -330,6 +330,93 @@ function calculateCompositeScore({
   return Math.max(0, Math.min(1, score));
 }
 
+/**
+ * Format search results as a markdown table for CLI output.
+ *
+ * Produces a structured output with:
+ * - Header line showing detected patterns in bold
+ * - Markdown table with columns: File | Descrizione | Progetto | Tecnica
+ * - Footer sections (### File) with truncated content snippets
+ *
+ * @param {Array} rankedResults - Ranked result objects (each with source, summary, project_id, type, language, content, score)
+ * @param {object} topPatterns - Pattern detection result { categories: { [category]: [label] } }
+ * @returns {{ header: string, table: string, footers: string }} Formatted output components
+ */
+function formatResultsForTable(rankedResults, topPatterns) {
+  // ── Header: detected patterns in bold ──────────────────────────────
+  let header = '';
+  try {
+    const cats = topPatterns && topPatterns.categories ? topPatterns.categories : {};
+    const allLabels = Object.values(cats).flatMap(arr =>
+      Array.isArray(arr) ? arr.map(item => typeof item === 'string' ? item : item.label) : []
+    );
+    if (allLabels.length > 0) {
+      header = '**Pattern rilevati:** ' + allLabels.join(', ') + '\n\n';
+    }
+  } catch (_) { /* non-fatal — proceed without header */ }
+
+  // ── Table: File | Descrizione | Progetto | Tecnica ────────────────────
+  let table = '| File | Descrizione | Progetto | Tecnica |\n';
+  table += '|------|-----------|----------|---------|\n';
+
+  try {
+    if (!rankedResults || !Array.isArray(rankedResults)) {
+      table += '| — | — | — | — |\n';
+    } else {
+      for (const result of rankedResults) {
+        if (!result) {
+          table += '| — | — | — | — |\n';
+          continue;
+        }
+
+        // File: source path as relative markdown link
+        const source = result.source || '—';
+        const fileLink = source !== '—'
+          ? `[${source}](#${source.replace(/[^a-zA-Z0-9]/g, '_')})`
+          : '—';
+
+        // Descrizione: summary truncated to ~80 chars
+        const summary = result.summary || '—';
+        const desc = summary.length > 80 ? summary.slice(0, 77) + '...' : summary;
+
+        // Progetto: project_id or '—'
+        const project = result.project_id || '—';
+
+        // Tecnica: type/language (e.g. 'code/TypeScript', 'doc/markdown')
+        const type = result.type || 'unknown';
+        const language = result.language || '';
+        const technique = language ? `${type}/${language}` : type;
+
+        table += `| ${fileLink} | ${desc} | ${project} | ${technique} |\n`;
+      }
+    }
+  } catch (_) { /* non-fatal — table already has header */ }
+
+  table += '\n';
+
+  // ── Footers: ### File sections with truncated content ──────────────
+  let footers = '';
+  try {
+    if (rankedResults && Array.isArray(rankedResults)) {
+      for (let i = 0; i < rankedResults.length; i++) {
+        const result = rankedResults[i];
+        if (!result) continue;
+
+        const source = result.source || `risultato_${i + 1}`;
+        footers += `### ${source}\n\n`;
+
+        const content = result.content || '';
+        if (content) {
+          const snippet = content.length > 200 ? content.slice(0, 197) + '...' : content;
+          footers += snippet + '\n\n';
+        }
+      }
+    }
+  } catch (_) { /* non-fatal */ }
+
+  return { header, table, footers };
+}
+
 module.exports = {
   applyRecencyBoost,
   applySymbolBoost,
@@ -338,5 +425,6 @@ module.exports = {
   estimateTokens,
   trimResultsByTokenBudget,
   sortChunksByPosition,
-  formatResultsForOutput
+  formatResultsForOutput,
+  formatResultsForTable
 };
