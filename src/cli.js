@@ -15,7 +15,10 @@ const fs = require('fs');
 const { existsSync, readFileSync, mkdirSync, writeFileSync, rmSync, unlinkSync } = fs;
 const { join, dirname, basename, relative, resolve } = require('path');
 const os = require('os');
-const { applyRecencyBoost, applySymbolBoost, extractKeywords, estimateTokens, trimResultsByTokenBudget, sortChunksByPosition, formatResultsForOutput } = require('./re-ranking');
+const { applyRecencyBoost, applySymbolBoost, sortChunksByPosition, formatResultsForOutput, formatResultsForTable, formatConceptsSection } = require('./re-ranking');
+const { getTopPatterns } = require('./pattern-detection');
+const { findRelatedConcepts } = require('./related-concepts');
+const { findRelatedDocs } = require('./related-docs');
 
 const PROJECT_ROOT = process.cwd();
 const ROOT_PKG = join(PROJECT_ROOT, 'package.json');
@@ -559,11 +562,12 @@ async function runContext(query) {
   const embeddedQuery = intentDetector.extractKeywords(query) || query;
   const vector = await sync.embedText(embeddedQuery);
 
-  const SCORE_THRESHOLD = 0.78;
-  const FALLBACK_THRESHOLD = 0.55;
+  const SCORE_THRESHOLD = 0.70;
+  const FALLBACK_THRESHOLD = 0.48;
   const LIMIT = 5;
   const GROUP_SIZE = 2;
 
+  const start = Date.now();
   let hits = [];
   let groupCount = 0;
   try {
@@ -583,7 +587,6 @@ async function runContext(query) {
       hits = hits.concat(group.hits);
     }
   } catch (groupErr) {
-    console.warn('[qdrant] searchPointGroups not supported, falling back to search');
     try {
       const searchConfig = {
         vector: { name: sync.vectorName, vector },
@@ -607,18 +610,18 @@ async function runContext(query) {
   }
 
   const totalResults = hits.length;
-  console.log('[qdrant] results: %d total, %d above threshold', totalResults, hits.filter(h => h.score >= SCORE_THRESHOLD).length);
 
+  // Filter on raw Qdrant score (same as MCP) — boosts applied after for ranking
+  const aboveThreshold = hits.filter(h => h.score >= SCORE_THRESHOLD).length;
   let rankedHits = hits.filter(hit => hit.score >= SCORE_THRESHOLD);
   if (rankedHits.length < 2 && totalResults > 0) {
-    console.log(`[qdrant] fallback: only ${rankedHits.length} results above ${SCORE_THRESHOLD.toFixed(2)}, retrying with ${FALLBACK_THRESHOLD.toFixed(2)}`);
     rankedHits = hits.filter(hit => hit.score >= FALLBACK_THRESHOLD);
   }
 
   rankedHits = sortChunksByPosition(rankedHits);
 
   let rankedResults = rankedHits.map(hit => ({ ...hit.payload, score: hit.score, _query: query }));
-  applyRecencyBoost(rankedResults);
+  applyRecencyBoost(rankedResults, 30, query);
   applySymbolBoost(rankedResults, query);
 
   const ranked = rankedResults
@@ -627,13 +630,29 @@ async function runContext(query) {
 
   const { results: formattedResults, trimmedInfo, totalTokens } = formatResultsForOutput(ranked, { maxTokens: 4000 });
 
-  const elapsed = Date.now() - Date.now(); // placeholder — actual timing not critical here
-  console.log(`[qdrant] group_by: groups=${groupCount}, chunks=${totalResults} (threshold=${SCORE_THRESHOLD.toFixed(2)} → ${rankedHits.length} above)`);
-  if (trimmedInfo && trimmedInfo.trimmed) {
-    console.log(`[retrieval] %d results, ~%d estimated tokens, trimmed to 500 chars per result`, formattedResults.length, totalTokens);
-  }
+  // Detect patterns across all ranked results
+  const topPatterns = getTopPatterns(ranked);
 
-  console.log(JSON.stringify({ query, project_id, results: formattedResults }, null, 2));
+  // Format and output as markdown table
+  try {
+    const tableOutput = formatResultsForTable(ranked, topPatterns);
+
+    // Add related concepts and documentation section
+    try {
+      const concepts = await findRelatedConcepts(sync, sync.collectionName, query, ranked);
+      const relatedDocs = await findRelatedDocs(sync, sync.collectionName, ranked);
+      const conceptsSection = formatConceptsSection(concepts, relatedDocs);
+      if (conceptsSection) {
+        tableOutput.footers += conceptsSection;
+      }
+    } catch (conceptsErr) {
+      // Silent failure — concepts section omitted
+    }
+
+    console.log(tableOutput.header + tableOutput.table + tableOutput.footers);
+  } catch (tableErr) {
+    // Silent failure
+  }
 }
 
 // ─── Main ────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ const { QdrantClient } = require('@qdrant/js-client-rest');
 const { promises: fs, existsSync } = require('fs');
 const { join, basename, extname, relative, dirname, resolve } = require('path');
 const crypto = require('crypto');
+const { calculateCompositeScore } = require('./re-ranking');
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
 
@@ -34,14 +35,17 @@ const EXCLUDED_FILE_EXTENSIONS = new Set([
 ]);
 
 // GSD files with genuine cross-project value — only these are indexed from .gsd/
-// Everything else (task plans, summaries, slice details) is project-specific noise.
+// Everything else (task plans, summaries, slice details, overrides) is project-specific noise.
 const CROSS_PROJECT_GSD_FILES = new Set([
   'ROADMAP.md',       // Architecture vision, slice dependencies, demo milestones
   'CONTEXT.md',       // Milestone brief — scope, goals, constraints from discussion
   'UAT.md',           // Verified test cases — reusable patterns and edge cases
   'ASSESSMENT.md',    // Roadmap reassessment — strategic decisions after slice completion
   'RESEARCH.md',      // Research findings — library comparisons, architecture analysis
-  'CONTEXT-DRAFT.md'  // Draft context — incremental planning artifacts
+  'CONTEXT-DRAFT.md', // Draft context — incremental planning artifacts
+  'CODEBASE.md',      // Codebase map — structured file index for cross-project navigation
+  'VISION.md',        // Project vision, principles, what's accepted/rejected
+  'CHANGELOG.md'      // Release history — version tracking, feature evolution
 ]);
 
 // Files managed by GSD locally - exclude from Qdrant to avoid duplicate context
@@ -51,14 +55,15 @@ const GSD_PROJECT_FILES = new Set([
   'DECISIONS.md',
   'KNOWLEDGE.md',
   'PROJECT.md',
-  'FUTURE-REQUIREMENTS.md'
+  'FUTURE-REQUIREMENTS.md',
+  'OVERRIDES.md'      // Override metadata — no project value for cross-project embedding
 ]);
 
 class GSDKnowledgeSync {
   constructor() {
     this.client = new QdrantClient({ url: QDRANT_URL });
     this.projectName = basename(PROJECT_ROOT);
-    this.collectionName = 'gsd_memory'; // Unified collection for all projects
+    this.collectionName = process.env.COLLECTION_NAME || 'gsd_memory'; // Unified collection for all projects
     // bge-m3: multilingual (100+ languages), optimized for retrieval, 1024-dim Cosine embeddings.
     // Replaces codebert-base which was English-only and performed poorly on non-English queries.
     this.vectorName = process.env.VECTOR_NAME || 'bge-m3-1024';
@@ -337,10 +342,13 @@ class GSDKnowledgeSync {
     const limit = options.limit || 10;
     const vector = await this.embedText(query);
 
-    // Prefetch-based search: broad candidate gathering then refine with score threshold
+    // Composite score thresholds — unified with CLI and MCP
+    const SCORE_THRESHOLD = options.scoreThreshold || 0.70;
+    const FALLBACK_THRESHOLD = 0.48;
+
+    // Prefetch-based search: broad candidate gathering then refine with composite score
     const t0 = Date.now();
     const prefetchLimit = Math.max(limit * 3, 20);
-    const SCORE_THRESHOLD = options.scoreThreshold || 0.6;
 
     let hits = [];
     try {
@@ -351,7 +359,6 @@ class GSDKnowledgeSync {
           limit: prefetchLimit,
         },
         limit: Math.min(limit * 2, prefetchLimit),
-        score_threshold: SCORE_THRESHOLD,
         with_payload: true, 
         with_vector: false
       });
@@ -362,7 +369,7 @@ class GSDKnowledgeSync {
       }
       hits = await this.client.search(this.collectionName, { 
         vector: { name: this.vectorName, vector }, 
-        limit,
+        limit: prefetchLimit,
         with_payload: true, 
         with_vector: false
       });
@@ -370,16 +377,46 @@ class GSDKnowledgeSync {
 
     const elapsed = Date.now() - t0;
     if (process.env.GSD_QDRANT_VERBOSE === '1') {
-      console.log('[qdrant] searchWithContext: %d results in %dms', hits.length, elapsed);
+      console.log('[qdrant] searchWithContext: %d raw results in %dms', hits.length, elapsed);
     }
 
-    // Filter results locally
-    let filtered = hits;
-    if (options.type) {
-      filtered = filtered.filter(h => h.payload.type === options.type);
+    // Compute composite scores for unified ranking (same formula as CLI and MCP)
+    const scoredHits = hits.map(hit => {
+      const payload = hit.payload || {};
+      const composite = calculateCompositeScore({
+        similarity: hit.score,
+        timestamp: payload.timestamp || (payload.lastModified ? payload.lastModified * 1000 : null),
+        importance: payload.importance || 1,
+        reusable: payload.reusable || false,
+        projectId: payload.project_id,
+        callerProjectId: options.projectId || this.projectName,
+      });
+      return { ...hit, compositeScore: composite };
+    });
+
+    const abovePrimary = scoredHits.filter(h => h.compositeScore >= SCORE_THRESHOLD).length;
+    if (process.env.GSD_QDRANT_VERBOSE === '1') {
+      console.log('[qdrant] searchWithContext: %d above primary threshold (%.2f)', abovePrimary, SCORE_THRESHOLD);
     }
-    
-    return filtered.map((hit) => ({ score: hit.score, ...hit.payload }));
+
+    // Filter by composite score with fallback
+    let rankedHits = scoredHits.filter(hit => hit.compositeScore >= SCORE_THRESHOLD);
+    if (rankedHits.length < 2 && scoredHits.length > 0) {
+      if (process.env.GSD_QDRANT_VERBOSE === '1') {
+        console.log(`[qdrant] searchWithContext: only ${rankedHits.length} results above ${SCORE_THRESHOLD.toFixed(2)}, falling back to ${FALLBACK_THRESHOLD.toFixed(2)}`);
+      }
+      rankedHits = scoredHits.filter(hit => hit.compositeScore >= FALLBACK_THRESHOLD);
+    }
+
+    // Apply type filter if specified
+    if (options.type) {
+      rankedHits = rankedHits.filter(h => h.payload.type === options.type);
+    }
+
+    // Sort by composite score descending
+    rankedHits.sort((a, b) => b.compositeScore - a.compositeScore);
+
+    return rankedHits.map((hit) => ({ score: hit.compositeScore, ...hit.payload }));
   }
 
   /**
@@ -426,8 +463,8 @@ class GSDKnowledgeSync {
   /**
    * Walk .gsd/ directory and return only files with genuine cross-project value.
    * Uses a whitelist approach: only index ROADMAP, CONTEXT, UAT, ASSESSMENT, RESEARCH,
-   * and CONTEXT-DRAFT files. Everything else (task plans, summaries, slice details) is
-   * project-specific noise that has no reuse value across projects.
+   * CONTEXT-DRAFT, CODEBASE, VISION, and CHANGELOG files.
+   * Everything else (task plans, summaries, slice details, overrides) is project-specific noise.
    */
   /** Count total points in the collection for this project only */
   async countProjectPoints() {
@@ -460,15 +497,15 @@ class GSDKnowledgeSync {
       } else if (entry.isFile() && entry.name.endsWith('.md')) {
         // Whitelist: only index GSD files that have cross-project value
         const fileName = basename(entry.name, '.md').toUpperCase();
-        // Match ROADMAP, CONTEXT, UAT, ASSESSMENT, RESEARCH, CONTEXT-DRAFT (and their numbered variants like S01-UAT)
+        // Match ROADMAP, CONTEXT, UAT, ASSESSMENT, RESEARCH, CONTEXT-DRAFT, CODEBASE (and their numbered variants like S01-UAT)
         if (CROSS_PROJECT_GSD_FILES.has(basename(fullPath))) {
           files.push(fullPath);
-        } else if (/^(ROADMAP|CONTEXT|UAT|ASSESSMENT|RESEARCH)$/.test(fileName)) {
+        } else if (/^(ROADMAP|CONTEXT|UAT|ASSESSMENT|RESEARCH|CODEBASE|VISION|CHANGELOG)$/.test(fileName)) {
           // Allow numbered variants: M001-ROADMAP, S03-UAT, T02-RESEARCH, etc.
           const baseName = fileName.replace(/^[A-Z]+\d+[-_]/i, '');
           if (CROSS_PROJECT_GSD_FILES.has(`${baseName}.md`)) {
             files.push(fullPath);
-          } else if (/^(ROADMAP|CONTEXT|UAT|ASSESSMENT|RESEARCH)$/.test(baseName) || baseName === 'CONTEXT-DRAFT') {
+          } else if (/^(ROADMAP|CONTEXT|UAT|ASSESSMENT|RESEARCH|CODEBASE|VISION|CHANGELOG)$/.test(baseName) || baseName === 'CONTEXT-DRAFT') {
             files.push(fullPath);
           }
         }

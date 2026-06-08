@@ -1,6 +1,6 @@
 {
   "name": "gsd-qdrant-knowledge",
-  "version": "2.3.4",
+  "version": "2.3.5",
   "description": "CLI per setup automatico GSD + Qdrant in qualsiasi progetto Node.js",
   "main": "src/gsd-qdrant-template.js",
   "bin": {
@@ -11,10 +11,7 @@
     "access": "public"
   },
   "scripts": {
-    "postinstall": "node src/install-model.js",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "postinstall": "node src/install-model.js"
   },
   "keywords": [
     "gsd",
@@ -42,26 +39,22 @@
     "src/cli.js",
     "src/gsd-qdrant-mcp/index.js",
     "src/gsd-qdrant-mcp/package.json",
-    "src/gsd-qdrant-mcp/README.md",
     "src/gsd-qdrant-template.js",
     "src/intent-detector.js",
-    "src/auto-retrieve-mcp.js",
     "src/knowledge-instructions.js",
     "src/re-ranking.js",
+    "src/pattern-detection.js",
+    "src/related-concepts.js",
+    "src/related-docs.js",
     "src/query-cache.js",
-    "src/stopwords.js",
     "src/install-model.js",
     "src/hooks/post-commit.bat",
     "src/hooks/post-commit.ps1",
     "src/hooks/post-commit.sh",
     "README.md",
-    "GSD-QDRANT-SETUP.md",
     "CHANGELOG.md"
   ],
-  "devDependencies": {
-    "@vitest/coverage-v8": "^4.1.2",
-    "vitest": "^4.1.2"
-  },
+
   "type": "commonjs",
   "bugs": {
     "url": "https://github.com/gianlorenzomungiovino/GSD-Qdrant-Knowledge/issues"

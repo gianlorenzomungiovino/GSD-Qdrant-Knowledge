@@ -13,6 +13,19 @@
         "GSD_PERSIST_WRITE_GATE_STATE": "1",
         "GSD_WORKFLOW_PROJECT_ROOT": "D:\\Gianlorenzo\\Documents\\Sviluppo\\_Template\\qdrant-template"
       }
+    },
+    "gsd-qdrant": {
+      "command": "node",
+      "args": [
+        "D:\\Gianlorenzo\\Documents\\Sviluppo\\_Tools\\GSD-Qdrant-Knowledge\\src\\gsd-qdrant-mcp\\index.js",
+        "--project",
+        "D:\\Gianlorenzo\\Documents\\Sviluppo\\_Tools\\GSD-Qdrant-Knowledge"
+      ],
+      "env": {
+        "QDRANT_URL": "http://localhost:6333",
+        "COLLECTION_NAME": "gsd_memory",
+        "VECTOR_NAME": "bge-m3-1024"
+      }
     }
   }
 }

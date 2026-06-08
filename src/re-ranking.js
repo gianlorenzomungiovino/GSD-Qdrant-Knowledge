@@ -7,7 +7,6 @@
  * and results containing exact token matches on symbolNames get a ×1.5 score multiplier.
  */
 
-const { filterStopwords } = require('./stopwords');
 
 function extractTokens(query) {
   if (!query || typeof query !== 'string') return [];
@@ -18,7 +17,7 @@ function extractTokens(query) {
     .trim();
 
   const tokens = normalized.split(/[\s\-_/\\.]+/);
-  return filterStopwords(tokens);
+  return tokens.filter(t => t.length >= 2);
 }
 
 function sourceToTokens(source) {
@@ -111,7 +110,6 @@ function applySymbolBoost(results, rawQuery) {
     }
   }
 
-  console.log('[retrieval] symbolBoost: %d results, sourceBoost: %d results', boostedCount, sourceBoostedCount);
   return results;
 }
 
@@ -162,9 +160,6 @@ function applyRecencyBoost(results, optionsOrDays = 30, rawQuery) {
     totalBoost += boost;
     result.score = Math.min(1.0, result.score + boost);
   }
-
-  const avgBoost = results.length > 0 ? totalBoost / results.length : 0;
-  console.log(`[rerank] ${results.length} results scored, avg boost: ${avgBoost.toFixed(3)}`);
 
   return results;
 }
@@ -275,15 +270,229 @@ function formatResultsForOutput(ranked, options = {}) {
   return { results: ranked, trimmedInfo, totalTokens };
 }
 
+/**
+ * Calculate a composite relevance score from similarity, recency, importance, and project boosts.
+ *
+ * Formula: 0.6 × similarity + 0.15 × recency + 0.05 × importance + reusableBoost + crossProjectBoost + sameProjectBoost
+ *
+ * - similarity: base semantic search score (0–1)
+ * - recency: 1 − min(1, ageInDays / 30), where ageInDays = (now − timestampMs) / 86400000
+ * - importance: (importanceValue / 5), clamped to [0, 1]
+ * - reusableBoost: +0.08 if reusable === true
+ * - crossProjectBoost: +0.06 if project_id differs from the caller's projectId
+ * - sameProjectBoost: +0.04 if project_id matches the caller's projectId
+ *
+ * Used by both CLI (context command) and MCP (auto_retrieve tool) for unified ranking.
+ *
+ * @param {object} params
+ * @param {number} params.similarity - Base semantic score (0–1)
+ * @param {number} params.timestamp - lastModified timestamp in milliseconds
+ * @param {number} [params.importance] - Importance value 1–5 (default 1)
+ * @param {boolean} [params.reusable] - Whether the result is marked reusable (default false)
+ * @param {string} [params.projectId] - Project ID of the result
+ * @param {string} [params.callerProjectId] - Project ID of the caller (for cross/same-project boost)
+ * @returns {number} Composite score clamped to [0, 1]
+ */
+function calculateCompositeScore({
+  similarity,
+  timestamp,
+  importance = 1,
+  reusable = false,
+  projectId,
+  callerProjectId,
+}) {
+  const now = Date.now();
+
+  // Base similarity (0–1)
+  const sim = Math.max(0, Math.min(1, Number(similarity) || 0));
+
+  // Recency: 1 − min(1, ageInDays / 30)
+  const ts = timestamp != null ? Number(timestamp) : now;
+  const ageMs = now - ts;
+  const ageInDays = Math.max(0, ageMs / 86400000);
+  const recency = Math.max(0, Math.min(1, 1 - ageInDays / 30));
+
+  // Importance: (value / 5), clamped to [0, 1]
+  const imp = Math.max(0, Math.min(1, Number(importance) / 5));
+
+  // Boosts
+  const reusableBoost = reusable ? 0.08 : 0;
+  const crossProjectBoost = projectId && projectId !== callerProjectId ? 0.06 : 0;
+  const sameProjectBoost = projectId && projectId === callerProjectId ? 0.04 : 0;
+
+  // Composite score
+  const score = sim * 0.6 + recency * 0.15 + imp * 0.05 + reusableBoost + crossProjectBoost + sameProjectBoost;
+
+  return Math.max(0, Math.min(1, score));
+}
+
+/**
+ * Format search results as a markdown table for CLI output.
+ *
+ * Produces a structured output with:
+ * - Header line showing detected patterns in bold
+ * - Markdown table with columns: File | Descrizione | Progetto | Tecnica
+ * - Footer sections (### File) with truncated content snippets
+ *
+ * @param {Array} rankedResults - Ranked result objects (each with source, summary, project_id, type, language, content, score)
+ * @param {object} topPatterns - Pattern detection result { categories: { [category]: [label] } }
+ * @returns {{ header: string, table: string, footers: string }} Formatted output components
+ */
+function formatResultsForTable(rankedResults, topPatterns) {
+  // ── Header: detected patterns in bold ──────────────────────────────
+  let header = '';
+  try {
+    const cats = topPatterns && topPatterns.categories ? topPatterns.categories : {};
+    const allLabels = Object.values(cats).flatMap(arr =>
+      Array.isArray(arr) ? arr.map(item => typeof item === 'string' ? item : item.label) : []
+    );
+    if (allLabels.length > 0) {
+      header = '**Pattern rilevati:** ' + allLabels.join(', ') + '\n\n';
+    }
+  } catch (_) { /* non-fatal — proceed without header */ }
+
+  // ── Table: File | Descrizione | Progetto | Tecnica ────────────────────
+  let table = '| File | Descrizione | Progetto | Tecnica |\n';
+  table += '|------|-----------|----------|---------|\n';
+
+  try {
+    if (!rankedResults || !Array.isArray(rankedResults)) {
+      table += '| — | — | — | — |\n';
+    } else {
+      for (const result of rankedResults) {
+        if (!result) {
+          table += '| — | — | — | — |\n';
+          continue;
+        }
+
+        // File: source path as relative markdown link
+        const source = result.source || '—';
+        const fileLink = source !== '—'
+          ? `[${source}](#${source.replace(/[^a-zA-Z0-9]/g, '_')})`
+          : '—';
+
+        // Descrizione: summary truncated to ~80 chars
+        const summary = result.summary || '—';
+        const desc = summary.length > 80 ? summary.slice(0, 77) + '...' : summary;
+
+        // Progetto: project_id or '—'
+        const project = result.project_id || '—';
+
+        // Tecnica: type/language (e.g. 'code/TypeScript', 'doc/markdown')
+        const type = result.type || 'unknown';
+        const language = result.language || '';
+        const technique = language ? `${type}/${language}` : type;
+
+        table += `| ${fileLink} | ${desc} | ${project} | ${technique} |\n`;
+      }
+    }
+  } catch (_) { /* non-fatal — table already has header */ }
+
+  table += '\n';
+
+  // ── Footers: empty — file content snippets are NOT printed in CLI output ──
+  // Related concepts and documentation are appended separately via formatConceptsSection.
+  let footers = '';
+
+  return { header, table, footers };
+}
+
+/**
+ * Format related concepts and documentation as markdown sections for CLI output.
+ *
+ * Produces:
+ *   - "## Concetti correlati" with a numbered list (when concepts array is non-empty)
+ *   - "## Documentazione correlata" with grouped doc entries (when relatedDocs array is non-empty)
+ *
+ * Each section is wrapped in try/catch so a formatting error in one does not
+ * prevent the other from rendering.  Long descriptions are truncated to 120 chars.
+ *
+ * @param {Array<Object>|null|undefined} concepts — related concepts from findRelatedConcepts: [{name, description, source, score}, ...]
+ * @param {Array<Object>|null|undefined} relatedDocs — related docs from findRelatedDocs: [{ids, docPaths, descriptions}, ...]
+ * @returns {string} markdown-formatted sections or empty string when both inputs are empty
+ */
+function formatConceptsSection(concepts, relatedDocs) {
+  const conceptList = Array.isArray(concepts) ? concepts : [];
+  const docGroups = Array.isArray(relatedDocs) ? relatedDocs : [];
+
+  // If both arrays are empty, return early
+  if (conceptList.length === 0 && docGroups.length === 0) {
+    return '';
+  }
+
+  let output = '';
+
+  // ── Concepts section ─────────────────────────────────────────────────
+  try {
+    if (conceptList.length > 0) {
+      output += '\n## Elementi correlati\n\n';
+      for (let i = 0; i < conceptList.length; i++) {
+        const c = conceptList[i];
+        if (!c) continue;
+
+        const name = c.name || c.source || 'Concetto sconosciuto';
+        let description = (c.description || '—').replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
+        // Truncate long descriptions to 120 chars
+        if (description.length > 120) {
+          description = description.slice(0, 117) + '...';
+        }
+        const source = c.source || '—';
+
+        output += `${i + 1}. **${name}** — ${description}\n   - Source: ${source}\n\n`;
+      }
+    }
+  } catch (err) {
+    // Silent failure — concepts section omitted on error
+  }
+
+  // ── Documentation section ────────────────────────────────────────────
+  try {
+    if (docGroups.length > 0) {
+      output += '\n## Documentazione correlata\n\n';
+      for (const group of docGroups) {
+        if (!group) continue;
+
+        // GSD IDs: M001, S01, T02, etc.
+        const ids = group.ids || group.id || group.sharedIds || [];
+        const idsText = Array.isArray(ids) ? ids.join(', ') : String(ids);
+        output += `### GSD IDs: ${idsText}\n\n`;
+
+        // Doc paths with descriptions
+        const docPaths = group.docPaths || group.sources || group.paths || [];
+        const descriptions = group.descriptions || group.titles || [];
+
+        if (Array.isArray(docPaths)) {
+          for (let i = 0; i < docPaths.length; i++) {
+            const path = docPaths[i] || '—';
+            const desc = Array.isArray(descriptions) && descriptions[i]
+              ? descriptions[i]
+              : '';
+            const entry = desc ? `${path} — ${desc}` : path;
+            output += `- ${entry}\n`;
+          }
+        } else if (docPaths) {
+          output += `- ${docPaths}\n`;
+        }
+
+        output += '\n';
+      }
+    }
+  } catch (err) {
+    // Silent failure — docs section omitted on error
+  }
+
+  return output;
+}
+
 module.exports = {
   applyRecencyBoost,
   applySymbolBoost,
-  extractTokens,
-  sourceToTokens,
-  calculateSourceTokenOverlapScore,
+  calculateCompositeScore,
   calculateLexicalSignal,
   estimateTokens,
   trimResultsByTokenBudget,
   sortChunksByPosition,
-  formatResultsForOutput
+  formatResultsForOutput,
+  formatResultsForTable,
+  formatConceptsSection
 };

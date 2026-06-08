@@ -15,11 +15,11 @@ const SWEEP_INTERVAL_MS = 60 * 1000; // sweep every 60 seconds
 let hits = 0;
 let misses = 0;
 
-const { STOPWORDS } = require('./stopwords');
+
 
 /**
  * Normalize a query string for cache key generation.
- * Steps: lowercase → split on whitespace/punctuation → filter stopwords → join.
+ * Steps: lowercase → trim → split on whitespace/hyphens/underscores → filter empty tokens → join.
  * @param {string} query - Original user query
  * @returns {string} Normalized query suitable as a cache key
  */
@@ -28,10 +28,10 @@ function normalizeQuery(query) {
 
   const normalized = query.toLowerCase().trim();
   const tokens = normalized.split(/[\s\-_]+/);
-  const filtered = tokens.filter(t => t.length > 0 && !STOPWORDS.has(t));
+  const filtered = tokens.filter(t => t.length > 0);
   const result = filtered.join(' ');
 
-  console.log('[cache] normalized: %s → %s', query, result);
+  console.log('[cache] normalized: %s → %s', query, result); // lowercase → trim → split → filter empty → join
   return result;
 }
 
@@ -152,4 +152,4 @@ class QueryCache {
 // Singleton instance — shared across all imports
 const cache = new QueryCache();
 
-module.exports = { cache, normalizeQuery };
+module.exports = { cache };

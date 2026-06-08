@@ -74,8 +74,8 @@ const CONFIG = resolveConfig();
 
 // Load re-ranking utilities
 const {
-  applyRecencyBoost,
   applySymbolBoost,
+  calculateCompositeScore,
   calculateLexicalSignal,
   sortChunksByPosition,
   formatResultsForOutput
@@ -299,14 +299,33 @@ function createMcpServer() {
         const projectId = CONFIG.projectRoot.split(/[/\\]/).pop();
 
         const ranked = rankedHits.map(hit => {
-          const recencyScore = Math.min(1, (Date.now() - hit.payload.timestamp) / (30 * 24 * 60 * 60 * 1000));
-          const importanceScore = (hit.payload.importance || 1) / 5;
-          const reusableBoost = hit.payload.reusable ? 0.08 : 0;
-          const crossProjectBoost = hit.payload.project_id && hit.payload.project_id !== projectId ? 0.12 : 0;
-          const sameProjectBoost = hit.payload.project_id === projectId ? 0.04 : 0;
-          const score = hit.score * 0.6 + (1 - recencyScore) * 0.15 + importanceScore * 0.05 + reusableBoost + crossProjectBoost + sameProjectBoost;
-          return { ...hit.payload, score };
-        }).slice(0, limit);
+          const payload = hit.payload || {};
+          const composite = calculateCompositeScore({
+            similarity: hit.score,
+            timestamp: payload.timestamp,
+            importance: payload.importance || 1,
+            reusable: payload.reusable || false,
+            projectId: payload.project_id,
+            callerProjectId: projectId,
+          });
+          return { ...hit.payload, score: composite };
+        });
+
+        // Deduplicate by project_id: keep top 2 results per project, then sort by score
+        const projectGroups = new Map();
+        for (const hit of ranked) {
+          const pid = hit.project_id || '__unknown__';
+          if (!projectGroups.has(pid)) projectGroups.set(pid, []);
+          projectGroups.get(pid).push(hit);
+        }
+        const deduped = [];
+        for (const [, hits] of projectGroups) {
+          hits.sort((a, b) => b.score - a.score);
+          deduped.push(...hits.slice(0, 2));
+        }
+        deduped.sort((a, b) => b.score - a.score);
+
+        const final = deduped.slice(0, limit);
 
         applySymbolBoost(ranked, task);
 

@@ -7,8 +7,6 @@
  * Analyzes user input to determine search type, filters, and preferences.
  */
 
-const { filterStopwords } = require('./stopwords');
-
 /**
  * Detect intent from a natural language query
  * 
@@ -314,29 +312,24 @@ function extractSearchTerms(query, filters) {
 
 /**
  * Keyword extraction for embedding queries.
- * 
- * Simple fallback: tokenize, filter noise (stopwords + short/long tokens).
+ *
+ * Simple fallback: tokenize, filter noise tokens (length 2–40).
  * This is a minimal safety net — the primary normalization should happen via
  * KNOWLEDGE.md instructions to the LLM before calling auto_retrieve.
  */
 function extractKeywords(query) {
   if (!query || typeof query !== 'string') return '';
 
-  const raw = query.trim();
-  const normalized = raw.toLowerCase();
-  
+  const raw = query.trim().toLowerCase();
+
   // Split on whitespace, punctuation, hyphens, underscores
-  const rawTokens = raw.split(/[\s\-_.,;:!?(){}[\]<>\/\\|@#$%^&*+=~`]+/);
-  const normalizedTokens = normalized.split(/[\s\-_.,;:!?(){}[\]<>\/\\|@#$%^&*+=~`]+/);
-  
-  // Filter stopwords (English + Italian) and noise tokens
-  const meaningful = rawTokens.filter((token, idx) => {
-    const normalizedToken = normalizedTokens[idx] || token.toLowerCase();
-    return token.length >= 2 &&
-      token.length <= 40 &&
-      filterStopwords([normalizedToken]).length > 0;
+  const tokens = raw.split(/[\s\-_.,;:!?(){}[\]<>\/\\|@#$%^&*+=~`]+/);
+
+  // Filter noise tokens (length 2–40)
+  const meaningful = tokens.filter(token => {
+    return token.length >= 2 && token.length <= 40;
   });
-  
+
   if (meaningful.length === 0) return '';
 
   // Return all meaningful tokens — no artificial cap. The embedding model handles variable length.
@@ -402,17 +395,17 @@ function buildQdrantFilter(intent) {
     const mappedType = TYPE_MAP[intent.filters.type];
     if (mappedType && KNOWN_PAYLOAD_TYPES.has(mappedType)) {
       should.push({ key: 'type', match: { value: mappedType } });
-      console.log('[qdrant] filter: type "%s" → payload "%s" (soft boost)', intent.filters.type, mappedType);
+
     } else if (intent.filters.type) {
       // Unknown search type — no mapping exists. Skip entirely.
-      console.log('[qdrant] filter: unknown type "%s", skipping', intent.filters.type);
+
     }
   }
 
   // ── project_id → soft boost (should, not must) ──────────────────
   if (intent.filters.project_id) {
     should.push({ key: 'project_id', match: { value: intent.filters.project_id } });
-    console.log('[qdrant] filter: project "%s" (soft boost)', intent.filters.project_id);
+
   }
 
   // ── tags → soft boost (should) ────────────────────────────────────
@@ -433,121 +426,14 @@ function buildQdrantFilter(intent) {
   if (should.length > 0) filter.should = should;
 
   // Log what we built for agent observability
-  console.log('[qdrant] filter: must=%d, should=%d', must.length, should.length);
+
 
   return Object.keys(filter).length > 0 ? filter : null;
-}
-
-/**
- * Generate a search query from structured intent
- * 
- * @param {Object} intent - The structured intent
- * @returns {string} Formatted search query string
- */
-function generateQuery(intent) {
-  const parts = [];
-  
-  // Add search terms
-  if (intent.query) {
-    parts.push(intent.query);
-  }
-  
-  // Add filters
-  if (intent.filters.language) {
-    parts.push(`lang:${intent.filters.language}`);
-  }
-  
-  if (intent.filters.type) {
-    parts.push(`type:${intent.filters.type}`);
-  }
-  
-  if (intent.filters.tags && intent.filters.tags.length > 0) {
-    parts.push(`tags:${intent.filters.tags.join(',')}`);
-  }
-  
-  if (intent.filters.crossProject) {
-    parts.push('cross:true');
-  }
-  
-  // Add preferences
-  if (intent.preferences.limit) {
-    parts.push(`limit:${intent.preferences.limit}`);
-  }
-  
-  if (intent.preferences.sort) {
-    parts.push(`sort:${intent.preferences.sort}`);
-  }
-  
-  if (intent.preferences.exact) {
-    parts.push('exact:true');
-  }
-  
-  if (intent.preferences.fuzzy) {
-    parts.push('fuzzy:true');
-  }
-  
-  return parts.join(' ');
-}
-
-/**
- * Main execution - test the intent detector
- */
-function main() {
-  const testQueries = [
-    'javascript code for React component',
-    'typescript example with TypeScript and JSDoc',
-    'Python utility function',
-    'Go snippet for Kubernetes deployment',
-    'Cross-project search for API endpoints',
-    'Limit 5 top results for database query',
-    'Sort by relevance for performance optimization',
-    '"exact match" query',
-    'fuzzy search for similar code',
-    'HTML template with Tailwind CSS'
-  ];
-  
-  console.log('🔍 Intent Detector Module');
-  console.log('='.repeat(60));
-  console.log('Testing intent detection with natural language queries:\n');
-  
-  testQueries.forEach(query => {
-    const intent = detectIntent(query);
-    console.log(`Original: "${query}"`);
-    console.log('Detected Intent:');
-    console.log(`  Type: ${intent.type}`);
-    console.log(`  Query: ${intent.query || '(none)'}`);
-    console.log(`  Filters: ${JSON.stringify(intent.filters) || '(none)'}`);
-    console.log(`  Preferences: ${JSON.stringify(intent.preferences) || '(none)'}`);
-    console.log(`  Generated: "${generateQuery(intent)}"`);
-    console.log('-'.repeat(60));
-  });
-  
-  // Test buildQdrantFilter
-  console.log('\n--- Qdrant Filter Builder ---');
-  testQueries.forEach(query => {
-    const intent = detectIntent(query);
-    const filter = buildQdrantFilter(intent);
-    console.log(`Query: "${query}"`);
-    console.log(`  filter: ${JSON.stringify(filter)}`);
-    console.log('-'.repeat(60));
-  });
-
-  console.log('\n✅ Intent detector module ready!');
 }
 
 // Export for use in other modules
 module.exports = {
   detectIntent,
-  detectSearchType,
-  extractFilters,
-  extractPreferences,
-  extractSearchTerms,
   extractKeywords,
-  generateQuery,
   buildQdrantFilter
 };
-
-// Execute if run directly
-if (require.main === module) {
-  main();
-}
