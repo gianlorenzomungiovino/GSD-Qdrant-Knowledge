@@ -390,25 +390,9 @@ function formatResultsForTable(rankedResults, topPatterns) {
 
   table += '\n';
 
-  // ── Footers: ### File sections with truncated content ──────────────
+  // ── Footers: empty — file content snippets are NOT printed in CLI output ──
+  // Related concepts and documentation are appended separately via formatConceptsSection.
   let footers = '';
-  try {
-    if (rankedResults && Array.isArray(rankedResults)) {
-      for (let i = 0; i < rankedResults.length; i++) {
-        const result = rankedResults[i];
-        if (!result) continue;
-
-        const source = result.source || `risultato_${i + 1}`;
-        footers += `### ${source}\n\n`;
-
-        const content = result.content || '';
-        if (content) {
-          const snippet = content.length > 200 ? content.slice(0, 197) + '...' : content;
-          footers += snippet + '\n\n';
-        }
-      }
-    }
-  } catch (_) { /* non-fatal */ }
 
   return { header, table, footers };
 }
@@ -441,21 +425,20 @@ function formatConceptsSection(concepts, relatedDocs) {
   // ── Concepts section ─────────────────────────────────────────────────
   try {
     if (conceptList.length > 0) {
-      output += '\n## Concetti correlati\n\n';
+      output += '\n## Elementi correlati\n\n';
       for (let i = 0; i < conceptList.length; i++) {
         const c = conceptList[i];
         if (!c) continue;
 
         const name = c.name || c.source || 'Concetto sconosciuto';
-        let description = c.description || '—';
+        let description = (c.description || '—').replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
         // Truncate long descriptions to 120 chars
         if (description.length > 120) {
           description = description.slice(0, 117) + '...';
         }
         const source = c.source || '—';
-        const score = typeof c.score === 'number' ? c.score.toFixed(2) : 'N/A';
 
-        output += `${i + 1}. **${name}** — ${description}\n   - Source: ${source} (score: ${score})\n\n`;
+        output += `${i + 1}. **${name}** — ${description}\n   - Source: ${source}\n\n`;
       }
     }
   } catch (err) {

@@ -102,25 +102,23 @@ Il **lexical rescue pre-threshold** è il passo chiave che permette ai file con 
 
 **CLI context output**: Oltre al retrieval standard, il comando `context` produce una tabella markdown strutturata con pattern tecnologici rilevati, concetti correlati espansi semanticamente (two-phase search) e documentazione correlata.
 
-## Esempio di output
+## Esempio di output CLI
 
 ```
-=== CONTESTO DA MEMORIA CROSS-PROJECT ===
-Task: "implementare autenticazione JWT"
-Trovati 3 risultati rilevanti:
+**Pattern rilevati:** React, TypeScript
 
-• [doc] Authentication middleware pattern
-  Score: 0.967 | Source: auth-middleware/DECISIONS.md
-  Match type: semantic
+| File | Descrizione | Progetto | Tecnica |
+|------|-----------|----------|---------|
+| [src/auth/jwt.js](#src_auth_jwt_js) | JwtModule | payment-service | code/javascript |
+| [lib/auth.ts](#lib_auth_ts) | type AuthConfig | api-gateway | code/typescript |
 
-• [code] JWT auth module with refresh tokens
-  Score: 0.942 | Source: payment-service/src/auth/jwt.js
-  Match type: semantic
-  relatedDocPaths: [auth-middleware/DECISIONS.md]
+## Elementi correlati
 
-• [doc] Security decisions and patterns
-  Score: 0.918 | Source: api-gateway/DECISIONS.md
-  Match type: semantic
+1. **authMiddleware** — export function authMiddleware(req, res, next)
+   - Source: start/src/backend/utils/authMiddleware.js
+
+2. **useAuth** — const useAuth = () =>
+   - Source: start/src/contesti/useAuth.js
 ```
 
 ## CLI

@@ -14,7 +14,7 @@
  * performs a Qdrant search for docs containing those IDs,
  * and returns grouped results as [{ids, docPaths, descriptions}].
  *
- * @param {Object} sync — GSDKnowledgeSync instance (has .client, .pipeline, .generatePlaceholderEmbedding)
+ * @param {Object} sync — GSDKnowledgeSync instance (has .embedText)
  * @param {string} collectionName — Qdrant collection name
  * @param {Array<Object>} rankedResults — primary ranked results
  * @param {Object} options — search options
@@ -59,15 +59,10 @@ async function findRelatedDocs(sync, collectionName, rankedResults, options = {}
     console.log(`[related-docs] Found ${idCount} GSD IDs: ${idsArray.join(', ')}`);
   }
 
-  // Build embedding from GSD IDs
+  // Build embedding using the SAME local model as primary search.
   let vector;
   try {
-    if (sync.client.pipeline) {
-      const output = await sync.client.pipeline(idsArray.join(' '), { pooling: 'mean', normalize: true });
-      vector = Array.from(output.data);
-    } else {
-      vector = sync.generatePlaceholderEmbedding(idsArray.join(' '));
-    }
+    vector = await sync.embedText(idsArray.join(' '));
   } catch (err) {
     return [];
   }

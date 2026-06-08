@@ -160,7 +160,5 @@ function getTopPatterns(results) {
 }
 
 module.exports = {
-  PATTERN_DB,
-  detectPatterns,
   getTopPatterns,
 };

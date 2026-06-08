@@ -2,6 +2,12 @@
 
 ## 2.3.5
 
+### Fixed — Dead code cleanup
+
+- **Rimosso `findRelatedDocs()` da `related-concepts.js`** (~80 righe): funzione completamente morta, mai chiamata. La CLI usa la versione di `related-docs.js`.
+- **Rimosse esportazioni orfane**: `extractKeywords`, `deriveDescription` da `related-concepts.js` (solo uso interno); `PATTERN_DB`, `detectPatterns` da `pattern-detection.js` (solo uso interno).
+- **`related-concepts.js` ridotta da 14.7kB a 11.6kB** (-21%).
+
 ### Added — CODEBASE.md embedding in Qdrant whitelist
 
 - **CODEBASE.md, VISION.md, CHANGELOG.md aggiunti alla whitelist di embedding**: Questi file ora vengono indicizzati in Qdrant insieme ai file sorgente del progetto, fornendo all'agente contesto sul progetto (visione, struttura, storia delle modifiche) durante la ricerca semantica.
@@ -30,25 +36,25 @@
 
 - **`formatResultsForTable()` in `re-ranking.js`**: Il comando `CLI context` ora produce una tabella markdown strutturata con colonne **File | Descrizione | Progetto | Tecnica** invece di JSON grezzo.
 - **`pattern-detection.js` con `PATTERN_DB` centralizzato**: 10+ pattern tecnologici rilevati via regex (zero-LLM). `getTopPatterns()` aggrega e normalizza i pattern su più risultati.
-- **Header pattern in evidenza** nella tabella CLI, con footers che mostrano contenuti troncati (80 char summary, 200 char content).
+- **Header pattern in evidenza** nella tabella CLI.
 
 ### Added — CLI conceptual expansion
 
 - **`related-concepts.js` con two-phase semantic search**: Risultati primari → estrazione keyword → ricerca secondaria Qdrant → filtraggio overlap. Espansione semantica dei concetti senza chiamate LLM esterne.
 - **`related-docs.js` con GSD ID extraction**: Correlazione documentazione tramite estrazione di GSD IDs (M\d{3}, S\d{2}, T\d{2}, R\d{3}, D\d{3}) dai payload Qdrant.
-- **`formatConceptsSection()`**: Sezioni markdown "Concetti correlati" e "Documentazione correlata" sotto la tabella CLI, con try/catch indipendente per resilienza.
+- **`formatConceptsSection()`**: Sezioni markdown sotto la tabella CLI, con try/catch indipendente per resilienza.
 
 ### Removed — Dead code elimination
 
-- **Eliminato `src/stopwords.js`**: File di stopwords eliminato e dati inlineati nei 3 consumatori (query-cache.js, intent-detector.js, re-ranking.js). Elimina una dipendenza cross-file non necessaria.
+- **Eliminato `src/stopwords.js`**: File di stopwords eliminato e dati inlineati nei 3 consumatori (query-cache.js, intent-detector.js, re-ranking.js).
 - **Eliminato `src/auto-retrieve-mcp.js`**: File orfano senza referenze nel codice sorgente.
 - **Eliminato `src/install-gsd-extension.js`**: File orfano senza referenze nel codice sorgente.
-- **Eliminato `src/gsd-qdrant-mcp/README.md`**: File ridondante — la documentazione è nel README principale del progetto.
+- **Eliminato `src/gsd-qdrant-mcp/README.md`**: File ridondante.
 
 ### Removed — Stopwords filtering removed from token extraction
 
-- **`filterStopwords` rimosso da `extractTokens()` e `extractKeywords()`**: Solo il filtro per lunghezza del token (≥2 caratteri) è mantenuto. Le stopwords non filtrano più i token durante l'estrazione.
-- **`filterStopwords` rimosso da `normalizeQuery()`**: La funzione ora fa solo lowercase → trim → split → filtro token vuoti → join. Niente più stopwords.
+- **`filterStopwords` rimosso da `extractTokens()` e `extractKeywords()`**: Solo il filtro per lunghezza del token (≥2 caratteri) è mantenuto.
+- **`filterStopwords` rimosso da `normalizeQuery()`**: La funzione ora fa solo lowercase → trim → split → filtro token vuoti → join.
 
 ### Removed — Unused exports cleaned up
 
@@ -56,15 +62,17 @@
 
 ### Changed — Simplified normalizeQuery()
 
-- **`normalizeQuery()` semplificato in query-cache.js**: Rimossa costante STOPWORDS e funzione filterStopwords. Pipeline: lowercase → trim → split → filtro token vuoti → join.
+- **`normalizeQuery()` semplificato in query-cache.js**: Rimossa costante STOPWORDS e funzione filterStopwords.
 
 ### Changed — COLLECTION_NAME ora configurabile via env var
 
-- **`gsd-qdrant-template.js` legge `COLLECTION_NAME` da `process.env`**: Prima hardcoded a `'gsd_memory'`, ora rispetta la variabile d'ambiente con fallback. Allineato alle altre configurazioni (QDRANT_URL, VECTOR_NAME, ecc.).
+- **`gsd-qdrant-template.js` legge `COLLECTION_NAME` da `process.env`**: Prima hardcoded a `'gsd_memory'`, ora rispetta la variabile d'ambiente con fallback.
 
 ### Fixed — package.json files array cleaned
 
-- **Rimossi riferimenti a file eliminati**: stopwords.js, auto-retrieve-mcp.js, GSD-QDRANT-SETUP.md, src/gsd-qdrant-mcp/README.md rimossi dal fields array. `npm pack` genera tarball pulito.
+- **Rimossi riferimenti a file eliminati**: stopwords.js, auto-retrieve-mcp.js, GSD-QDRANT-SETUP.md, src/gsd-qdrant-mcp/README.md.
+
+---
 
 ## 2.3.4
 
