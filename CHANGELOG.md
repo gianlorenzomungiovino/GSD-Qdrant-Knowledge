@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.3.6
+
+### Fixed — Knowledge instructions positioned after GSD intro paragraph
+
+- **`insertAfterIntro()` in `knowledge-instructions.js`**: le istruzioni auto-retrieve per l'agente GSD vengono inserite **subito dopo l'intro fissa** del template KNOWLEDGE.md (`"Agents read this before every unit..."`), invece di essere *appese in fondo* al file. La funzione usa un anchor testuale fisso invece di cercare heading `##`, evitando di spezzare blocchi custom di altri tool (GitNexus ha i propri `## Always Do`, `## Never Do`, ecc.). Fallback su "prima del primo `##`" per file non generati da GSD.
+
+### Fixed — Precise HTML-comment delimiters for Qdrant section
+
+- **Marker HTML `<!-- gsd-qdrant-knowledge:start -->` / `end -->`**: la sezione Qdrant è ora delimitata da comment HTML espliciti invece che da heading `##` e ricerca del prossimo `##`. Questo rende **installazione, aggiornamento e rimozione** (uninstall) precisi al 100% — nessun altro contenuto del file viene toccato, anche se contiene heading `##` personalizzati da altri tool.
+- **`replaceQdrantBlock()` sostituisce `replaceBetweenMarkers()`**: la vecchia funzione cercava il prossimo `##` dopo il marker, rischiando di cancellare contenuto di altri tool. La nuova cerca solo `MARKER_END`.
+- **`extractVersion()` limitato al blocco Qdrant**: la versione viene letta solo dal blocco tra i marker HTML, non dall'intero file.
+- **Funzione rinominata**: `insertBeforeFirstHeading()` → `insertAfterIntro()` per riflettere il comportamento reale.
+
+---
+
 ## 2.3.5
 
 ### Fixed — Dead code cleanup
