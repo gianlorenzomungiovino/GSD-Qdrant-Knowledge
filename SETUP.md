@@ -106,7 +106,7 @@ Dovresti vedere il server `gsd-qdrant` con command, args e env configurati.
 La quantizzazione TurboQuant è **abilitata di default**. Offre:
 
 - **~8x compression** vs F32 (doppia della scalar quantization)
-- **Recall ~0.92** (quasi invariata rispetto a F32)
+- **Recall 95,6%** (misurato su 39.853 punti, quasi invariata rispetto a F32)
 - **Velocità simile** alla scalar quantization
 - **Funziona con qualsiasi embedding model** (non serve distribuzione centrata)
 
