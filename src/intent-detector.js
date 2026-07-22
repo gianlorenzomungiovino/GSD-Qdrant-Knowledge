@@ -61,11 +61,11 @@ function detectSearchType(query) {
     'fuzzy': /\b(fuzzy|approssimativo|similare|fuzzi)\b/,
     // Code placement patterns — documentation takes priority over config when both match
     'documentation': /\b(documentation|documentazione|docs|wiki|manuale)\b/,
-    'script': /\b(cli|command|script|scripting|esecuzione|esecuzione)\b/,
-    'utility': /\b(utility|helper|aiuto|help|funzione|function|libreria|librerias)\b/,
+    'script': /\b(cli|command|script|scripting|esecuzione)\b/,
+    'utility': /\b(utility|helper|aiuto|help|funzione|function|libreria|librerie)\b/,
     'component': /\b(component|componente|ui|interface|interfaccia|widget)\b/,
     'test': /\b(test|testing|prove|testare|suite|test suite)\b/,
-    'config': /\b(config|configuration|configurazione|configuratione|settings|impostazioni)\b/,
+    'config': /\b(config|configuration|configurazione|settings|impostazioni)\b/,
     'snippet': /\b(snippet|pezzo|tratto|porzione)\b/,
     'example': /\b(example|esempio|esempi|sample|campioni|demo)\b/
   };
@@ -97,9 +97,9 @@ function extractFilters(query, searchType) {
     'go': /\b(go|golang|\.go)\b/,
     'rust': /\b(rust|rs|\.rs)\b/,
     'java': /\b(java|\.java)\b/,
-    'c': /\b(c|\.c)\b/,
-    'cpp': /\b(c\+\+|cpp|\.cpp|\.cc)\b/,
-    'c#': /\b(c#|c\#|\.cs)\b/,
+    'cpp': /(?<!\w)(c\+\+|cpp|\.cpp|\.cc)(?!\+)/,
+    'c#': /c#|c\#|\.cs(?![a-zA-Z0-9_])/,
+    'c': /\bc(?!\+|#)|\.c\b/,
     'ruby': /\b(ruby|rb|\.rb)\b/,
     'php': /\b(php|\.php)\b/,
     'html': /\b(html|\.html|\.htm)\b/,
@@ -123,15 +123,15 @@ function extractFilters(query, searchType) {
   // Extract type filter
   const typePatterns = {
     'snippet': /\bsnippet\b/,
-    'config': /\b(config|configuration|configurazione|configuratione)\b/,
+    'config': /\b(config|configuration|configurazione)\b/,
     'example': /\b(example|esempio|esempi|sample|campione|campioni)\b/,
     'template': /\b(template|modello|modelli)\b/,
     'documentation': /\b(documentation|documentazione|docs)\b/,
     'code': /\b(code|codice)\b/,
     'script': /\b(script|scripting)\b/,
-    'utility': /\b(utility|utilità|utilità|utils|utils)\b/,
-    'helper': /\b(helper|aiuto|aiuto|help)\b/,
-    'library': /\b(library|libreria|librerias|lib)\b/,
+    'utility': /\b(utility|utilità|utils)\b/,
+    'helper': /\b(helper|aiuto|help)\b/,
+    'library': /\b(library|libreria|librerie|lib)\b/,
     'framework': /\b(framework|frameworks|cornice|cornici)\b/,
     'tool': /\b(tool|strumento|strumenti)\b/,
     'test': /\b(test|testing|prove|testare)\b/,
@@ -285,7 +285,7 @@ function extractSearchTerms(query, filters) {
   // Remove filter keywords and their values
   const filterKeywords = [
     'javascript', 'js', 'typescript', 'ts', 'python', 'py', 'go', 'golang',
-    'rust', 'rs', 'java', 'c', 'cpp', 'c#', 'ruby', 'rb', 'php', 'html',
+    'rust', 'rs', 'java', 'cpp', 'c#', 'ruby', 'rb', 'php', 'html',
     'css', 'sql', 'json', 'yaml', 'yml', 'markdown', 'md', 'shell', 'bash',
     'sh', 'docker', 'dockerfile', 'other', 'snippet', 'config', 'configuration',
     'example', 'esempio', 'sample', 'template', 'modello', 'documentation',

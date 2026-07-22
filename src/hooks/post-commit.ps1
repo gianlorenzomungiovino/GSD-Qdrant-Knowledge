@@ -5,6 +5,8 @@ $PROJECT_ROOT = git rev-parse --show-toplevel 2>$null
 if (-not $PROJECT_ROOT) { exit 0 }
 Set-Location $PROJECT_ROOT
 
+# Auto-sync ad ogni commit locale — nessun filtro
+
 # Cerca il CLI nel package npm installato
 $CLI_PATH = $null
 if (Test-Path "node_modules\gsd-qdrant-knowledge\src\cli.js") {
@@ -21,11 +23,12 @@ if (Test-Path "node_modules\gsd-qdrant-knowledge\src\cli.js") {
 
 if (-not $CLI_PATH) { exit 0 }
 
-# Controlla se Qdrant è raggiungibile (timeout 1s, silent)
+# Controlla se Qdrant è raggiungibile (endpoint /health, timeout 2s)
 try {
-    Invoke-WebRequest -Uri "http://localhost:6333/" -TimeoutSec 1 -UseBasicParsing | Out-Null
+    Invoke-WebRequest -Uri "http://localhost:6333/health" -TimeoutSec 2 -UseBasicParsing | Out-Null
 } catch {
     exit 0
 }
 
-node $CLI_PATH sync 2>$null || exit 0
+# Esegue il sync in background per non bloccare il commit
+Start-Process -FilePath "node" -ArgumentList "$CLI_PATH", "sync" -WindowStyle Hidden -Wait:$false

@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.3.7
+
+### Added — Non-blocking post-commit hooks
+
+- **Sync eseguito in background su tutti e 3 i platform**: I hook post-commit (.bat, .ps1, .sh) ora lanciano il sync in background (`start /b`, `Start-Process -WindowStyle Hidden`, `nohup & disown`) invece di bloccare il commit in attesa della risposta.
+- **Endpoint health verificato**: Il controllo di raggiungibilità Qdrant usa `/health` invece del root `/`, con timeout aumentato a 2s.
+- **Nessun filtro di commit**: Gli hook ora sincronizzano ad ogni commit locale, senza controllare se ci sono file `.gsd/` modificati.
+
+### Fixed — Universal GSD file detection in walkGsd
+
+- **Regex stripa TUTTI i prefissi consecutivi**: `/^([A-Z]*\d+[-_])+/gi` — prima `/^[A-Z]+\d+[-_]/i` stripava solo il primo prefisso, rompendosi con la nuova struttura `phases/01-01-ASSESSMENT.md`.
+- **Logica whitelist-only**: Rimosso il controllo `GSD_PROJECT_FILES` blacklist da `walkGsd` (era un falso positivo che escludeva `CODEBASE.md` dalla whitelist). La blacklist rimane in `walkProjectCode` per l'indicizzazione del codice sorgente.
+- **Struttura directory agnostica**: `walkGsd` ora funziona uniformemente con `milestones/M001/`, `phases/01-xxx/`, o layout flat — dipende solo dal nome base del file, non dal percorso.
+- **Risultati**: espresso_scraping (milestones) → 3 file, Moro Design Store (phases) → 67 file.
+
+### Fixed — Language filter disambiguation (C/C++/C#)
+
+- **Pattern C/C++/C# separati correttamente**: Prima `/b(c|\.c)\b/` e `/b(c\+\+|cpp|\.cpp)\b/` potevano matchare ambigui. Ora:
+  - `'c': /\bc(?!\+|#)|\.c\b/` — C puro, non C++ o C#
+  - `'cpp': /(?<!\w)(c\+\+|cpp|\.cpp|\.cc)(?!\+)/` — C++ con word boundary
+  - `'c#': /c#|c\#|\.cs(?![a-zA-Z_])/` — C# con lookahead negativo
+- **Pattern duplicati rimossi**: `'esecuzione'` duplicato in `script`, `'librerias'` in `utility`, `'configuratione'` in `config`.
+- **Termini di filtro puliti da `extractSearchTerms()`**: `c`, `c#`, `configuration`, `librerias`, `aiuto` duplicato rimossi dalla lista di rimozione.
+
+---
+
 ## 2.3.6
 
 ### Fixed — Knowledge instructions positioned after GSD intro paragraph

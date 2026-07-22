@@ -6,6 +6,8 @@ for /f "delims=" %%i in ('git rev-parse --show-toplevel 2^>nul') do set PROJECT_
 if "%PROJECT_ROOT%"=="" exit /b 0
 cd /d "%PROJECT_ROOT%" || exit /b 1
 
+REM Auto-sync ad ogni commit locale — nessun filtro
+
 REM Cerca il CLI nel package npm installato
 set CLI_PATH=""
 if exist "node_modules\gsd-qdrant-knowledge\src\cli.js" (
@@ -21,7 +23,8 @@ if exist "node_modules\gsd-qdrant-knowledge\src\cli.js" (
 :found
 if "%CLI_PATH%"=="" exit /b 0
 
-REM Controlla se Qdrant è raggiungibile (timeout 1s, silent)
-curl -sf --connect-timeout 1 http://localhost:6333/ >nul 2>&1 || exit /b 0
+REM Controlla se Qdrant è raggiungibile (endpoint /health, timeout 2s)
+curl -sf --connect-timeout 2 http://localhost:6333/health >nul 2>&1 || exit /b 0
 
-node "%CLI_PATH%" sync >nul 2>&1 || exit /b 0
+REM Esegue il sync in background per non bloccare il commit
+start /b node "%CLI_PATH%" sync >nul 2>&1

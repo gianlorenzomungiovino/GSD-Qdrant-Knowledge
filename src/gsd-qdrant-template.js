@@ -495,19 +495,18 @@ class GSDKnowledgeSync {
       if (entry.isDirectory()) {
         files.push(...await this.walkGsd(fullPath));
       } else if (entry.isFile() && entry.name.endsWith('.md')) {
-        // Whitelist: only index GSD files that have cross-project value
+        // Universal GSD file detection: strip ALL leading prefixes, then check whitelist.
+        // Works with any .gsd/ structure: milestones/, phases/, or flat.
+        // Examples: 01-01-ASSESSMENT.md -> ASSESSMENT.md, M001-CONTEXT.md -> CONTEXT.md, CODEBASE.md -> CODEBASE.md
         const fileName = basename(entry.name, '.md').toUpperCase();
-        // Match ROADMAP, CONTEXT, UAT, ASSESSMENT, RESEARCH, CONTEXT-DRAFT, CODEBASE (and their numbered variants like S01-UAT)
-        if (CROSS_PROJECT_GSD_FILES.has(basename(fullPath))) {
+        // Strip all consecutive number-letter prefixes: 01-01-, M001-, S01-, 47-, etc.
+        const baseName = fileName.replace(/^([A-Z]*\d+[-_])+/gi, '');
+
+        // Whitelist check (with .md extension).
+        // Note: GSD_PROJECT_FILES blacklist is used in walkProjectCode, not here.
+        // The whitelist is sufficient — only cross-project valuable files are indexed.
+        if (CROSS_PROJECT_GSD_FILES.has(baseName + '.md')) {
           files.push(fullPath);
-        } else if (/^(ROADMAP|CONTEXT|UAT|ASSESSMENT|RESEARCH|CODEBASE|VISION|CHANGELOG)$/.test(fileName)) {
-          // Allow numbered variants: M001-ROADMAP, S03-UAT, T02-RESEARCH, etc.
-          const baseName = fileName.replace(/^[A-Z]+\d+[-_]/i, '');
-          if (CROSS_PROJECT_GSD_FILES.has(`${baseName}.md`)) {
-            files.push(fullPath);
-          } else if (/^(ROADMAP|CONTEXT|UAT|ASSESSMENT|RESEARCH|CODEBASE|VISION|CHANGELOG)$/.test(baseName) || baseName === 'CONTEXT-DRAFT') {
-            files.push(fullPath);
-          }
         }
       }
     }

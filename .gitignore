@@ -7,6 +7,13 @@ Thumbs.db
 __pycache__/
 *.pyc
 
+# ── AI agent files ──
+.claude/
+.gitnexus/
+.gsd-backups/
+AGENTS.md
+CLAUDE.md
+
 # ── GSD baseline (auto-generated) ──
 .gsd
 .gsd-id
@@ -54,6 +61,9 @@ PRE-PUBLISH-CHECKLIST.md
 
 # Tests (local verification only)
 tests/
+
+# CI/CD workflows (local only)
+.github/
 
 # ── GSD baseline (auto-generated) ──
 nul
