@@ -49,6 +49,7 @@ Un'agent senza contesto cross-project tende a riscrivere pattern che esistono gi
 
 | Feature                         | Dettaglio                                                                                                                                                                                                                        |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🗜️ **TurboQuant 4-bit**         | Qdrant 1.18+ con compressione vettoriale TurboQuant: **~8x meno spazio** vs F32 (doppia della scalar quantization), **recall 95,6%** (misurato su 39.853 punti), **ricerca più veloce** (vettori più piccoli = più dati in CPU cache). Abilitato di default |
 | ⚡ **Auto-retrieve hook**       | **★ Unique** — Iniezione automatica di contesto prima di ogni risposta. Zero query manuali, zero tokens sprecati a reinventare                                                                                                   |
 | 🌐 **Cross-project retrieval**  | Collection unificata `gsd_memory` con embedding bge-m3-1024 multilingue — tutti i progetti condividono la stessa knowledge base                                                                                                  |
 | 🔍 **Flat search + re-ranking** | Flat search(LIMIT=30) → lexical rescue pre-threshold → composite score filtering(≥0.70 / ≥0.48) → recency/path matching → token truncation; più candidati per il re-ranker, soglie unificate                                     |
@@ -57,7 +58,6 @@ Un'agent senza contesto cross-project tende a riscrivere pattern che esistono gi
 | 💻 **Smart code indexing**      | bge-m3-1024 con path-first (prima linea = percorso file) e weighted header SIGNATURES:/EXPORTS:/IMPORTS: — il codice è indicizzato come lo leggono gli agent                                                                     |
 | 🔄 **Auto-sync**                | Hook `post-commit` sincronizza automaticamente. Health check su Qdrant prima di ogni sync. Zero configurazione manuale                                                                                                           |
 | ⚡ **Zero config**              | Un comando: `gsd-qdrant-knowledge`. Bootstrap, collection, MCP registration, hook — tutto automatico                                                                                                                             |
-| 🗜️ **TurboQuant 4-bit**         | Qdrant 1.18+ con compressione vettoriale TurboQuant: **~8x meno spazio** vs F32 (doppia della scalar quantization), **recall 95,6%** (misurato su 39.853 punti), **ricerca più veloce** (vettori più piccoli = più dati in CPU cache). Abilitato di default |
 
 ## Scoring (bge-m3 + flat search + re-ranking)
 
