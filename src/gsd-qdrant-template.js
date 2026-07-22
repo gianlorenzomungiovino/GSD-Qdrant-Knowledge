@@ -23,7 +23,7 @@ const PROJECT_ROOT = resolveProjectRoot();
 const STATE_FILE = join(PROJECT_ROOT, '.gsd', '.qdrant-sync-state.json');
 
 const EXCLUDED_DIRS = new Set([
-  '.git', 'node_modules', 'vendor', 'bower_components', '.next', 'dist', 'build', 'coverage', '.turbo', '.vercel', '.idea', '.vscode', '.bg-shell', 'gsd-qdrant-knowledge',
+  '.git', 'node_modules', 'vendor', 'bower_components', '.next', 'dist', 'build', 'coverage', '.turbo', '.vercel', '.idea', '.vscode', '.bg-shell', '.gsd', 'gsd-qdrant-knowledge',
 ]);
 const CODE_EXTENSIONS = new Set([
   '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.py', '.rb', '.php', '.go', '.rs', '.java', '.kt', '.scala', '.cs', '.html', '.css', '.scss', '.sass', '.less', '.sql', '.sh', '.bash', '.zsh', '.ps1', '.vue', '.svelte', '.astro'
@@ -254,7 +254,9 @@ class GSDKnowledgeSync {
     }
     
     // Index documentation files (.md) — one point per file (docs are small enough)
+    let docFileIndex = 0;
     for (const filePath of mdFiles) {
+      docFileIndex += 1;
       const content = await fs.readFile(filePath, 'utf8');
       const relPath = this.toProjectRelative(filePath);
       const id = this.makePointId('doc', relPath);
@@ -262,8 +264,12 @@ class GSDKnowledgeSync {
       seenIds.add(relPath);
       
       // Check if already indexed
-      if (syncState[this.indexedFileKey('doc', relPath)]?.hash === hash) continue;
+      if (syncState[this.indexedFileKey('doc', relPath)]?.hash === hash) {
+        console.log(`[sync] doc skip (unchanged): ${relPath}`);
+        continue;
+      }
       
+      console.log(`[sync] doc ${docFileIndex}/${mdFiles.length}: ${relPath}`);
       const payload = await this.buildDocPayload(filePath, content, relPath, content);
       const vector = await this.embedText(this.buildDocText(relPath, content, payload));
       

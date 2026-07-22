@@ -293,13 +293,75 @@ function createMcpServer() {
 
         rankedHits = sortChunksByPosition(rankedHits);
 
+        // ─── Always-on whitelist documentation (project context) ─────────
+        // Whitelist docs (ROADMAP, CONTEXT, ASSESSMENT, UAT, etc.) are few
+        // high-value files that explain GSD patterns. They provide project
+        // context to the LLM regardless of the query topic — like a "project
+        // awareness layer" that improves answer quality for ANY question.
+        // We search for them using the original query and always include
+        // the top results alongside code results.
+        let contextDocs = [];
+        try {
+          const queryVector = await sync.embedText(task);
+          const docHits = await sync.client.search(CONFIG.collectionName, {
+            vector: { name: CONFIG.vectorName, vector: queryVector },
+            limit: 10,
+            with_payload: true,
+            with_vector: false,
+            filter: {
+              must: [
+                { key: 'type', match: { value: 'doc' } },
+                { key: 'language', match: { value: 'markdown' } },
+              ]
+            }
+          });
+
+          // Take top docs that aren't already in results
+          const existingSources = new Set(rankedHits.map(h => h.payload?.source));
+          for (const point of docHits) {
+            const source = point.payload?.source;
+            if (!source || existingSources.has(source)) continue;
+            if (point.score >= 0.40) {
+              point._projectContext = true;
+              point._lexicalRescue = {
+                projectContext: true,
+                boostReason: 'always-on-whitelist-project-context',
+              };
+              rankedHits.push({ ...point, score: Math.max(point.score, 0.50) });
+              existingSources.add(source);
+              contextDocs.push(point);
+            }
+          }
+        } catch (docErr) {
+          console.warn('[qdrant] auto_retrieve: whitelist doc search failed:', docErr.message);
+        }
+
         const elapsed = Date.now() - t0;
-        console.log(`[qdrant] auto_retrieve: chunks=${totalResults} (threshold=${SCORE_THRESHOLD.toFixed(2)} → ${rankedHits.length} above), in ${elapsed}ms`);
+        console.log(`[qdrant] auto_retrieve: chunks=${totalResults} (threshold=${SCORE_THRESHOLD.toFixed(2)} → ${rankedHits.length} above, +${contextDocs.length} project context docs), in ${elapsed}ms`);
 
         const projectId = CONFIG.projectRoot.split(/[/\\]/).pop();
 
         const ranked = rankedHits.map(hit => {
           const payload = hit.payload || {};
+
+          // Whitelist docs as project context bypass the composite score penalty.
+          // They provide project awareness to the LLM regardless of query topic.
+          // We boost their importance to ensure they survive scoring.
+          if (hit._projectContext && payload.type === 'doc') {
+            const baseBoost = hit.score || 0.50;
+            const composite = calculateCompositeScore({
+              similarity: baseBoost,
+              timestamp: payload.timestamp,
+              importance: Math.max(payload.importance || 1, 3), // boost for whitelist docs
+              reusable: payload.reusable || false,
+              projectId: payload.project_id,
+              callerProjectId: projectId,
+            });
+            // Ensure project context docs get a score that survives threshold
+            const finalScore = Math.max(composite, baseBoost * 0.85);
+            return { ...payload, score: finalScore, _projectContext: true };
+          }
+
           const composite = calculateCompositeScore({
             similarity: hit.score,
             timestamp: payload.timestamp,
@@ -308,7 +370,7 @@ function createMcpServer() {
             projectId: payload.project_id,
             callerProjectId: projectId,
           });
-          return { ...hit.payload, score: composite };
+          return { ...payload, score: composite };
         });
 
         // Deduplicate by project_id: keep top 2 results per project, then sort by score
@@ -325,11 +387,24 @@ function createMcpServer() {
         }
         deduped.sort((a, b) => b.score - a.score);
 
-        const final = deduped.slice(0, limit);
+        // Separate project context docs from regular results
+        const projectContextDocs = deduped.filter(h => h._projectContext);
+        const regularResults = deduped.filter(h => !h._projectContext);
 
-        applySymbolBoost(ranked, task);
+        // Limit project context docs to a reasonable number (max 3)
+        const MAX_CONTEXT_DOCS = 3;
+        const limitedContextDocs = projectContextDocs.slice(0, MAX_CONTEXT_DOCS);
 
-        const { results: formattedResults, trimmedInfo, totalTokens } = formatResultsForOutput(ranked, { maxTokens: 4000 });
+        // Fill remaining slots with regular results to reach the limit
+        const remainingSlots = Math.max(0, limit - limitedContextDocs.length);
+        const selectedRegular = regularResults.slice(0, remainingSlots);
+
+        // Final results: context docs first (project awareness), then code
+        const finalResults = [...limitedContextDocs, ...selectedRegular];
+
+        applySymbolBoost(finalResults, task);
+
+        const { results: formattedResults, trimmedInfo, totalTokens } = formatResultsForOutput(finalResults, { maxTokens: 4000 });
 
         console.log(`[retrieval] ${formattedResults.length} results, ~${totalTokens} estimated tokens` +
           (trimmedInfo && trimmedInfo.trimmed ? `, trimmed to 500 chars per result` : ''));
