@@ -391,48 +391,73 @@ function createMcpServer() {
         const projectContextDocs = deduped.filter(h => h._projectContext);
         const regularResults = deduped.filter(h => !h._projectContext);
 
-        // Limit project context docs to a reasonable number (max 3)
-        const MAX_CONTEXT_DOCS = 3;
+        // Limit project context docs to max 2 — enough for awareness, not enough to dominate
+        const MAX_CONTEXT_DOCS = 2;
         const limitedContextDocs = projectContextDocs.slice(0, MAX_CONTEXT_DOCS);
 
-        // Fill remaining slots with regular results to reach the limit
-        const remainingSlots = Math.max(0, limit - limitedContextDocs.length);
-        const selectedRegular = regularResults.slice(0, remainingSlots);
+        // Sort each section independently by score
+        regularResults.sort((a, b) => b.score - a.score);
+        limitedContextDocs.sort((a, b) => b.score - a.score);
 
-        // Final results: context docs first (project awareness), then code
-        const finalResults = [...limitedContextDocs, ...selectedRegular];
+        // Apply section limits
+        const MAX_CODE_RESULTS = 3;
+        const codeResults = regularResults.slice(0, MAX_CODE_RESULTS);
+        const contextDocsSection = limitedContextDocs;
 
-        applySymbolBoost(finalResults, task);
+        applySymbolBoost(codeResults, task);
+        applySymbolBoost(contextDocsSection, task);
 
-        const { results: formattedResults, trimmedInfo, totalTokens } = formatResultsForOutput(finalResults, { maxTokens: 4000 });
+        const { results: formattedCodeResults, trimmedInfo: codeTrimmed, totalTokens: codeTokens } = formatResultsForOutput(codeResults, { maxTokens: 4000 });
+        const { results: formattedContextDocs, trimmedInfo: docTrimmed, totalTokens: docTokens } = formatResultsForOutput(contextDocsSection, { maxTokens: 2000 });
 
-        console.log(`[retrieval] ${formattedResults.length} results, ~${totalTokens} estimated tokens` +
-          (trimmedInfo && trimmedInfo.trimmed ? `, trimmed to 500 chars per result` : ''));
+        const totalTokensAll = codeTokens + docTokens;
+        console.log(`[retrieval] ${formattedCodeResults.length} code results + ${formattedContextDocs.length} context docs, ~${totalTokensAll} estimated tokens`);
 
-        const results = formattedResults.map(hit => ({
-          type: hit.type,
-          subtype: hit.subtype,
-          project_id: hit.project_id,
-          source: hit.source,
-          summary: hit.summary,
-          content: includeContent ? hit.content : null,
-          tags: hit.tags,
-          language: hit.language,
-          reusable: hit.reusable,
-          importance: hit.importance,
-          relevance_score: hit.score,
-          match_type: 'semantic',
-        }));
+        // Build structured response with clear sections
+        const results = [
+          ...formattedCodeResults.map(hit => ({
+            type: hit.type,
+            subtype: hit.subtype,
+            project_id: hit.project_id,
+            source: hit.source,
+            summary: hit.summary,
+            content: includeContent ? hit.content : null,
+            tags: hit.tags,
+            language: hit.language,
+            reusable: hit.reusable,
+            importance: hit.importance,
+            relevance_score: hit.score,
+            match_type: 'semantic',
+            section: 'code-results',
+          })),
+          ...formattedContextDocs.map(hit => ({
+            type: hit.type,
+            subtype: hit.subtype,
+            project_id: hit.project_id,
+            source: hit.source,
+            summary: hit.summary,
+            content: includeContent ? hit.content : null,
+            tags: hit.tags,
+            language: hit.language,
+            reusable: hit.reusable,
+            importance: hit.importance,
+            relevance_score: hit.score,
+            match_type: 'project-context',
+            section: 'project-context',
+          })),
+        ];
 
         const cachePayload = {
           task,
           results,
-          totalResults: formattedResults.length,
+          totalResults: formattedCodeResults.length + formattedContextDocs.length,
+          codeResultsCount: formattedCodeResults.length,
+          contextDocsCount: formattedContextDocs.length,
           projectId,
         };
 
         queryCache.set(cacheKey, cachePayload);
-        console.log(`[cache] stored: ${cacheKey} (${formattedResults.length} results)`);
+        console.log(`[cache] stored: ${cacheKey} (${cachePayload.totalResults} results: ${formattedCodeResults.length} code + ${formattedContextDocs.length} context)`);
 
         return {
           content: [

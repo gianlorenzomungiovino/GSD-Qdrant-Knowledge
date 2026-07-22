@@ -2,23 +2,26 @@
 
 ## 2.3.8
 
-### Added — Always-on whitelist docs as project context layer
+### Added — Always-on whitelist docs as project context layer (Opzione 4: Sezioni Separate)
 
 - **Le docs del whitelist (ROADMAP, CONTEXT, ASSESSMENT, UAT, ecc.) vengono restituite con OGNI query**, non solo per query GSD-specifiche.
-- **Max 3 docs come `project context`** (`_projectContext`) — limitate per non sovraccaricare l'LLM.
-- **Le docs tornano PRIMA dei code results** nel response array, garantendo che l'LLM le riceva come contesto di progetto.
-- **Scenario reale**: query JWT → 3 code results (auth specifici) + 3 docs (M001-CONTEXT, ASSESSMENT, ROADMAP) → l'LLM sa come è strutturato il progetto e dove inserire il codice.
-- **Implementazione**: dopo la primary search, si cerca sempre le docs del whitelist con la stessa query. Le prime 3 (score ≥ 0.40) vengono aggiunte con boost di importance a 3.
+- **Risultati separati in 2 sezioni**: `Code Results (query-specific)` e `Project Context` — l'LLM vede chiaramente la differenza tra "risultati della query" e "contesto del progetto".
+- **Max 2 docs come `project context`** (`_projectContext`) — limitate per non sovraccaricare l'LLM.
+- **Max 3 code results** — il codice specifico per la query ha priorità.
+- **Scenario reale**: query "typewriter animation" → 3 code results (Hero.jsx, LineWaves.jsx, Drawer.jsx) + 2 docs (M001-CONTEXT, ASSESSMENT) → l'LLM usa il codice per implementare, le docs per capire dove inserirlo.
+- **Implementazione**: dopo la primary search, si cerca sempre le docs del whitelist con la stessa query. Le prime 2 (score ≥ 0.40) vengono aggiunte con boost di importance a 3. Le due sezioni vengono formattate separatamente.
 
 ### Fixed — Composite scoring per project context docs
 
 - **Le docs `_projectContext` bypassano la formula composite score**: prima il composite score (`0.6×similarity + 0.15×recency + 0.05×importance`) schiacciava le docs sotto la soglia perché avevano `importance=2` e `recency=0`.
 - **Ora le docs `_projectContext` ricevono `importance=3` e `finalScore = max(composite, baseBoost × 0.85)`** — garantiscono che sopravvivano al filtering.
+- **Token budget separato**: code results usano `maxTokens: 4000`, project context docs usano `maxTokens: 2000` — le docs sono più corte e non sprecano token.
 
-### Fixed — Limit applicato correttamente ai risultati
+### Fixed — Limit applicato correttamente ai risultati (separati per sezione)
 
 - **Prima il `limit` veniva calcolato (`final = deduped.slice(0, limit)`) ma MAI usato** — `formatResultsForOutput` riceveva `ranked` (tutti i risultati, anche 27+).
-- **Ora `finalResults` contiene max 3 docs + code per riempire il limit** — il limite è effettivo e i risultati restituiti sono coerenti.
+- **Ora i limiti sono separati per sezione**: max 3 code results + max 2 project context docs = max 5 total.
+- **Ogni sezione viene formattata e troncata independently** — le docs non competono con il codice per i slot.
 
 ### Fixed — `.gsd/` escluso dall'indicizzazione come codice
 
